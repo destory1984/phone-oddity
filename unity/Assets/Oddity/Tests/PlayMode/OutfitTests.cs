@@ -104,6 +104,28 @@ namespace Oddity.PlayTests
             foreach (var m in skin) Assert.Greater(m.GetFloat("_ShadingToonyFactor"), 0.5f, m.name + ": imported toony back");
         }
 
+        // The prologue room tint on clothes is undone exactly when the room look goes off.
+        [UnityTest]
+        public IEnumerator RoomLook_ClothesRestored()
+        {
+            yield return LoadScene();
+            var harin = Harin();
+            var cloth = harin.GetComponentsInChildren<Renderer>(true).SelectMany(r => r.materials)
+                .Where(m => m != null && m.name.Contains("CLOTH") && m.HasProperty("_ShadeColor")).Distinct().ToList();
+            Assert.GreaterOrEqual(cloth.Count, 1, "cloth materials");
+            var before = cloth.Select(m => (m.GetColor("_Color"), m.GetColor("_ShadeColor"))).ToList();
+            harin.SetRoomLook(true, prologue: true);
+            yield return null;
+            Assert.AreNotEqual(before[0].Item1, cloth[0].GetColor("_Color"), "prologue tint applied");
+            harin.SetRoomLook(false);
+            yield return null;
+            for (int i = 0; i < cloth.Count; i++)
+            {
+                Assert.AreEqual(before[i].Item1, cloth[i].GetColor("_Color"), cloth[i].name + " base");
+                Assert.AreEqual(before[i].Item2, cloth[i].GetColor("_ShadeColor"), cloth[i].name + " shade");
+            }
+        }
+
         // Cut 12, after the spring bones settle: every skirt joint stays outside the thigh colliders
         // (VRoid's 7.7 cm spheres along each thigh), so the skirt does not go through her legs.
         [UnityTest]

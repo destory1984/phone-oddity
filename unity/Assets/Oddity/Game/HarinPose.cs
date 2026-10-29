@@ -216,11 +216,15 @@ namespace Oddity.Game
         // MToon shading ramp: width = 2 (1 - toony). VRoid exported face 0.55 (width 0.9) and body 0.675 (0.65),
         // so the jaw over the neck cut off sharply and the two meshes did not match. One value for both,
         // width 1.8 (2x the face, 2.8x the body); the shift keeps the lit share near the face's old value.
+        // Clothes in the prologue room: the 3,500 K lamp turned the cream T-shirt salmon (255/205/182), the same
+        // colour as her skin. A cool multiplier cancels the lamp's red and a desaturation keeps it near ivory.
+        public static readonly Color PrologueClothTint = new Color(0.70f, 0.95f, 1f, 1f);
+        public const float PrologueClothDesat = 0.6f;
         public const float RoomSkinToony = 0.1f, RoomSkinShift = -0.2f;
         public static readonly Color HairTeal = new Color(0x1f / 255f, 0xb5 / 255f, 0xb8 / 255f, 1f);
         public const float HairGlow = 0.04f;
 
-        class LookState { public Material M; public Color Emission, Shade, Base, Matcap; public float Toony, Shift; public bool Skin, Hair; }
+        class LookState { public Material M; public Color Emission, Shade, Base, Matcap; public float Toony, Shift; public bool Skin, Hair, Cloth; }
         List<LookState> _look;
 
         /// <summary>
@@ -250,12 +254,22 @@ namespace Oddity.Game
                         Shift = m.GetFloat(MToon10Prop.ShadingShiftFactor),
                         Skin = m.name.Contains("SKIN"),
                         Hair = m.name.Contains("HAIR"),
+                        Cloth = m.name.Contains("CLOTH"),
                     });
                 }
             }
             foreach (var l in _look)
             {
                 l.M.SetColor("_EmissionColor", !on ? l.Emission : l.Hair ? HairTeal * HairGlow : Color.black);
+                if (l.Cloth)
+                {
+                    bool fix = on && prologue;
+                    l.M.SetColor("_ShadeColor", fix ? CoolCloth(l.Shade) : l.Shade);
+                    var cc = fix ? CoolCloth(l.Base) : l.Base;
+                    cc.a = l.M.GetColor("_Color").a; // keep the fade alpha
+                    l.M.SetColor("_Color", cc);
+                    continue;
+                }
                 if (!l.Skin) continue;
                 l.M.SetColor("_ShadeColor", !on ? l.Shade : prologue ? PrologueSkinShade : SkinShade);
                 var c = !on ? l.Base : prologue ? PrologueSkinBase : SkinBase;
@@ -265,6 +279,14 @@ namespace Oddity.Game
                 l.M.SetFloat(MToon10Prop.ShadingShiftFactor, on ? RoomSkinShift : l.Shift);
                 if (l.M.HasProperty("_MatcapColor")) l.M.SetColor("_MatcapColor", on ? Color.black : l.Matcap);
             }
+        }
+
+        static Color CoolCloth(Color c)
+        {
+            float y = c.r * 0.299f + c.g * 0.587f + c.b * 0.114f;
+            var d = new Color(Mathf.Lerp(c.r, y, PrologueClothDesat), Mathf.Lerp(c.g, y, PrologueClothDesat),
+                Mathf.Lerp(c.b, y, PrologueClothDesat), c.a);
+            return new Color(d.r * PrologueClothTint.r, d.g * PrologueClothTint.g, d.b * PrologueClothTint.b, c.a);
         }
 
         void ResetPoseBones()
