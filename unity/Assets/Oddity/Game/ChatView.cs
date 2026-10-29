@@ -17,7 +17,9 @@ namespace Oddity.Game
     {
         public const float CanvasWidth = 1080f;
         public const float CanvasHeight = 1920f;
-        const float WindowHeight = 760f;
+        public const float WindowHeight = 760f;
+        /// <summary>Share of the square Harin texture (from its top) that the window shows.</summary>
+        public const float WindowShare = WindowHeight / CanvasWidth;
         const float ChoiceAreaHeight = 470f;
         const float NoticeHeight = 190f;
         const float NoticeSeconds = 3f;

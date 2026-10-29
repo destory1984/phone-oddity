@@ -38,6 +38,26 @@ namespace Oddity.Game
         const float FadeDipAlpha = 0.4f;
         const float FadeDipSeconds = 1f;
 
+        // Phone glitch: the script's glitch value is shown at a third or less ("calm") so her hair and straps
+        // do not smear on every line; emotional moments flash at full strength for a moment, then settle.
+        /// <summary>Steady glitch in the phone = the line's glitch times this (at most a third of the moment).</summary>
+        public const float GlitchCalmScale = 0.3f;
+        /// <summary>Lines with at least this glitch flash at full strength.</summary>
+        public const float GlitchMomentAt = 0.5f;
+        /// <summary>Flash strength after a big choice and on the emergence night, when the line itself has less.</summary>
+        public const float GlitchMomentFloor = 0.45f;
+        public const float GlitchMomentSeconds = 0.5f;
+        /// <summary>A choice whose effects add up to at least this (absolute values) is a big one.</summary>
+        public const int BigChoiceEffect = 2;
+
+        // Phone stage framing: her eyes this far down Harin's window (0 = top), and the window this wide (m)
+        // at her face, so the face fills about a third of it and the window ends just under the collarbones.
+        public const float AppStageEyeLine = 0.33f; // Head + 7.5 cm; the drawn eyes land about 5% lower
+        public const float AppStageFrameWidth = 0.45f;
+
+        public static float CalmGlitch(float lineGlitch) => Mathf.Clamp01(lineGlitch) * GlitchCalmScale;
+        public static float MomentGlitch(float lineGlitch) => Mathf.Max(Mathf.Clamp01(lineGlitch), GlitchMomentFloor);
+
         /// <summary>Fixed line shown when there is no script for the day.</summary>
         public const string EndOfContentText = "내일 또 보자";
 
@@ -59,6 +79,10 @@ namespace Oddity.Game
         bool _act2;
         SubtitleBar _subtitle;
         Coroutine _fadeDip;
+        Coroutine _glitchMoment;
+        Line _pendingFace;        // a Harin line whose face waits for the typing indicator
+        bool _pendingMoment;
+        bool _bigChoice;          // the next Harin line follows a big choice
 
         /// <summary>Fired after the Night slot is closed and saved, just before the emergence plays.</summary>
         public event Action NightFinished;
@@ -69,6 +93,10 @@ namespace Oddity.Game
         public SubtitleBar Subtitle => _subtitle;
         /// <summary>True once the emergence has finished and act 2 plays in the room.</summary>
         public bool InRoom => _act2;
+        /// <summary>Glitch shown in the phone right now (chat window and Harin's jitter).</summary>
+        public float PhoneGlitch { get; private set; }
+        /// <summary>True while a glitch moment flashes.</summary>
+        public bool GlitchMomentActive => _glitchMoment != null;
         /// <summary>True when the current day has no script ("오늘은 여기까지" shown).</summary>
         public bool EndOfContent { get; private set; }
         /// <summary>True once the last line of the act 2 cut has been passed.</summary>
@@ -100,7 +128,36 @@ namespace Oddity.Game
             if (emergence == null) emergence = gameObject.AddComponent<EmergenceSequence>();
             emergence.SetArt(cut10DeskPhone, screenNoise, portalRing, wristSwirl);
             emergence.Finished += OnEmergenceFinished;
+            FrameAppStage();
             StartCoroutine(LoadAllThenInit());
+        }
+
+        /// <summary>
+        /// Camera for the phone stage, looking straight at her from the front: the frame is
+        /// <see cref="AppStageFrameWidth"/> wide at her eyes and her eyes sit <see cref="AppStageEyeLine"/>
+        /// of the way down the part of the square picture the chat window shows.
+        /// </summary>
+        public static UnityEngine.Pose AppStageCameraPose(Vector3 eyes, Vector3 facing, float fov)
+        {
+            facing.y = 0f;
+            facing = facing.sqrMagnitude < 1e-6f ? Vector3.forward : facing.normalized;
+            float w = AppStageFrameWidth;                                   // square picture: height = width
+            float d = w * 0.5f / Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad);
+            float below = w * (0.5f - AppStageEyeLine * ChatView.WindowShare); // camera this far under her eyes
+            var pos = eyes + facing * d - Vector3.up * below;
+            return new UnityEngine.Pose(pos, Quaternion.LookRotation(-facing, Vector3.up));
+        }
+
+        void FrameAppStage()
+        {
+            var go = GameObject.Find("AppStageCamera");
+            if (go == null || harin == null) return;
+            var cam = go.GetComponent<Camera>();
+            var head = harin.BonePosition(HumanBodyBones.Head);
+            if (cam == null || head == Vector3.zero) return;
+            var eyes = head + Vector3.up * 0.075f * harin.transform.lossyScale.y;
+            var pose = AppStageCameraPose(eyes, harin.transform.forward, cam.fieldOfView);
+            cam.transform.SetPositionAndRotation(pose.position, pose.rotation);
         }
 
         // Reads day1..EmergenceDay and the prologue. On desktop nothing yields, so Init runs inside Start.
@@ -181,6 +238,7 @@ namespace Oddity.Game
             }
             _voice = gameObject.AddComponent<HarinVoice>();
             _voice.Init(harin);
+            SetPhoneIdle();
 
             if (_prologue != null && _subtitle != null && harin != null && !SkipPrologue && !PrologueSeen)
             {
@@ -254,8 +312,22 @@ namespace Oddity.Game
             }
         }
 
+        // Between lines in the phone: the faint smile, breathing and idle glances.
+        void SetPhoneIdle()
+        {
+            if (harin == null) return;
+            harin.SetFace(HarinPuppet.IdleFace);
+            harin.SetIdle(true);
+        }
+
         void Update()
         {
+            if (_pendingFace != null && !chat.IsTyping)
+            {
+                Line line = _pendingFace;
+                _pendingFace = null;
+                ApplyPhoneLine(line, _pendingMoment);
+            }
             if (!_waiting) return;
             if (Clock.IsOpen)
             {
@@ -291,13 +363,10 @@ namespace Oddity.Game
             Debug.Log("GameBootstrap: no script for day " + State.Day + " " + State.Slot);
             EndOfContent = true;
             var line = new Line { Who = "harin", Text = EndOfContentText, Face = "happy", Typing = 0f };
+            _pendingFace = null;
             chat.ShowLine(line);
-            chat.SetGlitch(0f);
-            if (harin != null)
-            {
-                harin.SetFace(HarinPuppet.FaceForBeat(line.Face, line.Beat));
-                harin.SetGlitch(0f);
-            }
+            SetPhoneGlitch(0f);
+            if (harin != null) harin.SetFace(HarinPuppet.FaceForBeat(line.Face, line.Beat));
         }
 
         string OpeningText(Slot slot)
@@ -352,14 +421,59 @@ namespace Oddity.Game
             }
             else
             {
+                bool harinLine = line.Who == "harin";
+                bool moment = line.Glitch >= GlitchMomentAt
+                    || (harinLine && (_bigChoice || (State.Day >= CoreInfo.EmergenceDay && State.Slot == Slot.Night)));
+                if (harinLine) _bigChoice = false;
                 chat.ShowLine(line);
-                chat.SetGlitch(line.Glitch);
+                if (harinLine && chat.IsTyping)
+                {
+                    // she is still typing: keep the idle face until the bubble shows
+                    _pendingFace = line;
+                    _pendingMoment = moment;
+                    SetPhoneIdle();
+                    SetPhoneGlitch(CalmGlitch(line.Glitch));
+                }
+                else
+                {
+                    _pendingFace = null;
+                    ApplyPhoneLine(line, moment);
+                }
+                return;
             }
             if (harin != null)
             {
                 harin.SetFace(HarinPuppet.FaceForBeat(line.Face, line.Beat));
                 harin.SetGlitch(line.Glitch);
             }
+        }
+
+        // A phone line is on screen: Harin's lines show their face, other lines leave her at the idle smile.
+        void ApplyPhoneLine(Line line, bool moment)
+        {
+            if (harin != null)
+            {
+                if (line.Who == "harin") harin.SetFace(HarinPuppet.FaceForBeat(line.Face, line.Beat));
+                else harin.SetFace(HarinPuppet.IdleFace);
+            }
+            if (_glitchMoment != null) { StopCoroutine(_glitchMoment); _glitchMoment = null; }
+            if (moment && isActiveAndEnabled) _glitchMoment = StartCoroutine(GlitchMoment(line.Glitch));
+            else SetPhoneGlitch(CalmGlitch(line.Glitch));
+        }
+
+        System.Collections.IEnumerator GlitchMoment(float lineGlitch)
+        {
+            SetPhoneGlitch(MomentGlitch(lineGlitch));
+            yield return new WaitForSeconds(GlitchMomentSeconds);
+            SetPhoneGlitch(CalmGlitch(lineGlitch));
+            _glitchMoment = null;
+        }
+
+        void SetPhoneGlitch(float amount)
+        {
+            PhoneGlitch = Mathf.Clamp01(amount);
+            chat.SetGlitch(PhoneGlitch);
+            if (harin != null) harin.SetGlitch(PhoneGlitch);
         }
 
         System.Collections.IEnumerator FadeDip()
@@ -370,8 +484,17 @@ namespace Oddity.Game
             _fadeDip = null;
         }
 
+        // The emergence and act 2 drive Harin themselves.
+        void LeavePhone()
+        {
+            _pendingFace = null;
+            if (_glitchMoment != null) { StopCoroutine(_glitchMoment); _glitchMoment = null; }
+            if (harin != null) harin.SetIdle(false);
+        }
+
         void OnEmergenceFinished()
         {
+            LeavePhone();
             _act2 = true;
             _awaitingTap = false;
             _script = _scripts[1]; // d1_after lives in the day 1 file
@@ -400,6 +523,7 @@ namespace Oddity.Game
             if (slot == Slot.Night && State.Day - 1 >= CoreInfo.EmergenceDay)
             {
                 NightFinished?.Invoke();
+                LeavePhone();
                 emergence.Play();
                 return;
             }
@@ -446,6 +570,7 @@ namespace Oddity.Game
             Clock.CloseCurrent();
             _store.Save(State);
             NightFinished?.Invoke();
+            LeavePhone();
             emergence.Play();
         }
 
@@ -475,6 +600,7 @@ namespace Oddity.Game
         {
             _inPrologue = true;
             _awaitingTap = false;
+            LeavePhone();
             chat.SetVisible(false);
             _director = PrologueDirector.Create(gameObject, harin, emergence, emergence.MainCamera, _subtitle, screenNoise, chat.Font);
             _director.Begin();
@@ -552,6 +678,7 @@ namespace Oddity.Game
             _subtitle.SetVisible(false);
             chat.SetVisible(true);
             _lineScene = null;
+            SetPhoneIdle();
             StartDayOne(true);
         }
 
@@ -565,6 +692,12 @@ namespace Oddity.Game
 
         void OnChoicePicked(int index)
         {
+            var current = _runner.Current;
+            if (current != null && index >= 0 && index < current.Choices.Count)
+            {
+                var e = current.Choices[index].Effects;
+                _bigChoice = e != null && Mathf.Abs(e.Stability) + Mathf.Abs(e.Deviation) + Mathf.Abs(e.Heart) >= BigChoiceEffect;
+            }
             _runner.Choose(index);
         }
 

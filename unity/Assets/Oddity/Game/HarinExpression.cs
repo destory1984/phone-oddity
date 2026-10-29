@@ -64,10 +64,14 @@ namespace Oddity.Game
             _mixWeight = Mathf.Clamp01(secondWeight);
         }
 
-        // "smile": a closed-mouth smile mixed from two presets (the full happy preset opens the mouth wide).
-        public const float SmileRelaxed = 0.5f, SmileHappy = 0.05f;
+        // "smile": a closed-mouth smile. Even 0.05 of the happy preset parts the lips enough to show the
+        // teeth, so the smile is relaxed alone (happy kept in the mix at 0 so it can be tuned back up).
+        public const float SmileRelaxed = 0.55f, SmileHappy = 0f;
         // "flustered": a weaker smile; the head and eyes look away (beat), no blush yet.
-        public const float FlusteredRelaxed = 0.35f, FlusteredHappy = 0.1f;
+        public const float FlusteredRelaxed = 0.4f, FlusteredHappy = 0f;
+        // "soft": the face between lines in the phone, the faintest closed-mouth smile.
+        public const float SoftRelaxed = 0.2f;
+        public const string IdleFace = "soft";
 
         static readonly HashSet<string> LaughBeats = new HashSet<string> { "laughs", "teases", "soft_laugh" };
 
@@ -88,6 +92,7 @@ namespace Oddity.Game
             float relaxed, happy;
             if (key == "smile") { relaxed = SmileRelaxed; happy = SmileHappy; }
             else if (key == "flustered") { relaxed = FlusteredRelaxed; happy = FlusteredHappy; }
+            else if (key == IdleFace) { relaxed = SoftRelaxed; happy = 0f; }
             else return false;
             _currentFace = ExpressionKey.Relaxed;
             CurrentFace = key;

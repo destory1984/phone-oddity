@@ -62,9 +62,20 @@ namespace Oddity.Game
         const float Cut11LookHeight = 0.8f;
         const float SeatInFromEdge = 0.15f;  // hip contact this far in from the mattress front edge
         const float SeatZ = -0.55f;
-        const float Cut12CamHeight = 1.05f, Cut12Dist0 = 2.4f, Cut12Dist1 = 2.8f, Cut12Fov0 = 35f, Cut12Fov1 = 40f;
+        // cut 12 and act 2: a waist-up shot of her seated. The camera sits Act2EyeDrop under her eyes, her eyes
+        // Act2EyeLine down the frame (above the subtitle band), and waist to head top fills Act2BodyShare of the
+        // frame height at the end. The camera still pulls back during cut 12, from Cut12PullFrom of that distance.
+        public const float Act2EyeLine = 0.32f; // Head + 7.5 cm; the drawn eyes land about 2% lower
+        public const float Act2EyeDrop = 0.07f;
+        public const float Act2BodyShare = 0.6f;
+        public const float Act2HeadTopAboveEye = 0.11f; // model units
+        const float Cut12Fov0 = 35f, Cut12Fov1 = 38f;
+        const float Cut12PullFrom = 0.8f;
         const float Cut12SideDeg = 20f;
-        const float Cut12LookAboveSeat = 0.1f;
+        // the 6500 K face light and catch light of the prologue, used in the room too (cuts 11, 12 and act 2)
+        // (the prologue's light sits about 1.1 m from her face; further away here, so it is scaled by distance squared)
+        const float FaceLightKelvin = 6500f, FaceLightIntensity = 0.5f, CatchLightIntensity = 0.015f;
+        const float FaceLightRefDistance = 1.1f, FaceLightMaxBoost = 3f;
         // lights (Kelvin; intensity multipliers on the scene values)
         const float LampKelvin = 3500f, WindowKelvin = 7000f;
         const float LampCut11 = 0.8f, LampCut12 = 0.55f, LampLate = 0.4f;
@@ -118,6 +129,10 @@ namespace Oddity.Game
         Transform _ring, _glow, _shadow, _swirlPivot;
 
         Light _lamp, _window, _keyLight;
+        Light _faceLight, _catchLight;
+        bool _seatedFraming;   // cut 12 / act 2: LateUpdate frames her once the seated pose is on the bones
+        float _seatedU;
+        Vector3 _eyes;
         Color _lampColor, _windowColor, _keyColor;
         float _lampIntensity, _windowIntensity, _keyIntensity;
 
@@ -220,7 +235,13 @@ namespace Oddity.Game
             _fit = mainCamera.GetComponent<PhoneCameraFit>();
 
             // let the room lights (rendering layer 1) light her too once she is in the room
-            foreach (var r in harin.GetComponentsInChildren<Renderer>(true)) r.renderingLayerMask |= 1u;
+            uint harinMask = 0;
+            foreach (var r in harin.GetComponentsInChildren<Renderer>(true))
+            {
+                harinMask |= r.renderingLayerMask;
+                r.renderingLayerMask |= 1u;
+            }
+            BuildFaceLights(harinMask == 0 ? 1u : harinMask);
 
             _lamp = FindLight("RoomLamp");
             _window = FindLight("WindowMoonLight");
@@ -232,6 +253,35 @@ namespace Oddity.Game
             BuildCut10Rig();
             _prepared = true;
         }
+
+        // the same soft key as the prologue's: from the camera's upper right, lighting only Harin
+        void BuildFaceLights(uint harinMask)
+        {
+            var go = new GameObject("RoomFaceLight");
+            _faceLight = go.AddComponent<Light>();
+            _faceLight.type = LightType.Spot;
+            _faceLight.color = Mathf.CorrelatedColorTemperatureToRGB(FaceLightKelvin);
+            _faceLight.intensity = FaceLightIntensity;
+            _faceLight.range = 4f;
+            _faceLight.spotAngle = 50f;
+            _faceLight.innerSpotAngle = 25f;
+            _faceLight.shadows = LightShadows.None;
+            go.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalLightData>().renderingLayers = harinMask;
+            _faceLight.enabled = false;
+
+            var c = new GameObject("RoomCatchLight");
+            _catchLight = c.AddComponent<Light>();
+            _catchLight.type = LightType.Point;
+            _catchLight.color = Mathf.CorrelatedColorTemperatureToRGB(FaceLightKelvin);
+            _catchLight.intensity = CatchLightIntensity;
+            _catchLight.range = 1.2f;
+            _catchLight.shadows = LightShadows.None;
+            c.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalLightData>().renderingLayers = harinMask;
+            _catchLight.enabled = false;
+        }
+
+        /// <summary>The room face light (null before the first play).</summary>
+        public Light FaceLight => _faceLight;
 
         static Light FindLight(string name)
         {
@@ -257,6 +307,7 @@ namespace Oddity.Game
 
             bool inPhone = t < Cut10At;
             bool cut10 = t >= Cut10At && t < RoomAt;
+            _seatedFraming = t >= SeatAt;
             if (chat != null) chat.SetVisible(inPhone);
             if (_fit != null) _fit.enabled = inPhone;
             mainCamera.enabled = !cut10;
@@ -288,6 +339,8 @@ namespace Oddity.Game
                 if (t < SitAt) harin.ApplyPose(Pose.LookAtHands, Smooth((t - RoomAt) / (SitAt - RoomAt)));
                 else harin.ApplyPose(Pose.SitDown, Smooth((t - SitAt) / (SeatAt - SitAt)));
                 PlaceCut11Camera((t - RoomAt) / (SeatAt - RoomAt));
+                _eyes = ht.position + Vector3.up * 1.45f * _homeScale.y;
+                AimFaceLights();
             }
             else
             {
@@ -295,7 +348,9 @@ namespace Oddity.Game
                 harin.MoveTo(roomAnchor);
                 harin.SetFace(t < 9f ? "neutral" : "relaxed");
                 harin.ApplyPose(Pose.Seated, Smooth((t - SeatAt) / 1f));
-                PlaceCut12Camera((t - SeatAt) / (Duration - SeatAt));
+                _seatedU = (t - SeatAt) / (Duration - SeatAt);
+                if (_eyes == Vector3.zero) _eyes = roomAnchor.position + roomAnchor.rotation * new Vector3(0f, 1.05f, 0.1f);
+                PlaceCut12Camera(_seatedU);
             }
         }
 
@@ -303,6 +358,8 @@ namespace Oddity.Game
         {
             bool room = t >= RoomAt;
             bool cut10 = t >= Cut10At && !room;
+            if (_faceLight != null) _faceLight.enabled = room;
+            if (_catchLight != null) _catchLight.enabled = room;
             if (_keyLight != null)
             {
                 // the app-stage fill light turned her skin pink in the room; in cut 10 it plays the desk lamp
@@ -591,17 +648,74 @@ namespace Oddity.Game
             mainCamera.fieldOfView = Mathf.Lerp(Cut11Fov0, Cut11Fov1, Smooth(u));
         }
 
+        // After every LateUpdate of hers (she runs at -100): from cut 12 on, through act 2, measure her posed
+        // eyes and waist and frame her. Measured in her model space and put back on the seat anchor, so the
+        // glitch jitter shows on screen instead of being followed by the camera.
+        void LateUpdate()
+        {
+            if (!_prepared || !_seatedFraming || !(IsPlaying || HasFinished)) return;
+            var ht = harin.transform;
+            var head = harin.BonePosition(HumanBodyBones.Head);
+            if (head == Vector3.zero) return;
+            var eyesWorld = head + Vector3.up * 0.075f * ht.lossyScale.y;
+            _eyes = OnSeat(ht.InverseTransformPoint(eyesWorld));
+            var spine = harin.BonePosition(HumanBodyBones.Spine);
+            _waistY = spine != Vector3.zero ? OnSeat(ht.InverseTransformPoint(spine)).y : _eyes.y - 0.5f;
+            PlaceCut12Camera(_seatedU);
+            AimFaceLights();
+        }
+
+        float _waistY = float.NaN;
+
+        Vector3 OnSeat(Vector3 local) => roomAnchor.position + roomAnchor.rotation * Vector3.Scale(local, _homeScale);
+
+        /// <summary>
+        /// Seated framing: camera <see cref="Act2EyeDrop"/> under her eyes at horizontal distance d, tilted so
+        /// her eyes sit <see cref="Act2EyeLine"/> of the way down the frame (same idea as the prologue's face shots).
+        /// </summary>
+        public static UnityEngine.Pose SeatedCameraPose(Vector3 eyes, Vector3 dir, float d, float fov)
+        {
+            var pos = eyes + dir * d - Vector3.up * Act2EyeDrop;
+            float tanHalf = Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad);
+            float above = Mathf.Atan((1f - 2f * Act2EyeLine) * tanHalf) * Mathf.Rad2Deg; // eyes above the optical axis
+            float rise = Mathf.Atan2(Act2EyeDrop, d) * Mathf.Rad2Deg;                    // eyes above the camera
+            var yaw = Quaternion.LookRotation(-dir, Vector3.up);
+            return new UnityEngine.Pose(pos, yaw * Quaternion.Euler(above - rise, 0f, 0f));
+        }
+
+        /// <summary>Camera distance at which waist to head top fills <see cref="Act2BodyShare"/> of the frame.</summary>
+        public static float SeatedDistance(float eyeY, float waistY, float headTopAboveEye, float fov)
+        {
+            float span = Mathf.Max(0.2f, eyeY + headTopAboveEye - waistY);
+            float frame = span / Act2BodyShare;
+            return frame * 0.5f / Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad);
+        }
+
         void PlaceCut12Camera(float u)
         {
             u = Mathf.Clamp01(u);
-            var seat = roomAnchor.position + roomAnchor.rotation * Vector3.Scale(harin.SeatContactLocal, _homeScale);
-            var look = seat + Vector3.up * Cut12LookAboveSeat;
             var dir = Quaternion.Euler(0f, -Cut12SideDeg, 0f) * roomAnchor.forward; // from her front, 20° to the side
-            float d = Mathf.Lerp(Cut12Dist0, Cut12Dist1, Smooth(u));
-            var pos = look + dir * d;
-            pos.y = Cut12CamHeight;
-            mainCamera.transform.SetPositionAndRotation(pos, Quaternion.LookRotation(look - pos));
-            mainCamera.fieldOfView = Mathf.Lerp(Cut12Fov0, Cut12Fov1, Smooth(u));
+            dir.y = 0f;
+            dir.Normalize();
+            float fov = Mathf.Lerp(Cut12Fov0, Cut12Fov1, Smooth(u));
+            float waist = float.IsNaN(_waistY) ? _eyes.y - 0.5f * _homeScale.y : _waistY;
+            float end = SeatedDistance(_eyes.y, waist, Act2HeadTopAboveEye * _homeScale.y, Cut12Fov1);
+            float d = end * Mathf.Lerp(Cut12PullFrom, 1f, Smooth(u));
+            var pose = SeatedCameraPose(_eyes, dir, d, fov);
+            mainCamera.transform.SetPositionAndRotation(pose.position, pose.rotation);
+            mainCamera.fieldOfView = fov;
+        }
+
+        void AimFaceLights()
+        {
+            if (_faceLight == null) return;
+            var ct = mainCamera.transform;
+            var p = ct.position + ct.right * 0.35f + Vector3.up * 0.4f;
+            _faceLight.transform.SetPositionAndRotation(p, Quaternion.LookRotation(_eyes - p));
+            float k = Vector3.Distance(p, _eyes) / FaceLightRefDistance;
+            _faceLight.intensity = FaceLightIntensity * Mathf.Clamp(k * k, 1f, FaceLightMaxBoost);
+            var toCam = ct.position - _eyes;
+            _catchLight.transform.position = _eyes + toCam.normalized * Mathf.Min(0.35f, toCam.magnitude * 0.6f) + Vector3.up * 0.05f;
         }
 
         static float Smooth(float x)

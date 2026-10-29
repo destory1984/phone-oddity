@@ -130,8 +130,9 @@ namespace Oddity.PlayTests
             yield return null;
 
             Assert.AreEqual(expected.Text, chat.CurrentLineText);
-            Assert.AreEqual(0.2f, harin.Glitch, 0.0001f);
-            Assert.AreEqual(0.2f, chat.GlitchAmount, 0.0001f);
+            // the phone shows the calm share of the line's glitch (CharmTests covers the moments)
+            Assert.AreEqual(GameBootstrap.CalmGlitch(0.2f), harin.Glitch, 0.0001f);
+            Assert.AreEqual(GameBootstrap.CalmGlitch(0.2f), chat.GlitchAmount, 0.0001f);
         }
 
         [UnityTest]

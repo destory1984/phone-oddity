@@ -75,6 +75,7 @@ namespace Oddity.Game
             CaptureOverrideBones();
             CapturePoseBones();
             CaptureLeanBones();
+            CaptureIdleBones();
             if (lowerArms) CaptureRestPose();
             ScheduleBlink();
         }
@@ -153,6 +154,7 @@ namespace Oddity.Game
                 foreach (var (t, q) in _armPose) t.localRotation = q;
 
             ApplyLean();
+            ApplyIdleBreath();
             var root = transform.rotation;
             if (_reach)
             {
@@ -176,6 +178,7 @@ namespace Oddity.Game
 
             expression.SetWeight(ExpressionKey.Blink, BlinkWeight());
             ApplyMouth();
+            UpdateIdleGaze();
 
             // jitter, applied on top of the base position
             if (Glitch > 0f)
