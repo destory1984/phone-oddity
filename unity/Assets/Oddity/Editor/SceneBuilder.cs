@@ -73,34 +73,39 @@ namespace Oddity.EditorTools
         const string ModelDir = "Assets/Models";
 
         /// <summary>
-        /// Replaces Harin's VRM in Prototype.unity with another VRoid export (for example the summer-B outfit).
+        /// Replaces one of Harin's VRMs in Prototype.unity with another VRoid export. <paramref name="outfit"/> picks the
+        /// wardrobe slot: Summer (outfit B, the phone, the emergence and act 2) or Indoor (outfit B2, the prologue).
         /// <paramref name="vrmPath"/> is a project asset path ("Assets/Models/harin-summer-B.vrm") or a file on
         /// disk, which is copied into Assets/Models first. The new model takes the old one's parent, transform,
         /// layer and rendering layers; HarinPuppet (with HarinPose, HarinExpression) and any other Oddity
         /// components are copied over, and scene references to the old puppet, object or transform are pointed
-        /// at the new one. Expression names are the VRM presets and the room look finds the materials by
-        /// their VRoid names (SKIN, HAIR), so they keep working. Batch mode:
-        /// Unity -batchmode -executeMethod Oddity.EditorTools.SceneBuilder.SwapHarinModelFromArgs -vrm path
+        /// at the new one. When the slot is empty (the first indoor model) the summer model is the template, the new
+        /// one starts inactive and nothing else is re-pointed. Expression names are the VRM presets and the room look
+        /// finds the materials by their VRoid names (SKIN, HAIR), so they keep working. The cheek masks are baked again.
+        /// Batch mode:
+        /// Unity -batchmode -executeMethod Oddity.EditorTools.SceneBuilder.SwapHarinModelFromArgs -vrm path [-outfit indoor]
         /// </summary>
-        public static void SwapHarinModel(string vrmPath)
+        public static void SwapHarinModel(string vrmPath, HarinWardrobe.Outfit outfit = HarinWardrobe.Outfit.Summer)
         {
             string assetPath = ImportVrm(vrmPath);
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
             if (prefab == null) throw new System.Exception("no model imported from " + assetPath);
 
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
-            var oldPuppet = Object.FindFirstObjectByType<HarinPuppet>(FindObjectsInactive.Include);
-            if (oldPuppet == null) throw new System.Exception("no HarinPuppet in " + ScenePath);
-            var old = oldPuppet.gameObject;
+            var wardrobe = EnsureWardrobe();
+            var oldPuppet = wardrobe.Get(outfit);
+            bool replace = oldPuppet != null;
+            var template = replace ? oldPuppet : wardrobe.Summer;
+            if (template == null) throw new System.Exception("no HarinPuppet in " + ScenePath);
+            var old = template.gameObject;
 
             var fresh = (GameObject)PrefabUtility.InstantiatePrefab(prefab, scene);
-            fresh.name = old.name;
+            fresh.name = replace ? old.name : (outfit == HarinWardrobe.Outfit.Indoor ? "HarinIndoor" : old.name);
             fresh.transform.SetParent(old.transform.parent, false);
-            fresh.transform.SetSiblingIndex(old.transform.GetSiblingIndex());
+            fresh.transform.SetSiblingIndex(old.transform.GetSiblingIndex() + (replace ? 0 : 1));
             fresh.transform.localPosition = old.transform.localPosition;
             fresh.transform.localRotation = old.transform.localRotation;
             fresh.transform.localScale = old.transform.localScale;
-            fresh.SetActive(old.activeSelf);
 
             uint renderingLayers = 0;
             foreach (var r in old.GetComponentsInChildren<Renderer>(true)) renderingLayers |= r.renderingLayerMask;
@@ -130,41 +135,75 @@ namespace Oddity.EditorTools
                 map[oldAnimator] = newAnimator;
             }
 
-            // point scene references at the new model
-            foreach (var root in scene.GetRootGameObjects())
-            foreach (var comp in root.GetComponentsInChildren<Component>(true))
+            if (replace)
             {
-                if (comp == null || comp.transform.IsChildOf(old.transform)) continue;
-                var so = new SerializedObject(comp);
-                var it = so.GetIterator();
-                bool changed = false;
-                while (it.Next(true))
+                fresh.SetActive(old.activeSelf);
+                // point scene references at the new model
+                foreach (var root in scene.GetRootGameObjects())
+                foreach (var comp in root.GetComponentsInChildren<Component>(true))
                 {
-                    if (it.propertyType != SerializedPropertyType.ObjectReference || it.objectReferenceValue == null) continue;
-                    if (map.TryGetValue(it.objectReferenceValue, out var to))
+                    if (comp == null || comp.transform.IsChildOf(old.transform)) continue;
+                    var so = new SerializedObject(comp);
+                    var it = so.GetIterator();
+                    bool changed = false;
+                    while (it.Next(true))
                     {
-                        it.objectReferenceValue = to;
-                        changed = true;
+                        if (it.propertyType != SerializedPropertyType.ObjectReference || it.objectReferenceValue == null) continue;
+                        if (map.TryGetValue(it.objectReferenceValue, out var to))
+                        {
+                            it.objectReferenceValue = to;
+                            changed = true;
+                        }
                     }
+                    if (changed) so.ApplyModifiedPropertiesWithoutUndo();
                 }
-                if (changed) so.ApplyModifiedPropertiesWithoutUndo();
+                Object.DestroyImmediate(old);
             }
-
-            Object.DestroyImmediate(old);
+            else
+            {
+                fresh.SetActive(false); // the wardrobe turns it on when it is worn
+                var w = new SerializedObject(wardrobe);
+                w.FindProperty(outfit == HarinWardrobe.Outfit.Indoor ? "indoor" : "summer").objectReferenceValue = fresh.GetComponent<HarinPuppet>();
+                w.ApplyModifiedPropertiesWithoutUndo();
+            }
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
             AssetDatabase.SaveAssets();
             BlushMaskBaker.Bake(false); // the copied cheek mask belongs to the old face
-            Debug.Log("HARIN model swapped to " + assetPath);
+            Debug.Log("HARIN " + outfit + " model swapped to " + assetPath);
         }
 
-        /// <summary>Batch-mode entry: -vrm &lt;path&gt; on the command line.</summary>
+        // The wardrobe sits on the GameBootstrap object; a scene with one model gets one with that model as Summer.
+        static HarinWardrobe EnsureWardrobe()
+        {
+            var wardrobe = Object.FindFirstObjectByType<HarinWardrobe>(FindObjectsInactive.Include);
+            if (wardrobe == null)
+            {
+                var boot = Object.FindFirstObjectByType<GameBootstrap>(FindObjectsInactive.Include);
+                if (boot == null) throw new System.Exception("no GameBootstrap in " + ScenePath);
+                wardrobe = boot.gameObject.AddComponent<HarinWardrobe>();
+                var b = new SerializedObject(boot);
+                var summer = b.FindProperty("harin").objectReferenceValue as HarinPuppet;
+                if (summer == null) summer = Object.FindFirstObjectByType<HarinPuppet>(FindObjectsInactive.Include);
+                var w = new SerializedObject(wardrobe);
+                w.FindProperty("summer").objectReferenceValue = summer;
+                w.ApplyModifiedPropertiesWithoutUndo();
+                b.FindProperty("wardrobe").objectReferenceValue = wardrobe;
+                b.ApplyModifiedPropertiesWithoutUndo();
+            }
+            return wardrobe;
+        }
+
+        /// <summary>Batch-mode entry: -vrm &lt;path&gt; [-outfit summer|indoor] on the command line.</summary>
         public static void SwapHarinModelFromArgs()
         {
             var args = System.Environment.GetCommandLineArgs();
             int i = System.Array.IndexOf(args, "-vrm");
-            if (i < 0 || i + 1 >= args.Length) throw new System.Exception("usage: -vrm <path to .vrm>");
-            SwapHarinModel(args[i + 1]);
+            if (i < 0 || i + 1 >= args.Length) throw new System.Exception("usage: -vrm <path to .vrm> [-outfit summer|indoor]");
+            var outfit = HarinWardrobe.Outfit.Summer;
+            int o = System.Array.IndexOf(args, "-outfit");
+            if (o >= 0 && o + 1 < args.Length && args[o + 1].ToLowerInvariant() == "indoor") outfit = HarinWardrobe.Outfit.Indoor;
+            SwapHarinModel(args[i + 1], outfit);
         }
 
         static string ImportVrm(string vrmPath)

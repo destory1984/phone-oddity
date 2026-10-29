@@ -54,7 +54,7 @@ namespace Oddity.PlayTests
 
         static GameBootstrap Boot() => UnityEngine.Object.FindFirstObjectByType<GameBootstrap>();
         static ChatView Chat() => UnityEngine.Object.FindFirstObjectByType<ChatView>();
-        static HarinPuppet Harin() => UnityEngine.Object.FindFirstObjectByType<HarinPuppet>();
+        static HarinPuppet Harin() => HarinWardrobe.ActivePuppet();
 
         static Vector2 Viewport(float dx, float dy) =>
             PokeZones.ViewportOf(GameObject.Find("AppStageCamera").GetComponent<Camera>(), Harin(), dx, dy);

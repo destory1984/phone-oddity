@@ -218,6 +218,13 @@ namespace Oddity.Game
         void Prepare()
         {
             if (_prepared) return;
+            // she comes out of the phone in the summer outfit and keeps it all night (one model for the whole cut)
+            var wardrobe = FindFirstObjectByType<HarinWardrobe>();
+            if (wardrobe != null && wardrobe.Summer != null)
+            {
+                wardrobe.Wear(HarinWardrobe.Outfit.Summer);
+                harin = wardrobe.Summer;
+            }
             FindReferences();
             if (harin == null || mainCamera == null || phone == null)
                 throw new InvalidOperationException("EmergenceSequence: Harin, MainCamera or Phone missing");

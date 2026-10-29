@@ -67,7 +67,7 @@ namespace Oddity.PlayTests
         {
             yield return LoadAndPlay();
             var seq = Boot().Emergence;
-            var harin = UnityEngine.Object.FindFirstObjectByType<HarinPuppet>();
+            var harin = HarinWardrobe.ActivePuppet();
             int id = harin.GetInstanceID();
             var renderers = harin.GetComponentsInChildren<Renderer>(true);
             Assert.Greater(renderers.Length, 0);
@@ -98,7 +98,7 @@ namespace Oddity.PlayTests
             yield return WaitFinished(seq);
             yield return null;
 
-            var harin = UnityEngine.Object.FindFirstObjectByType<HarinPuppet>();
+            var harin = HarinWardrobe.ActivePuppet();
             Assert.Less(Vector3.Distance(harin.transform.position, seq.RoomAnchor.position), 0.05f);
 
             var cam = seq.MainCamera.transform;
@@ -143,7 +143,7 @@ namespace Oddity.PlayTests
             yield return LoadAndPlay();
             var boot = Boot();
             yield return WaitFinished(boot.Emergence);
-            var harin = UnityEngine.Object.FindFirstObjectByType<HarinPuppet>();
+            var harin = HarinWardrobe.ActivePuppet();
             Assert.AreEqual(1f, harin.Fade, 0.001f);
 
             for (int i = 0; i < 10 && Mathf.Abs(harin.Glitch - 0.6f) > 0.01f; i++)
@@ -193,7 +193,7 @@ namespace Oddity.PlayTests
         {
             yield return LoadAndHold();
             var seq = Boot().Emergence;
-            var harin = UnityEngine.Object.FindFirstObjectByType<HarinPuppet>();
+            var harin = HarinWardrobe.ActivePuppet();
             var cam = seq.Cut10Camera;
             Assert.IsNotNull(cam, "no Cut10Camera");
             cam.aspect = 9f / 16f;
@@ -250,7 +250,7 @@ namespace Oddity.PlayTests
         {
             yield return LoadAndHold();
             var seq = Boot().Emergence;
-            var harin = UnityEngine.Object.FindFirstObjectByType<HarinPuppet>();
+            var harin = HarinWardrobe.ActivePuppet();
             seq.Seek(9f);
             yield return null;
             var seat = harin.SeatContactWorld;

@@ -26,8 +26,11 @@ namespace Oddity.Game
         public const float DistScale = 0.95f;
         /// <summary>Camera height below her eyes (m): at eye level or a little under, never looking down on her.</summary>
         public const float EyeDrop = 0.03f;
-        /// <summary>Her eyes sit this far down from the top of the frame (0 = top, 1 = bottom).</summary>
-        public const float EyeLine = 0.35f;
+        /// <summary>
+        /// Her eyes sit this far down from the top of the frame (0 = top, 1 = bottom). 0.35 left the v58 bangs and
+        /// the top of her head over nearly the top half of the close-up; 0.28 trades some hair for neck and collar.
+        /// </summary>
+        public const float EyeLine = 0.28f;
         const float HappyWeight = 0.35f; // 0.55 opened the v58 mouth wide (tongue and mouth inside showed)
         const float CameraSmooth = 0.3f;     // SmoothDamp time; settles in about 1 s
         const float SeatedSideDeg = 12f, StandingSideDeg = -16f;
@@ -107,7 +110,11 @@ namespace Oddity.Game
         readonly List<HistoryEntry> _history = new List<HistoryEntry>();
 
         bool _rewinding;
+        bool _covered;
         Action _rewindDone;
+
+        /// <summary>Fired once per rewind when the screen is fully black (the game changes her outfit then).</summary>
+        public event Action RewindCovered;
 
         public bool Active { get; private set; }
         public Stage CurrentStage => _stage;
@@ -709,6 +716,7 @@ namespace Oddity.Game
         {
             _rewinding = true;
             _rewindDone = done;
+            _covered = false;
             _harin.BlushSuppressed = true; // the rewind flips through faces; no blush flashes
             _harin.SetBlush(0f);
             RewindTime = 0f;
@@ -775,6 +783,11 @@ namespace Oddity.Game
             _osd.color = new Color(1f, 1f, 1f, (Mathf.Repeat(t * 2f, 1f) < 0.65f ? 0.9f : 0.2f) * (1f - Smooth((t - RewindReverseEnd) / 0.3f)));
             float black = Smooth((t - RewindReverseEnd) / (RewindBlackEnd - RewindReverseEnd));
             _black.color = new Color(0f, 0f, 0f, black);
+            if (t >= RewindBlackEnd && !_covered)
+            {
+                _covered = true;
+                RewindCovered?.Invoke();
+            }
         }
     }
 }

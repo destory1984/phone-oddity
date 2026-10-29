@@ -20,6 +20,7 @@ namespace Oddity.Game
 
         [SerializeField] ChatView chat;
         [SerializeField] HarinPuppet harin;
+        [SerializeField] HarinWardrobe wardrobe;
         [SerializeField] EmergenceSequence emergence;
         [Header("Cut 10 art")]
         [SerializeField] Texture2D cut10DeskPhone;
@@ -119,6 +120,9 @@ namespace Oddity.Game
         public bool EmergenceBusy => emergence != null && emergence.IsPlaying;
         /// <summary>Touch reactions of Harin in the phone (null when poke.json is missing).</summary>
         public PokeController Poke => _poke;
+        /// <summary>Harin's model in use now: the indoor outfit during the prologue, the summer one otherwise.</summary>
+        public HarinPuppet Harin => wardrobe != null && wardrobe.Current != null ? wardrobe.Current : harin;
+        public HarinWardrobe Wardrobe => wardrobe;
 
         string PrologueSeenPath => string.IsNullOrEmpty(SavePathOverride)
             ? Path.Combine(Application.persistentDataPath, PrologueSeenFile)
@@ -129,7 +133,9 @@ namespace Oddity.Game
         void Start()
         {
             if (chat == null) chat = FindFirstObjectByType<ChatView>();
-            if (harin == null) harin = FindFirstObjectByType<HarinPuppet>();
+            if (wardrobe == null) wardrobe = FindFirstObjectByType<HarinWardrobe>();
+            if (wardrobe != null) wardrobe.Wear(HarinWardrobe.Outfit.Summer); // the phone starts in the summer outfit
+            if (harin == null) harin = wardrobe != null && wardrobe.Summer != null ? wardrobe.Summer : FindFirstObjectByType<HarinPuppet>();
             if (emergence == null) emergence = FindFirstObjectByType<EmergenceSequence>();
             if (emergence == null) emergence = gameObject.AddComponent<EmergenceSequence>();
             emergence.SetArt(cut10DeskPhone, screenNoise, portalRing, wristSwirl);
@@ -157,12 +163,12 @@ namespace Oddity.Game
         void FrameAppStage()
         {
             var go = GameObject.Find("AppStageCamera");
-            if (go == null || harin == null) return;
+            if (go == null || Harin == null) return;
             var cam = go.GetComponent<Camera>();
-            var head = harin.BonePosition(HumanBodyBones.Head);
+            var head = Harin.BonePosition(HumanBodyBones.Head);
             if (cam == null || head == Vector3.zero) return;
-            var eyes = head + Vector3.up * 0.075f * harin.transform.lossyScale.y;
-            var pose = AppStageCameraPose(eyes, harin.transform.forward, cam.fieldOfView);
+            var eyes = head + Vector3.up * 0.075f * Harin.transform.lossyScale.y;
+            var pose = AppStageCameraPose(eyes, Harin.transform.forward, cam.fieldOfView);
             cam.transform.SetPositionAndRotation(pose.position, pose.rotation);
         }
 
@@ -257,7 +263,8 @@ namespace Oddity.Game
                 Dev = DevPanel.Create(this, emergence.MainCamera, chat.Font);
             }
             _voice = gameObject.AddComponent<HarinVoice>();
-            _voice.Init(harin);
+            _voice.Init(Harin);
+            _voice.Follow = () => Harin; // lip sync goes to whichever model is worn
             SetPhoneIdle();
             InitPoke();
 
@@ -269,7 +276,7 @@ namespace Oddity.Game
                 emergence.Play();
                 return;
             }
-            if (_prologue != null && _subtitle != null && harin != null && !SkipPrologue && !PrologueSeen)
+            if (_prologue != null && _subtitle != null && Harin != null && !SkipPrologue && !PrologueSeen)
             {
                 StartPrologue();
                 return;
@@ -280,12 +287,12 @@ namespace Oddity.Game
         // Touch reactions: a bad or missing poke.json only turns them off.
         void InitPoke()
         {
-            if (string.IsNullOrEmpty(_pokeJson) || harin == null) return;
+            if (string.IsNullOrEmpty(_pokeJson) || Harin == null) return;
             try
             {
                 var table = PokeTable.Parse(_pokeJson);
                 _poke = gameObject.AddComponent<PokeController>();
-                _poke.Init(this, chat, harin, State, table);
+                _poke.Init(this, chat, Harin, State, table);
             }
             catch (ScriptFormatException e)
             {
@@ -360,9 +367,9 @@ namespace Oddity.Game
         // Between lines in the phone: the faint smile, breathing and idle glances.
         void SetPhoneIdle()
         {
-            if (harin == null) return;
-            harin.SetFace(HarinPuppet.IdleFace);
-            harin.SetIdle(true);
+            if (Harin == null) return;
+            Harin.SetFace(HarinPuppet.IdleFace);
+            Harin.SetIdle(true);
         }
 
         void Update()
@@ -411,7 +418,7 @@ namespace Oddity.Game
             _pendingFace = null;
             chat.ShowLine(line);
             SetPhoneGlitch(0f);
-            if (harin != null) harin.SetFace(HarinPuppet.FaceForBeat(line.Face, line.Beat));
+            if (Harin != null) Harin.SetFace(HarinPuppet.FaceForBeat(line.Face, line.Beat));
         }
 
         string OpeningText(Slot slot)
@@ -446,7 +453,7 @@ namespace Oddity.Game
         {
             _awaitingTap = true;
             if (_poke != null) _poke.Cancel();
-            if (harin != null) harin.StopPokeMotion();
+            if (Harin != null) Harin.StopPokeMotion();
             int number = NextLineNumber(CurrentSceneId);
             if (_voice != null)
             {
@@ -460,7 +467,7 @@ namespace Oddity.Game
             if (_act2)
             {
                 _subtitle.ShowLine(line);
-                if (harin != null && Mathf.Abs(line.Glitch - FadeDipGlitch) < 0.01f)
+                if (Harin != null && Mathf.Abs(line.Glitch - FadeDipGlitch) < 0.01f)
                 {
                     if (_fadeDip != null) StopCoroutine(_fadeDip);
                     _fadeDip = StartCoroutine(FadeDip());
@@ -488,25 +495,25 @@ namespace Oddity.Game
                 }
                 return;
             }
-            if (harin != null)
+            if (Harin != null)
             {
-                harin.SetFace(HarinPuppet.FaceForBeat(line.Face, line.Beat));
-                if (line.Who == "harin") harin.BlushForLine(line.Face, line.Beat);
-                harin.SetGlitch(line.Glitch);
+                Harin.SetFace(HarinPuppet.FaceForBeat(line.Face, line.Beat));
+                if (line.Who == "harin") Harin.BlushForLine(line.Face, line.Beat);
+                Harin.SetGlitch(line.Glitch);
             }
         }
 
         // A phone line is on screen: Harin's lines show their face, other lines leave her at the idle smile.
         void ApplyPhoneLine(Line line, bool moment)
         {
-            if (harin != null)
+            if (Harin != null)
             {
                 if (line.Who == "harin")
                 {
-                    harin.SetFace(HarinPuppet.FaceForBeat(line.Face, line.Beat));
-                    harin.BlushForLine(line.Face, line.Beat);
+                    Harin.SetFace(HarinPuppet.FaceForBeat(line.Face, line.Beat));
+                    Harin.BlushForLine(line.Face, line.Beat);
                 }
-                else harin.SetFace(HarinPuppet.IdleFace);
+                else Harin.SetFace(HarinPuppet.IdleFace);
             }
             if (_glitchMoment != null) { StopCoroutine(_glitchMoment); _glitchMoment = null; }
             if (moment && isActiveAndEnabled) _glitchMoment = StartCoroutine(GlitchMoment(line.Glitch));
@@ -525,14 +532,14 @@ namespace Oddity.Game
         {
             PhoneGlitch = Mathf.Clamp01(amount);
             chat.SetGlitch(PhoneGlitch);
-            if (harin != null) harin.SetGlitch(PhoneGlitch);
+            if (Harin != null) Harin.SetGlitch(PhoneGlitch);
         }
 
         System.Collections.IEnumerator FadeDip()
         {
-            harin.SetFade(FadeDipAlpha);
+            Harin.SetFade(FadeDipAlpha);
             yield return new WaitForSeconds(FadeDipSeconds);
-            harin.SetFade(1f);
+            Harin.SetFade(1f);
             _fadeDip = null;
         }
 
@@ -541,7 +548,7 @@ namespace Oddity.Game
         {
             _pendingFace = null;
             if (_glitchMoment != null) { StopCoroutine(_glitchMoment); _glitchMoment = null; }
-            if (harin != null) { harin.SetIdle(false); harin.StopPokeMotion(); }
+            if (Harin != null) { Harin.SetIdle(false); Harin.StopPokeMotion(); }
             if (_poke != null) _poke.Cancel();
             if (_voice != null) _voice.Stop();
         }
@@ -671,8 +678,11 @@ namespace Oddity.Game
             _awaitingTap = false;
             LeavePhone();
             chat.SetVisible(false);
-            _director = PrologueDirector.Create(gameObject, harin, emergence, emergence.MainCamera, _subtitle, screenNoise, chat.Font);
+            // day 12 at home: the indoor outfit (B2); the phone, the emergence and act 2 keep the summer one (B)
+            if (wardrobe != null) wardrobe.Wear(HarinWardrobe.Outfit.Indoor);
+            _director = PrologueDirector.Create(gameObject, Harin, emergence, emergence.MainCamera, _subtitle, screenNoise, chat.Font);
             _director.Begin();
+            _director.RewindCovered += WearSummer;
             // a throwaway state: the prologue never touches the hidden values, the day or the slot clock
             _prologueRunner = new DialogueRunner(_prologue, new GameState());
             _prologueRunner.LineShown += OnPrologueLine;
@@ -742,13 +752,23 @@ namespace Oddity.Game
             _prologueRunner.LineShown -= OnPrologueLine;
             _prologueRunner.ChoicesShown -= OnPrologueChoices;
             _prologueRunner.SlotFinished -= OnPrologueFinished;
-            if (_director != null) _director.End();
+            if (_director != null) { _director.RewindCovered -= WearSummer; _director.End(); }
             _director = null;
+            WearSummer(); // also when the script had no rewind line
             _subtitle.SetVisible(false);
             chat.SetVisible(true);
             _lineScene = null;
             SetPhoneIdle();
             StartDayOne(true);
+        }
+
+        // Back to the summer outfit, while the rewind screen is black (or at the end of the prologue).
+        void WearSummer()
+        {
+            if (wardrobe == null || wardrobe.Wearing == HarinWardrobe.Outfit.Summer) return;
+            wardrobe.Wear(HarinWardrobe.Outfit.Summer);
+            Harin.SetBlush(0f);
+            SetPhoneIdle();
         }
 
         /// <summary>Dev panel: forget that the prologue was seen and load the scene again.</summary>

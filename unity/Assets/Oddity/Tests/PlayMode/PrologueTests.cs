@@ -257,7 +257,7 @@ namespace Oddity.PlayTests
 
             var cam = boot.Prologue.Camera;
             cam.aspect = 9f / 16f;
-            var harin = UnityEngine.Object.FindFirstObjectByType<HarinPuppet>();
+            var harin = HarinWardrobe.ActivePuppet();
             // the VRoid model has no eye bones mapped; the director uses Head + 7.5 cm for her eyes, and so does this test.
             // The Head bone itself sits at the top of the neck, about 0.19 of the frame under the eyes.
             var headWorld = harin.BonePosition(HumanBodyBones.Head);
@@ -265,8 +265,10 @@ namespace Oddity.PlayTests
             var head = cam.WorldToViewportPoint(headWorld);
             var eyes = cam.WorldToViewportPoint(eyesWorld);
             Assert.Greater(head.z, 0f, "her head is in front of the camera");
-            Assert.That(eyes.y, Is.InRange(0.55f, 0.7f), $"eye line on screen (0 bottom, 1 top): {eyes.y:F3}");
-            Assert.That(head.y, Is.InRange(0.4f, 0.55f), $"Head bone (top of the neck) on screen: {head.y:F3}");
+            // Task 25: EyeLine 0.35 -> 0.28 so the v58 bangs and crown cover less of the frame; her eyes now sit
+            // 0.25 -> 0.35 from the top (was 0.30 -> 0.45) and more neck and collar show at the bottom.
+            Assert.That(eyes.y, Is.InRange(0.65f, 0.75f), $"eye line on screen (0 bottom, 1 top): {eyes.y:F3}");
+            Assert.That(head.y, Is.InRange(0.45f, 0.62f), $"Head bone (top of the neck) on screen: {head.y:F3}");
             Assert.That(head.x, Is.InRange(0.3f, 0.7f), "head roughly centred");
             Assert.LessOrEqual(cam.transform.position.y, eyesWorld.y + 0.005f, "the camera is not above her eyes");
         }
@@ -276,7 +278,7 @@ namespace Oddity.PlayTests
         {
             GameBootstrap.SkipPrologue = true;
             yield return LoadScene();
-            var harin = UnityEngine.Object.FindFirstObjectByType<HarinPuppet>();
+            var harin = HarinWardrobe.ActivePuppet();
             harin.SetMouth(0f, 0f, 0f);
             harin.SetFace("smile");
             for (int i = 0; i < 3; i++) yield return null;
@@ -328,7 +330,7 @@ namespace Oddity.PlayTests
         {
             GameBootstrap.SkipPrologue = true;
             yield return LoadScene();
-            var harin = UnityEngine.Object.FindFirstObjectByType<HarinPuppet>();
+            var harin = HarinWardrobe.ActivePuppet();
             const int rate = 48000;
             const float seconds = 0.5f;
             var clip = AudioClip.Create("sine", (int)(rate * seconds), 1, rate, false);

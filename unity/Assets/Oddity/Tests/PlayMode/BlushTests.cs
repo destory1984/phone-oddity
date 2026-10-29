@@ -46,7 +46,7 @@ namespace Oddity.PlayTests
             yield return null;
         }
 
-        static HarinPuppet Harin() => UnityEngine.Object.FindFirstObjectByType<HarinPuppet>();
+        static HarinPuppet Harin() => HarinWardrobe.ActivePuppet();
 
         static float Sample(Texture2D mask, Vector2 uv) => mask.GetPixelBilinear(uv.x, uv.y).r;
 

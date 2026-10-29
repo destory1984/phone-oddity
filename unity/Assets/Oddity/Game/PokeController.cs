@@ -66,7 +66,9 @@ namespace Oddity.Game
 
         GameBootstrap _boot;
         ChatView _chat;
-        HarinPuppet _harin;
+        HarinPuppet _harinFromInit;
+        // the model worn now (the bootstrap's wardrobe), else the one given to Init
+        HarinPuppet _harin => _boot != null && _boot.Harin != null ? _boot.Harin : _harinFromInit;
         Camera _camera;
         PokeRules _rules;
         Coroutine _face;
@@ -86,7 +88,7 @@ namespace Oddity.Game
         {
             _boot = boot;
             _chat = chat;
-            _harin = harin;
+            _harinFromInit = harin;
             _rules = new PokeRules(state, table, Environment.TickCount);
             var go = GameObject.Find("AppStageCamera");
             if (go != null) _camera = go.GetComponent<Camera>();

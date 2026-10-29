@@ -109,7 +109,7 @@ namespace Oddity.EditorTools
                     var boot = PlayPrologue(b => AtLine(b, "p_side_by_side", "flustered"));
                     boot.Prologue.SeekBeat(1f);
                     // the beat's face reaches the puppet on the next LateUpdate and would start a fresh pulse from 0
-                    var harin = UnityEngine.Object.FindFirstObjectByType<HarinPuppet>();
+                    var harin = HarinWardrobe.ActivePuppet();
                     harin.SetFace("flustered");
                     harin.SetBlush(1f);
                 },
@@ -142,7 +142,7 @@ namespace Oddity.EditorTools
                 CameraName = "AppStageCamera",
                 Setup = () =>
                 {
-                    var harin = UnityEngine.Object.FindFirstObjectByType<HarinPuppet>();
+                    var harin = HarinWardrobe.ActivePuppet();
                     if (harin == null) throw new Exception("no HarinPuppet in the scene");
                     harin.SetFace("neutral");
                     harin.SetGlitch(0f);
@@ -172,7 +172,7 @@ namespace Oddity.EditorTools
                     int taps = 0;
                     var chat = PlayMorning(c => taps++ >= 1);
                     var boot = UnityEngine.Object.FindFirstObjectByType<GameBootstrap>();
-                    var harin = UnityEngine.Object.FindFirstObjectByType<HarinPuppet>();
+                    var harin = HarinWardrobe.ActivePuppet();
                     var cam = GameObject.Find("AppStageCamera").GetComponent<Camera>();
                     double clock = 100;
                     PokeController.ClockOverride = () => clock;

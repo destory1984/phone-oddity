@@ -121,7 +121,7 @@ namespace Oddity.PlayTests
             SavePlayer(Slot.Morning);
             yield return LoadScene();
             var chat = Chat();
-            var harin = UnityEngine.Object.FindFirstObjectByType<HarinPuppet>();
+            var harin = HarinWardrobe.ActivePuppet();
 
             // morning line 2 carries glitch 0.2
             Line expected = _script.EntryFor(Slot.Morning).Lines[1];

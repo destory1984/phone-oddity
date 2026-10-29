@@ -58,7 +58,7 @@ namespace Oddity.PlayTests
         }
 
         static GameBootstrap Boot() => UnityEngine.Object.FindFirstObjectByType<GameBootstrap>();
-        static HarinPuppet Harin() => UnityEngine.Object.FindFirstObjectByType<HarinPuppet>();
+        static HarinPuppet Harin() => HarinWardrobe.ActivePuppet();
 
         // No Harin line yet (the name prompt, then the system lines): a faint closed-mouth smile, breathing.
         [UnityTest]

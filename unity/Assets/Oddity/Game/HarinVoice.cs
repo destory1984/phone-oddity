@@ -52,6 +52,9 @@ namespace Oddity.Game
         readonly Dictionary<string, float[]> _samples = new Dictionary<string, float[]>();
         AudioSource _source;
         HarinPuppet _harin;
+        /// <summary>When set, the mouth moves on the puppet this returns (the model worn now) instead of the one from Init.</summary>
+        public System.Func<HarinPuppet> Follow;
+        HarinPuppet Puppet => Follow != null ? Follow() : _harin;
         AudioClip _clip;
         AudioClip _pending;
         Func<bool> _ready;
@@ -171,7 +174,7 @@ namespace Oddity.Game
             _clip = null;
             _aa = 0f;
             if (_source != null) _source.Stop();
-            if (_harin != null) _harin.SetMouth(0f, 0f, 0f);
+            { var p = Puppet; if (p != null) p.SetMouth(0f, 0f, 0f); }
         }
 
         static string PickSfx(string face, string beat)
@@ -209,7 +212,7 @@ namespace Oddity.Game
             {
                 _clip = null;
                 _aa = 0f;
-                if (_harin != null) _harin.SetMouth(0f, 0f, 0f);
+                { var p = Puppet; if (p != null) p.SetMouth(0f, 0f, 0f); }
                 return;
             }
             float t = Time.time - _startedAt;
@@ -218,7 +221,7 @@ namespace Oddity.Game
             _aa = Mathf.Lerp(_aa, target, 0.6f);
             float ih = _aa * 0.3f * (0.5f + 0.5f * Mathf.Sin(t * 9f));
             float ou = _aa * 0.25f * (0.5f + 0.5f * Mathf.Sin(t * 6f + 1f));
-            if (_harin != null) _harin.SetMouth(_aa, ih, ou);
+            { var p = Puppet; if (p != null) p.SetMouth(_aa, ih, ou); }
         }
 
         float[] SamplesOf(AudioClip clip)

@@ -22,12 +22,34 @@ namespace Oddity.EditorTools
 
         public static void BakeBatch() => Bake(true);
 
-        /// <summary>Bakes from the scene's puppet; <paramref name="openScene"/> false uses the scene already open.</summary>
+        /// <summary>Cheek mask of the indoor outfit (B2, the prologue); its face mesh UVs are its own.</summary>
+        public const string IndoorMaskPath = "Assets/Oddity/Art/harin_indoor_blush_mask.png";
+
+        /// <summary>
+        /// Bakes a mask for every HarinPuppet in the scene (the wardrobe's indoor model gets <see cref="IndoorMaskPath"/>,
+        /// the others <see cref="MaskPath"/>); <paramref name="openScene"/> false uses the scene already open.
+        /// </summary>
         public static void Bake(bool openScene)
         {
             var scene = openScene ? EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single) : EditorSceneManager.GetActiveScene();
-            var puppet = Object.FindFirstObjectByType<HarinPuppet>(FindObjectsInactive.Include);
-            if (puppet == null) throw new System.Exception("no HarinPuppet in " + ScenePath);
+            var puppets = Object.FindObjectsByType<HarinPuppet>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            if (puppets.Length == 0) throw new System.Exception("no HarinPuppet in " + ScenePath);
+            var wardrobe = Object.FindFirstObjectByType<HarinWardrobe>(FindObjectsInactive.Include);
+            foreach (var puppet in puppets)
+            {
+                // the Animator of an inactive model gives no bones; turn it on for the bake only
+                bool wasActive = puppet.gameObject.activeSelf;
+                puppet.gameObject.SetActive(true);
+                try { BakeOne(puppet, wardrobe != null && wardrobe.Indoor == puppet ? IndoorMaskPath : MaskPath); }
+                finally { puppet.gameObject.SetActive(wasActive); }
+            }
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            AssetDatabase.SaveAssets();
+        }
+
+        static void BakeOne(HarinPuppet puppet, string maskPath)
+        {
             var root = puppet.gameObject;
             var head = root.GetComponent<Animator>()?.GetBoneTransform(HumanBodyBones.Head);
             if (head == null) throw new System.Exception("no Head bone on " + root.name);
@@ -41,13 +63,13 @@ namespace Oddity.EditorTools
             var cols = new Color32[px.Length];
             for (int i = 0; i < px.Length; i++) cols[i] = new Color32(px[i], px[i], px[i], 255);
             rgb.SetPixels32(cols);
-            Directory.CreateDirectory(Path.GetDirectoryName(MaskPath));
-            File.WriteAllBytes(MaskPath, rgb.EncodeToPNG());
+            Directory.CreateDirectory(Path.GetDirectoryName(maskPath));
+            File.WriteAllBytes(maskPath, rgb.EncodeToPNG());
             Object.DestroyImmediate(rgb);
             Object.DestroyImmediate(tex);
 
-            AssetDatabase.ImportAsset(MaskPath, ImportAssetOptions.ForceUpdate);
-            var imp = (TextureImporter)AssetImporter.GetAtPath(MaskPath);
+            AssetDatabase.ImportAsset(maskPath, ImportAssetOptions.ForceUpdate);
+            var imp = (TextureImporter)AssetImporter.GetAtPath(maskPath);
             imp.textureType = TextureImporterType.SingleChannel;
             imp.sRGBTexture = false;
             imp.mipmapEnabled = false;
@@ -60,14 +82,11 @@ namespace Oddity.EditorTools
             imp.textureCompression = TextureImporterCompression.Uncompressed; // R8
             imp.SaveAndReimport();
 
-            var mask = AssetDatabase.LoadAssetAtPath<Texture2D>(MaskPath);
+            var mask = AssetDatabase.LoadAssetAtPath<Texture2D>(maskPath);
             var so = new SerializedObject(puppet);
             so.FindProperty("blushMask").objectReferenceValue = mask;
             so.ApplyModifiedPropertiesWithoutUndo();
-            EditorSceneManager.MarkSceneDirty(scene);
-            EditorSceneManager.SaveScene(scene);
-            AssetDatabase.SaveAssets();
-            Debug.Log($"BLUSH mask baked {MaskPath} from {face.Renderer.name} (eyeY {face.EyeY:F3}, forward {face.Forward})");
+            Debug.Log($"BLUSH mask baked {maskPath} for {root.name} from {face.Renderer.name} (eyeY {face.EyeY:F3}, forward {face.Forward})");
         }
     }
 }

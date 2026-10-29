@@ -52,7 +52,7 @@ namespace Oddity.PlayTests
         }
 
         static GameBootstrap Boot() => UnityEngine.Object.FindFirstObjectByType<GameBootstrap>();
-        static HarinPuppet Harin() => UnityEngine.Object.FindFirstObjectByType<HarinPuppet>();
+        static HarinPuppet Harin() => HarinWardrobe.ActivePuppet();
 
         static List<Transform> SpringJoints(HarinPuppet harin, string part) => harin
             .GetComponentsInChildren<Transform>(true)
@@ -154,7 +154,10 @@ namespace Oddity.PlayTests
             Assert.AreEqual(Oddity.Game.Pose.Seated, harin.CurrentPose);
             var tips = SpringJoints(harin, "SkirtFront").Where(t => t.childCount == 0).ToList();
             Assert.GreaterOrEqual(tips.Count, 4, "front skirt chain tips");
-            for (int i = 0; i < 120; i++) yield return null;
+            // 120 frames and at least 2 s: after other scenes the frames get short and 120 of them were only
+            // about 1 s of spring time, so the result depended on the test order (0.05 m alone, -0.03 m after the emergence tests)
+            float until = Time.time + 2f;
+            for (int i = 0; i < 120 || Time.time < until; i++) yield return null;
 
             float s = harin.transform.lossyScale.y;
             float wrist = Mathf.Min(harin.BonePosition(HumanBodyBones.LeftHand).y, harin.BonePosition(HumanBodyBones.RightHand).y);
