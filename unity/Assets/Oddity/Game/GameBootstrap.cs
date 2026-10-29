@@ -240,6 +240,14 @@ namespace Oddity.Game
             _voice.Init(harin);
             SetPhoneIdle();
 
+            if (State.NeedsEmergence() && emergence != null)
+            {
+                // the app was closed during the emergence or act 2: play them again from the start
+                Debug.Log("GameBootstrap: act 2 was not seen, replaying the emergence");
+                LeavePhone();
+                emergence.Play();
+                return;
+            }
             if (_prologue != null && _subtitle != null && harin != null && !SkipPrologue && !PrologueSeen)
             {
                 StartPrologue();
@@ -490,6 +498,7 @@ namespace Oddity.Game
             _pendingFace = null;
             if (_glitchMoment != null) { StopCoroutine(_glitchMoment); _glitchMoment = null; }
             if (harin != null) harin.SetIdle(false);
+            if (_voice != null) _voice.Stop();
         }
 
         void OnEmergenceFinished()
@@ -515,10 +524,12 @@ namespace Oddity.Game
             {
                 Debug.Log("GameBootstrap: act 2 cut finished");
                 ActTwoFinished = true;
+                State.ActTwoSeen = true;
+                SaveState();
                 return;
             }
             Clock.CloseCurrent();
-            _store.Save(State);
+            SaveState();
             // CloseCurrent has moved the day on, so the day that just ended is State.Day - 1
             if (slot == Slot.Night && State.Day - 1 >= CoreInfo.EmergenceDay)
             {
@@ -530,17 +541,30 @@ namespace Oddity.Game
             BeginOrWait(false);
         }
 
-        public void SaveNow() => _store.Save(State);
+        public void SaveNow() => SaveState();
+
+        // A failed save is only logged: the game goes on and the next save tries again.
+        void SaveState()
+        {
+            if (!_store.Save(State)) Debug.LogWarning("GameBootstrap: cannot write the save (" + _store.LastError + "), will retry at the next save");
+        }
+
+        bool EmergenceOrPrologueBusy => _inPrologue || (emergence != null && emergence.IsPlaying);
 
         /// <summary>Dev panel: end the wait and start the open slot right away.</summary>
         public void SkipToNextSlot()
         {
+            if (EmergenceOrPrologueBusy || _act2) { Debug.Log("GameBootstrap: dev next slot ignored during the prologue or emergence"); return; }
             Clock.SkipWait();
             if (_waiting) BeginOrWait(true);
         }
 
         /// <summary>Dev panel: jump to the morning of the next day and start it now.</summary>
-        public void NextDayNow() => JumpTo(State.Day + 1, Slot.Morning);
+        public void NextDayNow()
+        {
+            if (EmergenceOrPrologueBusy || _act2) { Debug.Log("GameBootstrap: dev day +1 ignored during the prologue or emergence"); return; }
+            JumpTo(State.Day + 1, Slot.Morning);
+        }
 
         /// <summary>Dev panel and shots: go to the given day and slot and start it now.</summary>
         public void JumpTo(int day, Slot slot)
@@ -550,7 +574,7 @@ namespace Oddity.Game
             State.Day = day;
             State.Slot = slot;
             Clock.SkipWait();
-            _store.Save(State);
+            SaveState();
             BeginOrWait(false);
         }
 
@@ -568,7 +592,7 @@ namespace Oddity.Game
             _awaitingTap = false;
             State.Slot = Slot.Night;
             Clock.CloseCurrent();
-            _store.Save(State);
+            SaveState();
             NightFinished?.Invoke();
             LeavePhone();
             emergence.Play();
@@ -704,7 +728,7 @@ namespace Oddity.Game
         void OnNameEntered(string name)
         {
             State.PlayerName = name;
-            _store.Save(State);
+            SaveState();
             BeginOrWait(false);
         }
     }

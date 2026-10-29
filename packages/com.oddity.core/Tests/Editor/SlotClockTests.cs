@@ -53,6 +53,20 @@ namespace Oddity.Core.Tests
         }
 
         [Test]
+        public void Clock_BackwardsRestartsWait()
+        {
+            DateTime now = T0;
+            var state = new GameState();
+            var clock = new SlotClock(state, () => now);
+            clock.CloseCurrent();
+            now = T0.AddHours(-3);
+            Assert.IsFalse(clock.IsOpen);
+            Assert.AreEqual(now + SlotClock.FastInterval, state.NextOpenUtc);
+            now = now.AddSeconds(61);
+            Assert.IsTrue(clock.IsOpen); // opens 60 s after the clock went back, not hours later
+        }
+
+        [Test]
         public void SkipWait_OpensNow()
         {
             var clock = new SlotClock(new GameState(), () => T0);

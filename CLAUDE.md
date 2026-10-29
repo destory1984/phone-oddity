@@ -27,7 +27,7 @@
 | `shot [장면 ...]` | `shots/장면.png` (폭 800). baseline 이 있으면 `SHOT 장면 diff n.n%` |
 | `scenes`, `baseline`, `kill` | 장면 목록, 기준 그림 저장, 이 프로젝트의 Unity 닫기 |
 | `ship -m "메시지" [--quick a,b]` | check, test 통과 뒤 커밋. push 는 절대 안 한다 |
-| `build` | 안드로이드 개발 APK → `unity/Build/oddity-proto.apk`, 크기와 시간을 찍고 활성 대상을 Windows 로 되돌린다 (IL2CPP 라 길다) |
+| `build [--demo-voice]` | 안드로이드 개발 APK → `unity/Build/oddity-proto.apk`, 크기와 시간을 찍고 활성 대상을 Windows 로 되돌린다 (IL2CPP 라 길다). karina 음성 파일이 있으면 멈추고, `--demo-voice` 일 때만 `oddity-proto-DEMO-private.apk` 로 짓는다 |
 
 Unity 경로는 환경변수 `UNITY_EXE`, dotnet 은 `DOTNET_EXE` 로 바꾼다.
 Unity MCP(unity-mcp)는 감독이 열린 에디터를 잠깐 살필 때만 쓴다. MCP로 TestRunnerApi 를 부르지 않는다(2026-10-30 에디터가 꺼졌다).

@@ -101,5 +101,59 @@ namespace Oddity.Core.Tests
             }
             finally { Directory.Delete(dir, true); }
         }
+
+        [Test]
+        public void ActTwo_ReplaysIfInterrupted()
+        {
+            var s = new GameState { Day = CoreInfo.EmergenceDay + 1 };
+            Assert.IsTrue(s.NeedsEmergence());
+            Assert.IsFalse(new GameState { Day = CoreInfo.EmergenceDay }.NeedsEmergence());
+            // an old save has no actTwoSeen: false
+            GameState old = GameState.FromJson("{\"version\":1,\"day\":4}", out bool rec);
+            Assert.IsFalse(rec);
+            Assert.IsFalse(old.ActTwoSeen);
+            Assert.IsTrue(old.NeedsEmergence());
+            s.ActTwoSeen = true;
+            GameState back = GameState.FromJson(s.ToJson(), out rec);
+            Assert.IsTrue(back.ActTwoSeen);
+            Assert.IsFalse(back.NeedsEmergence());
+        }
+
+        [Test]
+        public void Save_FailureDoesNotStall()
+        {
+            string dir = TempDir();
+            try
+            {
+                // the save path is a directory: writing the file fails, but Save must not throw
+                string path = Path.Combine(dir, "save.json");
+                Directory.CreateDirectory(path);
+                var store = new SaveStore(path);
+                bool ok = true;
+                Assert.DoesNotThrow(() => ok = store.Save(new GameState()));
+                Assert.IsFalse(ok);
+                Assert.IsNotNull(store.LastError);
+            }
+            finally { Directory.Delete(dir, true); }
+        }
+
+        [Test]
+        public void Load_CorruptFileStartsFresh()
+        {
+            string dir = TempDir();
+            try
+            {
+                string path = Path.Combine(dir, "save.json");
+                File.WriteAllText(path, "{ not json !!");
+                var store = new SaveStore(path);
+                GameState s = store.Load(out bool recovered);
+                Assert.IsTrue(recovered);
+                Assert.AreEqual(1, s.Day);
+                Assert.IsTrue(File.Exists(path + ".bad"));
+                Assert.IsFalse(File.Exists(path));
+                Assert.IsTrue(store.Save(s)); // and the next save works
+            }
+            finally { Directory.Delete(dir, true); }
+        }
     }
 }

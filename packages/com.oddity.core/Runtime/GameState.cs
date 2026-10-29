@@ -28,6 +28,14 @@ namespace Oddity.Core
         public int DaysLeft = 30;
         public string PlayerName = "";
         public DateTime NextOpenUtc;
+        /// <summary>True once the act 2 cut after the emergence has been played to its last line. Old saves: false.</summary>
+        public bool ActTwoSeen;
+
+        /// <summary>The emergence night is over (Day moved past it) but act 2 was not seen to the end.</summary>
+        public bool NeedsEmergence()
+        {
+            return Day > CoreInfo.EmergenceDay && !ActTwoSeen;
+        }
 
         public void Apply(Effects e)
         {

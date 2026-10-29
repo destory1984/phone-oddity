@@ -16,12 +16,31 @@ namespace Oddity.EditorTools
     {
         const string ScenePath = "Assets/Scenes/Prototype.unity";
         const string OutputRelative = "Build/oddity-proto.apk";
+        const string DemoOutputRelative = "Build/oddity-proto-DEMO-private.apk";
+        const string VoiceDir = "Audio/Placeholder/Resources/Voice";
+        const string DemoVoiceEnv = "ODDITY_DEMO_VOICE";
 
         public static void Build()
         {
             try
             {
-                string output = Path.GetFullPath(Path.Combine(Application.dataPath, "..", OutputRelative));
+                // Files of a real person's voice must not ship by accident: only ODDITY_DEMO_VOICE=1 lets them through.
+                bool demo = Environment.GetEnvironmentVariable(DemoVoiceEnv) == "1";
+                string voiceDir = Path.Combine(Application.dataPath, VoiceDir);
+                if (Directory.Exists(voiceDir) && !demo)
+                {
+                    foreach (string f in Directory.GetFiles(voiceDir))
+                    {
+                        if (f.EndsWith(".meta", StringComparison.OrdinalIgnoreCase)) continue;
+                        if (Path.GetFileName(f).IndexOf("karina", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            Fail("voice files of a real person are in Resources/Voice (" + Path.GetFileName(f)
+                                + "). Move them out, or set " + DemoVoiceEnv + "=1 for a private demo build (python tools/dev.py build --demo-voice).");
+                            return;
+                        }
+                    }
+                }
+                string output = Path.GetFullPath(Path.Combine(Application.dataPath, "..", demo ? DemoOutputRelative : OutputRelative));
                 Directory.CreateDirectory(Path.GetDirectoryName(output));
                 if (File.Exists(output)) File.Delete(output);
 

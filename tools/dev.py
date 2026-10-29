@@ -8,7 +8,8 @@
     python tools/dev.py baseline [SCENE ...]   copy current shots to shots/baseline/ for later diffs
     python tools/dev.py kill                   close the Unity editor that has this project open (not the Hub)
     python tools/dev.py ship -m "msg" [--quick a,b]   check, test (only a,b with --quick), commit here. Never pushes.
-    python tools/dev.py build                  Android dev apk -> unity/Build/oddity-proto.apk, then active target back to Windows
+    python tools/dev.py build [--demo-voice]   Android dev apk -> unity/Build/oddity-proto.apk, then active target back to Windows
+                                               (--demo-voice: let karina voice files in; private apk oddity-proto-DEMO-private.apk)
 
 Every command that starts Unity first closes this project's editor. Only one Unity can open the project.
 Paths: UNITY_EXE (default C:/Program Files/Unity/Hub/Editor/6000.3.27f1/Editor/Unity.exe),
@@ -130,9 +131,13 @@ def check():
     return 0
 
 
-def build():
+def build(demo_voice=False):
     """Android development apk. Switches the active target to Android, so switch it back to Windows after."""
-    apk = UNITY_PROJECT / "Build" / "oddity-proto.apk"
+    apk = UNITY_PROJECT / "Build" / ("oddity-proto-DEMO-private.apk" if demo_voice else "oddity-proto.apk")
+    if demo_voice:
+        os.environ["ODDITY_DEMO_VOICE"] = "1"
+    else:
+        os.environ.pop("ODDITY_DEMO_VOICE", None)
     apk.unlink(missing_ok=True)
     t0 = time.time()
     code, text = unity(["-quit", "-executeMethod", "Oddity.EditorTools.BuildAndroid.Build"], "build.log", timeout=3000)
@@ -328,6 +333,7 @@ def main():
     ap.add_argument("names", nargs="*")
     ap.add_argument("-m", "--message")
     ap.add_argument("--quick", help="ship: run only these tests (comma list)")
+    ap.add_argument("--demo-voice", action="store_true", help="build: allow karina voice files (private demo apk)")
     ap.add_argument("--dotnet-only", action="store_true", help="test: skip the Unity EditMode and PlayMode runs")
     a = ap.parse_args()
     names = [n for arg in a.names for n in arg.split(",") if n]
@@ -346,7 +352,7 @@ def main():
     if a.cmd == "baseline":
         return baseline(names)
     if a.cmd == "build":
-        return build()
+        return build(a.demo_voice)
     if a.cmd == "ship":
         if not a.message:
             ap.error("ship needs -m MESSAGE")

@@ -152,7 +152,7 @@ namespace Oddity.PlayTests
         [UnityTest]
         public IEnumerator Day4_ShowsSeeYouTomorrowAndStops()
         {
-            var state = new GameState { PlayerName = Name, Day = CoreInfo.EmergenceDay + 1, Slot = Slot.Morning, NextOpenUtc = _now.AddMinutes(-1) };
+            var state = new GameState { PlayerName = Name, Day = CoreInfo.EmergenceDay + 1, Slot = Slot.Morning, NextOpenUtc = _now.AddMinutes(-1), ActTwoSeen = true };
             new SaveStore(_savePath).Save(state);
             yield return LoadScene();
             var boot = Boot();
@@ -160,6 +160,18 @@ namespace Oddity.PlayTests
             for (int i = 0; i < 3; i++) yield return null;
             Assert.IsTrue(boot.EndOfContent);
             Assert.AreEqual(GameBootstrap.EndOfContentText, chat.CurrentLineText);
+        }
+
+        [UnityTest]
+        public IEnumerator Day4_WithoutActTwoSeen_ReplaysEmergence()
+        {
+            var state = new GameState { PlayerName = Name, Day = CoreInfo.EmergenceDay + 1, Slot = Slot.Morning, NextOpenUtc = _now.AddMinutes(-1) };
+            new SaveStore(_savePath).Save(state);
+            yield return LoadScene();
+            var boot = Boot();
+            for (int i = 0; i < 3; i++) yield return null;
+            Assert.IsTrue(boot.Emergence.IsPlaying, "the app was closed before act 2 ended: the emergence plays again");
+            Assert.IsFalse(boot.EndOfContent);
         }
 
         [UnityTest]

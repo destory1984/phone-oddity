@@ -42,4 +42,5 @@
 - adb 는 `C:/Program Files/Unity/Hub/Editor/6000.3.27f1/Editor/Data/PlaybackEngines/AndroidPlayer/SDK/platform-tools/adb.exe` 다.
 - 설치: `adb install -r unity/Build/oddity-proto.apk`
 - 사람이 할 일: 폰의 개발자 옵션과 USB 디버깅을 켜고, 케이블을 꽂은 뒤 폰 화면의 허용 창을 누른다.
+- karina 목소리 파일이 `Resources/Voice` 에 있으면 빌드가 멈춘다. 개인 시연용은 `python tools/dev.py build --demo-voice` (환경변수 `ODDITY_DEMO_VOICE=1`) 로 `oddity-proto-DEMO-private.apk` 를 만든다. 이 APK 는 남에게 주지 않는다.
 - 개발 빌드라 DEV 단추와 FPS 표시가 보인다. 30fps 이상인지 본다.

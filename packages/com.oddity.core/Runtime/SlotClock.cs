@@ -15,18 +15,29 @@ namespace Oddity.Core
             _utcNow = utcNow ?? throw new ArgumentNullException(nameof(utcNow));
         }
 
+        // A wait longer than the interval means the phone clock went back: count the wait again from now.
+        private void ClampWait()
+        {
+            DateTime now = _utcNow();
+            if (_state.NextOpenUtc - now > FastInterval) _state.NextOpenUtc = now + FastInterval;
+        }
+
         public bool IsOpen
         {
-            get { return _utcNow() >= _state.NextOpenUtc; }
+            get
+            {
+                ClampWait();
+                return _utcNow() >= _state.NextOpenUtc;
+            }
         }
 
         public TimeSpan Remaining
         {
             get
             {
+                ClampWait();
                 TimeSpan left = _state.NextOpenUtc - _utcNow();
-                if (left < TimeSpan.Zero) return TimeSpan.Zero;
-                return left > FastInterval ? FastInterval : left;
+                return left < TimeSpan.Zero ? TimeSpan.Zero : left;
             }
         }
 

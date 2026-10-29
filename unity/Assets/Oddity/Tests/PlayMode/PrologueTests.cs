@@ -197,6 +197,14 @@ namespace Oddity.PlayTests
             UnityEngine.Object.Destroy(go);
         }
 
+        [Test]
+        public void Voice_DefaultIsNotKarina()
+        {
+            Assert.AreEqual("harinA", HarinVoice.DefaultVoiceSet);
+            Assert.AreEqual("karina", HarinVoice.VoiceSets[HarinVoice.VoiceSets.Length - 1], "karina is last in the list");
+            Assert.AreEqual(HarinVoice.DefaultVoiceSet, HarinVoice.VoiceSets[0]);
+        }
+
         [UnityTest]
         public IEnumerator Voice_SetSwitch_PicksSuffix()
         {
