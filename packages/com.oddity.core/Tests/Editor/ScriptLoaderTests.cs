@@ -55,7 +55,7 @@ namespace Oddity.Core.Tests
             const string json = @"{ ""day"": 1, ""scenes"": [
   { ""id"": ""a"", ""slot"": ""night"",
     ""lines"": [ { ""who"": ""harin"", ""text"": ""hi"" } ],
-    ""choices"": [ { ""text"": ""ok"", ""next"": ""a"" } ] } ] }";
+    ""choices"": [ { ""text"": ""ok"" } ] } ] }";
 
             Scene scene = ScriptLoader.Parse(json).Get("a");
 
@@ -65,6 +65,18 @@ namespace Oddity.Core.Tests
             Assert.AreEqual(0, scene.Choices[0].Effects.Stability);
             Assert.AreEqual(0, scene.Choices[0].Effects.Deviation);
             Assert.AreEqual(0, scene.Choices[0].Effects.Heart);
+        }
+
+        [Test]
+        public void Parse_AllowsChoiceWithoutNext()
+        {
+            const string json = @"{ ""day"": 1, ""scenes"": [
+  { ""id"": ""a"", ""slot"": ""night"",
+    ""choices"": [ { ""text"": ""ok"" } ] } ] }";
+
+            Scene scene = ScriptLoader.Parse(json).Get("a");
+
+            Assert.IsNull(scene.Choices[0].Next);
         }
 
         [Test]
@@ -104,7 +116,7 @@ namespace Oddity.Core.Tests
         [Test]
         public void Parse_AcceptsUtf8Bom()
         {
-            DayScript script = ScriptLoader.Parse("﻿" + ExampleJson);
+            DayScript script = ScriptLoader.Parse("\uFEFF" + ExampleJson);
 
             Assert.AreEqual(3, script.Scenes.Count);
         }

@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
@@ -18,7 +17,7 @@ namespace Oddity.Core
         public static DayScript Parse(string json)
         {
             if (json == null) throw new ScriptFormatException("Script JSON is null.");
-            json = json.TrimStart('﻿');
+            json = json.TrimStart('\uFEFF');
 
             DayScript script;
             try
@@ -74,7 +73,8 @@ namespace Oddity.Core
             {
                 foreach (Choice choice in scene.Choices)
                 {
-                    if (!ids.Contains(choice.Next ?? string.Empty))
+                    // No next means the slot ends here; only a dangling target is an error.
+                    if (!string.IsNullOrEmpty(choice.Next) && !ids.Contains(choice.Next))
                         throw new ScriptFormatException(
                             "Scene \"" + scene.Id + "\" has a choice whose next \"" + choice.Next + "\" does not exist.");
                 }
