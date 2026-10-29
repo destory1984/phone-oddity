@@ -29,6 +29,7 @@ namespace Oddity.Game
 
         DayScript _script;
         SaveStore _store;
+        string _savePath;
         DialogueRunner _runner;
         bool _awaitingTap;
         bool _waiting;
@@ -45,6 +46,9 @@ namespace Oddity.Game
         public SubtitleBar Subtitle => _subtitle;
         /// <summary>True once the emergence has finished and act 2 plays in the room.</summary>
         public bool InRoom => _act2;
+        /// <summary>True once the last line of the act 2 cut has been passed.</summary>
+        public bool ActTwoFinished { get; private set; }
+        public DevPanel Dev { get; private set; }
         /// <summary>Id of the scene the runner is playing, or null.</summary>
         public string CurrentSceneId => _runner != null && _runner.Current != null ? _runner.Current.Id : null;
 
@@ -64,6 +68,7 @@ namespace Oddity.Game
             string path = string.IsNullOrEmpty(SavePathOverride)
                 ? Path.Combine(Application.persistentDataPath, "save.json")
                 : SavePathOverride;
+            _savePath = path;
             _store = new SaveStore(path);
             State = _store.Load(out bool recovered);
             if (recovered) Debug.LogWarning("GameBootstrap: save was unreadable, starting a new game");
@@ -82,6 +87,7 @@ namespace Oddity.Game
             {
                 _subtitle = SubtitleBar.Create(emergence.MainCamera, chat.Font);
                 _subtitle.Tapped += OnTapped;
+                Dev = DevPanel.Create(this, emergence.MainCamera, chat.Font);
             }
 
             if (string.IsNullOrWhiteSpace(State.PlayerName))
@@ -207,6 +213,7 @@ namespace Oddity.Game
             if (_act2)
             {
                 Debug.Log("GameBootstrap: act 2 cut finished");
+                ActTwoFinished = true;
                 return;
             }
             Clock.CloseCurrent();
@@ -218,6 +225,34 @@ namespace Oddity.Game
                 return;
             }
             BeginOrWait(false);
+        }
+
+        public void SaveNow() => _store.Save(State);
+
+        /// <summary>Dev panel: end the wait and start the open slot right away.</summary>
+        public void SkipToNextSlot()
+        {
+            Clock.SkipWait();
+            if (_waiting) BeginOrWait(true);
+        }
+
+        /// <summary>Dev panel: delete the save file and load the scene again as a new game.</summary>
+        public void ClearSaveAndReload()
+        {
+            if (File.Exists(_savePath)) File.Delete(_savePath);
+            UnityEngine.SceneManagement.SceneManager.LoadScene(gameObject.scene.buildIndex);
+        }
+
+        /// <summary>Dev panel: skip the night and play the emergence now.</summary>
+        public void PlayEmergenceNow()
+        {
+            _waiting = false;
+            _awaitingTap = false;
+            State.Slot = Slot.Night;
+            Clock.CloseCurrent();
+            _store.Save(State);
+            NightFinished?.Invoke();
+            emergence.Play();
         }
 
         void OnTapped()

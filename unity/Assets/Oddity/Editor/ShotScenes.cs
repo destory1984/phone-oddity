@@ -80,6 +80,21 @@ namespace Oddity.EditorTools
             },
             new ShotScene
             {
+                Name = "dev_panel", // morning chat with the dev panel open
+                ScenePath = PrototypeScene,
+                CameraName = "MainCamera",
+                Setup = () =>
+                {
+                    FitPhoneCamera();
+                    int taps = 0;
+                    PlayMorning(c => taps++ >= 1);
+                    var boot = UnityEngine.Object.FindFirstObjectByType<GameBootstrap>();
+                    if (boot.Dev == null) throw new Exception("no DevPanel (editor only)");
+                    boot.Dev.Toggle();
+                },
+            },
+            new ShotScene
+            {
                 Name = "room_overview",
                 ScenePath = PrototypeScene,
                 CameraName = "RoomOverviewCamera",
