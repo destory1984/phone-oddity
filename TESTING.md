@@ -35,3 +35,11 @@
 - 묶음마다 `ship --quick 시험1,시험2`, push 전에만 전체 `test` 를 돌린다.
 - push 는 사용자에게 먼저 묻고, 마지막 push 로부터 1시간(60분) 지난 뒤에만 한다. `git reflog show origin/<브랜치> --date=iso -1` 로 시각을 본다.
 - 비밀값, 토큰, 개인 경로는 저장소에 넣지 않는다.
+
+## 5. 폰에서 시험하기
+
+- `python tools/dev.py build` 가 `unity/Build/oddity-proto.apk` (개발 빌드, ARM64) 를 만든다.
+- adb 는 `C:/Program Files/Unity/Hub/Editor/6000.3.27f1/Editor/Data/PlaybackEngines/AndroidPlayer/SDK/platform-tools/adb.exe` 다.
+- 설치: `adb install -r unity/Build/oddity-proto.apk`
+- 사람이 할 일: 폰의 개발자 옵션과 USB 디버깅을 켜고, 케이블을 꽂은 뒤 폰 화면의 허용 창을 누른다.
+- 개발 빌드라 DEV 단추와 FPS 표시가 보인다. 30fps 이상인지 본다.

@@ -8,7 +8,7 @@
     python tools/dev.py baseline [SCENE ...]   copy current shots to shots/baseline/ for later diffs
     python tools/dev.py kill                   close the Unity editor that has this project open (not the Hub)
     python tools/dev.py ship -m "msg" [--quick a,b]   check, test (only a,b with --quick), commit here. Never pushes.
-    python tools/dev.py build                  not built yet (Task 11)
+    python tools/dev.py build                  Android dev apk -> unity/Build/oddity-proto.apk, then active target back to Windows
 
 Every command that starts Unity first closes this project's editor. Only one Unity can open the project.
 Paths: UNITY_EXE (default C:/Program Files/Unity/Hub/Editor/6000.3.27f1/Editor/Unity.exe),
@@ -21,6 +21,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -55,9 +56,37 @@ def kill():
     return len(pids)
 
 
+def licensing_running():
+    out = run(["tasklist", "/FI", "IMAGENAME eq Unity.Licensing.Client.exe", "/NH"]).stdout
+    return "Unity.Licensing.Client" in out
+
+
+def ensure_license(wait=60):
+    """Unity needs the licensing client (started by Unity Hub). Start the Hub if it is missing and wait for it."""
+    if licensing_running():
+        return True
+    ps = "(Get-AppxPackage UnityTechnologies.UnityHub).PackageFamilyName"
+    family = run(["powershell", "-NoProfile", "-Command", ps]).stdout.strip()
+    if not family:
+        print("Unity Hub is not installed; open Unity Hub and sign in")
+        return False
+    print("starting Unity Hub for the license client...")
+    subprocess.Popen(["explorer.exe", "shell:AppsFolder" + chr(92) + family + "!UnityHub"])
+    end = time.time() + wait
+    while time.time() < end:
+        if licensing_running():
+            time.sleep(3)
+            return True
+        time.sleep(2)
+    print("Unity license client did not start in 60s; open Unity Hub and sign in")
+    return False
+
+
 def unity(args, log, timeout=STEP_TIMEOUT):
     """Run Unity with the project and a log file. Returns (exit code or None on timeout, log text)."""
     kill()
+    if not ensure_license():
+        return 1, ""
     LOGS.mkdir(parents=True, exist_ok=True)
     logfile = LOGS / log
     logfile.unlink(missing_ok=True)
@@ -68,6 +97,9 @@ def unity(args, log, timeout=STEP_TIMEOUT):
         kill()
         code = None
     text = logfile.read_text(encoding="utf-8", errors="replace") if logfile.exists() else ""
+    if "No valid Unity Editor license" in text:
+        print("Unity license missing: open Unity Hub and sign in, then run again")
+        return 1, text
     return code, text
 
 
@@ -96,6 +128,24 @@ def check():
         return 1
     print("check ok")
     return 0
+
+
+def build():
+    """Android development apk. Switches the active target to Android, so switch it back to Windows after."""
+    apk = UNITY_PROJECT / "Build" / "oddity-proto.apk"
+    apk.unlink(missing_ok=True)
+    t0 = time.time()
+    code, text = unity(["-quit", "-executeMethod", "Oddity.EditorTools.BuildAndroid.Build"], "build.log", timeout=3000)
+    secs = time.time() - t0
+    # put the active target back so test/shot stay fast and unchanged
+    unity(["-quit", "-buildTarget", "StandaloneWindows64"], "build-restore.log", timeout=900)
+    if code == 0 and apk.exists():
+        print(f"build ok {apk.relative_to(ROOT).as_posix()} {apk.stat().st_size / 1048576:.1f} MB, {secs:.0f}s")
+        return 0
+    errors = cs_errors(text) or [l.strip() for l in text.splitlines() if "BUILD FAILED" in l or "rror" in l][:8]
+    print(chr(10).join(errors[:8]))
+    print(f"BUILD FAILED (exit {code}, {secs:.0f}s); see unity/Logs/build.log")
+    return 1
 
 
 def scene_names():
@@ -296,8 +346,7 @@ def main():
     if a.cmd == "baseline":
         return baseline(names)
     if a.cmd == "build":
-        print("build: Task 11에서 만든다")
-        return 2
+        return build()
     if a.cmd == "ship":
         if not a.message:
             ap.error("ship needs -m MESSAGE")

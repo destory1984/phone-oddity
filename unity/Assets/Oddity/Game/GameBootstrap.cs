@@ -62,7 +62,33 @@ namespace Oddity.Game
             if (emergence == null) emergence = gameObject.AddComponent<EmergenceSequence>();
             emergence.Finished += OnEmergenceFinished;
 
-            string json = File.ReadAllText(Path.Combine(Application.streamingAssetsPath, "script", "day1.json"));
+            string scriptPath = Path.Combine(Application.streamingAssetsPath, "script", "day1.json");
+            if (Application.platform == RuntimePlatform.Android)
+            {
+                // StreamingAssets sits inside the apk on Android, so File cannot read it
+                StartCoroutine(LoadScriptThenInit(scriptPath));
+                return;
+            }
+            Init(File.ReadAllText(scriptPath));
+        }
+
+        System.Collections.IEnumerator LoadScriptThenInit(string url)
+        {
+            using (var req = UnityEngine.Networking.UnityWebRequest.Get(url))
+            {
+                yield return req.SendWebRequest();
+                if (req.result != UnityEngine.Networking.UnityWebRequest.Result.Success)
+                {
+                    Debug.LogError("GameBootstrap: cannot read script: " + req.error);
+                    chat.ShowLockNotice("대본을 읽지 못했다: " + req.error);
+                    yield break;
+                }
+                Init(req.downloadHandler.text);
+            }
+        }
+
+        void Init(string json)
+        {
             _script = ScriptLoader.Parse(json);
 
             string path = string.IsNullOrEmpty(SavePathOverride)

@@ -21,3 +21,4 @@ unity/*.slnx
 # shot harness (plans are committed)
 shots/*.png
 shots/baseline/
+unity/.utmp/
