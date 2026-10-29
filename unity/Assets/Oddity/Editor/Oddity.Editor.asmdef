@@ -1,0 +1,6 @@
+{
+  "name": "Oddity.Editor",
+  "rootNamespace": "Oddity.EditorTools",
+  "references": [],
+  "includePlatforms": ["Editor"]
+}
