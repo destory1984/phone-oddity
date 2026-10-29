@@ -17,3 +17,7 @@ unity/UserSettings/
 unity/*.csproj
 unity/*.sln
 unity/*.slnx
+
+# shot harness (plans are committed)
+shots/*.png
+shots/baseline/

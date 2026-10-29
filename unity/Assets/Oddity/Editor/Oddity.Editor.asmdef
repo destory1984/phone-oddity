@@ -1,6 +1,6 @@
 {
   "name": "Oddity.Editor",
   "rootNamespace": "Oddity.EditorTools",
-  "references": [],
+  "references": ["Oddity.Game"],
   "includePlatforms": ["Editor"]
 }
