@@ -3,7 +3,7 @@ VRoid Studio로 게임 캐릭터 "하린"의 3D 모델을 만들어 주십시오
 참고 그림 (이 폴더): front.png, left.png, back.png, right.png
 - 하린은 성인 여성이다. 그림은 정면, 왼쪽 옆, 뒤, 오른쪽 옆 모습이다.
 
-VRoid Studio 위치: C:\Users\eofeo\AppData\Local\Programs\VRoidStudio\2.14.0\VRoidStudio.exe
+VRoid Studio 위치: %LOCALAPPDATA%\Programs\VRoidStudio\2.14.0\VRoidStudio.exe
 
 할 일
 1. VRoid Studio를 열고 새 모델(여성)을 만든다.
