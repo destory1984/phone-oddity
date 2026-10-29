@@ -13,5 +13,6 @@ room_after
 dev_panel
 prologue_dinner
 prologue_closeup
+prologue_blush
 prologue_notice
 prologue_rewind

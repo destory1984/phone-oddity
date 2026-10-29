@@ -208,6 +208,7 @@ namespace Oddity.Game
                 expression.SetWeight(kv.Value, FaceWeight(kv.Value));
 
             UpdatePoke();
+            UpdateBlush();
             expression.SetWeight(ExpressionKey.Blink, BlinkWeight());
             ApplyMouth();
             UpdateIdleGaze();
@@ -241,7 +242,8 @@ namespace Oddity.Game
         public void SetFace(string face)
         {
             var key = (face ?? "").Trim().ToLowerInvariant();
-            if (TrySetCompositeFace(key)) return;
+            string before = CurrentFace;
+            if (TrySetCompositeFace(key)) { OnFaceChanged(before); return; }
             if (Faces.TryGetValue(key, out var expr))
             {
                 _currentFace = expr;

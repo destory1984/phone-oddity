@@ -100,6 +100,22 @@ namespace Oddity.EditorTools
             },
             new ShotScene
             {
+                Name = "prologue_blush", // p_side_by_side line 7 ("flustered"), the blush held at its peak
+                ScenePath = PrototypeScene,
+                CameraName = "MainCamera",
+                Prologue = true,
+                Setup = () =>
+                {
+                    var boot = PlayPrologue(b => AtLine(b, "p_side_by_side", "flustered"));
+                    boot.Prologue.SeekBeat(1f);
+                    // the beat's face reaches the puppet on the next LateUpdate and would start a fresh pulse from 0
+                    var harin = UnityEngine.Object.FindFirstObjectByType<HarinPuppet>();
+                    harin.SetFace("flustered");
+                    harin.SetBlush(1f);
+                },
+            },
+            new ShotScene
+            {
                 Name = "prologue_notice", // the lock-screen notice "19일 후 삭제됩니다"
                 ScenePath = PrototypeScene,
                 CameraName = "MainCamera",

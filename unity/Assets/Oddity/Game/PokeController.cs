@@ -135,6 +135,7 @@ namespace Oddity.Game
             LastLine = line;
             _chat.ShowHarinNote(line.Text);
             _harin.SetFace(HarinPuppet.FaceForBeat(line.Face, null));
+            _harin.BlushForLine(line.Face, null);
             _harin.PlayPokeMotion(line.Motion);
             Cancel();
             if (isActiveAndEnabled) _face = StartCoroutine(FaceBack());

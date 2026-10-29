@@ -67,7 +67,7 @@ namespace Oddity.Game
         // "smile": a closed-mouth smile. Even 0.05 of the happy preset parts the lips enough to show the
         // teeth, so the smile is relaxed alone (happy kept in the mix at 0 so it can be tuned back up).
         public const float SmileRelaxed = 0.55f, SmileHappy = 0f;
-        // "flustered": a weaker smile; the head and eyes look away (beat), no blush yet.
+        // "flustered": a weaker smile; the head and eyes look away (beat) and the cheeks blush (HarinBlush).
         public const float FlusteredRelaxed = 0.4f, FlusteredHappy = 0f;
         // "soft": the face between lines in the phone, a faint closed-mouth smile. On the summer-B / v58 face
         // 0.2 read as no expression at all, 0.3 with the lips shut still read as blank.

@@ -2413,6 +2413,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9ce0cf0679761be41a7b57c1e0312272, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Oddity.Game::Oddity.Game.HarinPuppet
+  blushMask: {fileID: 2800000, guid: 49864ef0f0570ad498772f325e5bb8fe, type: 3}
   lowerArms: 1
 --- !u!1 &1159292748
 GameObject:

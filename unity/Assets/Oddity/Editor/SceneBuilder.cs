@@ -154,6 +154,7 @@ namespace Oddity.EditorTools
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
             AssetDatabase.SaveAssets();
+            BlushMaskBaker.Bake(false); // the copied cheek mask belongs to the old face
             Debug.Log("HARIN model swapped to " + assetPath);
         }
 

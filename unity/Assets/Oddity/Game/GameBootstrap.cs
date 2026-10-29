@@ -491,6 +491,7 @@ namespace Oddity.Game
             if (harin != null)
             {
                 harin.SetFace(HarinPuppet.FaceForBeat(line.Face, line.Beat));
+                if (line.Who == "harin") harin.BlushForLine(line.Face, line.Beat);
                 harin.SetGlitch(line.Glitch);
             }
         }
@@ -500,7 +501,11 @@ namespace Oddity.Game
         {
             if (harin != null)
             {
-                if (line.Who == "harin") harin.SetFace(HarinPuppet.FaceForBeat(line.Face, line.Beat));
+                if (line.Who == "harin")
+                {
+                    harin.SetFace(HarinPuppet.FaceForBeat(line.Face, line.Beat));
+                    harin.BlushForLine(line.Face, line.Beat);
+                }
                 else harin.SetFace(HarinPuppet.IdleFace);
             }
             if (_glitchMoment != null) { StopCoroutine(_glitchMoment); _glitchMoment = null; }

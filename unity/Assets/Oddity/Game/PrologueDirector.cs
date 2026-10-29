@@ -178,6 +178,7 @@ namespace Oddity.Game
             if (!Active) return;
             Active = false;
             _rewinding = false;
+            if (_harin != null) _harin.BlushSuppressed = false;
             foreach (var (r, mask) in _masks) if (r != null) r.renderingLayerMask = mask;
             _masks.Clear();
             foreach (var (l, on, c, i) in _lights)
@@ -320,6 +321,7 @@ namespace Oddity.Game
             if (line.Who == "harin") _baseFace = string.IsNullOrEmpty(line.Face) ? "neutral" : line.Face;
             if (!string.IsNullOrEmpty(line.Beat)) PlayBeat(line.Beat);
             else if (line.Who == "harin") PlayBeat(null);
+            if (line.Who == "harin") _harin.BlushForLine(line.Face, line.Beat);
             if (_notice != null && line.Beat == NoticeBeat)
             {
                 _noticeText.text = line.Text ?? "";
@@ -707,6 +709,8 @@ namespace Oddity.Game
         {
             _rewinding = true;
             _rewindDone = done;
+            _harin.BlushSuppressed = true; // the rewind flips through faces; no blush flashes
+            _harin.SetBlush(0f);
             RewindTime = 0f;
             SetRewindVisible(true);
             if (_history.Count == 0) _history.Add(new HistoryEntry { Stage = _stage, Face = _baseFace, Beat = null });
