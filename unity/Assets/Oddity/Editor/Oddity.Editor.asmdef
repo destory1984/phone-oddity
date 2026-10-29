@@ -1,6 +1,6 @@
 {
   "name": "Oddity.Editor",
   "rootNamespace": "Oddity.EditorTools",
-  "references": ["Oddity.Game"],
+  "references": ["Oddity.Game", "Oddity.Core", "UnityEngine.UI", "Unity.InputSystem", "Unity.RenderPipelines.Universal.Runtime"],
   "includePlatforms": ["Editor"]
 }

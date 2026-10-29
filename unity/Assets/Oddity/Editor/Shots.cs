@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Oddity.Game;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -79,6 +80,9 @@ namespace Oddity.EditorTools
             _frames = 0;
             try
             {
+                // every scene starts as a new game, in a throwaway save file
+                GameBootstrap.SavePathOverride = Path.Combine(Application.temporaryCachePath, "shot_save.json");
+                File.Delete(GameBootstrap.SavePathOverride);
                 EditorSceneManager.OpenScene(_current.ScenePath, OpenSceneMode.Single);
                 EditorApplication.EnterPlaymode();
             }

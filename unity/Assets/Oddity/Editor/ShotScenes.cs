@@ -21,6 +21,24 @@ namespace Oddity.EditorTools
 
     public static class ShotScenes
     {
+        const string PrototypeScene = "Assets/Scenes/Prototype.unity";
+
+        // New game as "민수", then tap through the morning until `stop` says to stay.
+        static ChatView PlayMorning(Func<ChatView, bool> stop)
+        {
+            var chat = UnityEngine.Object.FindFirstObjectByType<ChatView>();
+            if (chat == null) throw new Exception("no ChatView in the scene");
+            chat.SubmitName("민수");
+            for (int i = 0; i < 30 && !stop(chat); i++) chat.Tap();
+            return chat;
+        }
+
+        static void FitPhoneCamera()
+        {
+            var cam = GameObject.Find("MainCamera").GetComponent<Camera>();
+            cam.aspect = 9f / 16f; // batch mode has no game view, so fix the phone's aspect
+        }
+
         public static readonly IReadOnlyList<ShotScene> All = new List<ShotScene>
         {
             new ShotScene
@@ -37,7 +55,48 @@ namespace Oddity.EditorTools
                     harin.SetFade(1f);
                 },
             },
+            new ShotScene
+            {
+                Name = "chat_morning",
+                ScenePath = PrototypeScene,
+                CameraName = "MainCamera",
+                Setup = () =>
+                {
+                    FitPhoneCamera();
+                    int taps = 0;
+                    PlayMorning(c => taps++ >= 1); // second line of the morning
+                },
+            },
+            new ShotScene
+            {
+                Name = "chat_choices",
+                ScenePath = PrototypeScene,
+                CameraName = "MainCamera",
+                Setup = () =>
+                {
+                    FitPhoneCamera();
+                    PlayMorning(c => c.VisibleButtonTexts.Count > 0);
+                },
+            },
+            new ShotScene
+            {
+                Name = "room_overview",
+                ScenePath = PrototypeScene,
+                CameraName = "RoomOverviewCamera",
+                Setup = () =>
+                {
+                    var cam = GameObject.Find("MainCamera").GetComponent<Camera>();
+                    cam.enabled = false;
+                    var overview = FindInactive("RoomOverviewCamera");
+                    overview.aspect = 1f;
+                    overview.enabled = true;
+                },
+            },
         };
+
+        static Camera FindInactive(string name) => UnityEngine.Object
+            .FindObjectsByType<Camera>(FindObjectsInactive.Include, FindObjectsSortMode.None)
+            .First(c => c.name == name);
 
         public static ShotScene Find(string name) => All.FirstOrDefault(s => s.Name == name);
     }

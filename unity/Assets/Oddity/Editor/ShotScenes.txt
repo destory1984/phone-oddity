@@ -1,1 +1,4 @@
 appstage
+chat_morning
+chat_choices
+room_overview
