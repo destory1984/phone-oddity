@@ -1,5 +1,7 @@
 appstage
 chat_morning
+chat_day2_morning
+chat_day3_night
 chat_typing
 chat_choices
 room_overview

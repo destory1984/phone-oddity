@@ -38,6 +38,10 @@ namespace Oddity.Game
         const float FadeDipAlpha = 0.4f;
         const float FadeDipSeconds = 1f;
 
+        /// <summary>Fixed line shown when there is no script for the day.</summary>
+        public const string EndOfContentText = "내일 또 보자";
+
+        readonly System.Collections.Generic.Dictionary<int, DayScript> _scripts = new System.Collections.Generic.Dictionary<int, DayScript>();
         DayScript _script;
         DayScript _prologue;
         DialogueRunner _prologueRunner;
@@ -65,6 +69,8 @@ namespace Oddity.Game
         public SubtitleBar Subtitle => _subtitle;
         /// <summary>True once the emergence has finished and act 2 plays in the room.</summary>
         public bool InRoom => _act2;
+        /// <summary>True when the current day has no script ("오늘은 여기까지" shown).</summary>
+        public bool EndOfContent { get; private set; }
         /// <summary>True once the last line of the act 2 cut has been passed.</summary>
         public bool ActTwoFinished { get; private set; }
         public DevPanel Dev { get; private set; }
@@ -94,45 +100,61 @@ namespace Oddity.Game
             if (emergence == null) emergence = gameObject.AddComponent<EmergenceSequence>();
             emergence.SetArt(cut10DeskPhone, screenNoise, portalRing, wristSwirl);
             emergence.Finished += OnEmergenceFinished;
-
-            string scriptPath = Path.Combine(Application.streamingAssetsPath, "script", "day1.json");
-            string prologuePath = Path.Combine(Application.streamingAssetsPath, "script", "prologue.json");
-            if (Application.platform == RuntimePlatform.Android)
-            {
-                // StreamingAssets sits inside the apk on Android, so File cannot read it
-                StartCoroutine(LoadScriptThenInit(scriptPath, prologuePath));
-                return;
-            }
-            Init(File.ReadAllText(scriptPath), File.Exists(prologuePath) ? File.ReadAllText(prologuePath) : null);
+            StartCoroutine(LoadAllThenInit());
         }
 
-        System.Collections.IEnumerator LoadScriptThenInit(string url, string prologueUrl)
+        // Reads day1..EmergenceDay and the prologue. On desktop nothing yields, so Init runs inside Start.
+        System.Collections.IEnumerator LoadAllThenInit()
         {
-            string day1;
-            using (var req = UnityEngine.Networking.UnityWebRequest.Get(url))
-            {
-                yield return req.SendWebRequest();
-                if (req.result != UnityEngine.Networking.UnityWebRequest.Result.Success)
-                {
-                    Debug.LogError("GameBootstrap: cannot read script: " + req.error);
-                    chat.ShowLockNotice("대본을 읽지 못했다: " + req.error);
-                    yield break;
-                }
-                day1 = req.downloadHandler.text;
-            }
+            string dir = Path.Combine(Application.streamingAssetsPath, "script");
+            var days = new System.Collections.Generic.Dictionary<int, string>();
             string prologue = null;
-            using (var req = UnityEngine.Networking.UnityWebRequest.Get(prologueUrl))
+            bool android = Application.platform == RuntimePlatform.Android; // StreamingAssets sits inside the apk there
+            for (int day = 1; day <= CoreInfo.EmergenceDay + 1; day++)
             {
-                yield return req.SendWebRequest();
-                if (req.result == UnityEngine.Networking.UnityWebRequest.Result.Success) prologue = req.downloadHandler.text;
-                else Debug.LogWarning("GameBootstrap: no prologue: " + req.error);
+                string path = Path.Combine(dir, "day" + day + ".json");
+                string text = null;
+                if (!android)
+                {
+                    if (File.Exists(path)) text = File.ReadAllText(path);
+                }
+                else
+                {
+                    using (var req = UnityEngine.Networking.UnityWebRequest.Get(path))
+                    {
+                        yield return req.SendWebRequest();
+                        if (req.result == UnityEngine.Networking.UnityWebRequest.Result.Success) text = req.downloadHandler.text;
+                        else if (day == 1)
+                        {
+                            Debug.LogError("GameBootstrap: cannot read script: " + req.error);
+                            chat.ShowLockNotice("대본을 읽지 못했다: " + req.error);
+                            yield break;
+                        }
+                    }
+                }
+                if (text != null) days[day] = text;
             }
-            Init(day1, prologue);
+            string prologuePath = Path.Combine(dir, "prologue.json");
+            if (!android)
+            {
+                if (File.Exists(prologuePath)) prologue = File.ReadAllText(prologuePath);
+            }
+            else
+            {
+                using (var req = UnityEngine.Networking.UnityWebRequest.Get(prologuePath))
+                {
+                    yield return req.SendWebRequest();
+                    if (req.result == UnityEngine.Networking.UnityWebRequest.Result.Success) prologue = req.downloadHandler.text;
+                    else Debug.LogWarning("GameBootstrap: no prologue: " + req.error);
+                }
+            }
+            Init(days, prologue);
         }
 
-        void Init(string json, string prologueJson = null)
+        void Init(System.Collections.Generic.Dictionary<int, string> dayJson, string prologueJson = null)
         {
-            _script = ScriptLoader.Parse(json);
+            foreach (var kv in dayJson) _scripts[kv.Key] = ScriptLoader.Parse(kv.Value);
+            if (!_scripts.ContainsKey(1)) throw new InvalidOperationException("day1.json is missing");
             if (!string.IsNullOrEmpty(prologueJson)) _prologue = ScriptLoader.Parse(prologueJson);
 
             string path = string.IsNullOrEmpty(SavePathOverride)
@@ -144,10 +166,7 @@ namespace Oddity.Game
             if (recovered) Debug.LogWarning("GameBootstrap: save was unreadable, starting a new game");
 
             Clock = new SlotClock(State, Now);
-            _runner = new DialogueRunner(_script, State);
-            _runner.LineShown += OnLineShown;
-            _runner.ChoicesShown += OnChoicesShown;
-            _runner.SlotFinished += OnSlotFinished;
+            SelectDay(State.Day);
 
             chat.Tapped += OnTapped;
             chat.ChoicePicked += OnChoicePicked;
@@ -171,9 +190,39 @@ namespace Oddity.Game
             StartDayOne(false);
         }
 
+        // Makes the script of the day current and builds its runner. False when the day has no script.
+        bool SelectDay(int day)
+        {
+            DayScript script;
+            if (!_scripts.TryGetValue(day, out script))
+            {
+                _script = null;
+                if (_runner == null) WireRunner(new DialogueRunner(_scripts[1], State));
+                return false;
+            }
+            if (_script == script && _runner != null) return true;
+            _script = script;
+            WireRunner(new DialogueRunner(script, State));
+            return true;
+        }
+
+        void WireRunner(DialogueRunner runner)
+        {
+            if (_runner != null)
+            {
+                _runner.LineShown -= OnLineShown;
+                _runner.ChoicesShown -= OnChoicesShown;
+                _runner.SlotFinished -= OnSlotFinished;
+            }
+            _runner = runner;
+            _runner.LineShown += OnLineShown;
+            _runner.ChoicesShown += OnChoicesShown;
+            _runner.SlotFinished += OnSlotFinished;
+        }
+
         void StartDayOne(bool afterPrologue)
         {
-            if (afterPrologue && State.Day == _script.Day && State.Slot == Slot.Morning)
+            if (afterPrologue && _script != null && State.Day == _script.Day && State.Slot == Slot.Morning)
             {
                 // the first thing after the rewind: the day 1 lock-screen notice
                 Scene entry = _script.EntryFor(Slot.Morning);
@@ -221,13 +270,12 @@ namespace Oddity.Game
         void BeginOrWait(bool announce)
         {
             _waiting = false;
-            if (State.Day != _script.Day || _script.EntryFor(State.Slot) == null)
+            if (!SelectDay(State.Day) || _script.EntryFor(State.Slot) == null)
             {
-                // nothing written past day 1 yet
-                _waiting = false;
-                Debug.Log("GameBootstrap: no script for day " + State.Day + " " + State.Slot);
+                ShowEndOfContent();
                 return;
             }
+            EndOfContent = false;
             if (!Clock.IsOpen)
             {
                 _waiting = true;
@@ -236,6 +284,20 @@ namespace Oddity.Game
             }
             if (announce) chat.ShowLockNotice("하린: " + OpeningText(State.Slot));
             _runner.StartSlot(State.Slot);
+        }
+
+        void ShowEndOfContent()
+        {
+            Debug.Log("GameBootstrap: no script for day " + State.Day + " " + State.Slot);
+            EndOfContent = true;
+            var line = new Line { Who = "harin", Text = EndOfContentText, Face = "happy", Typing = 0f };
+            chat.ShowLine(line);
+            chat.SetGlitch(0f);
+            if (harin != null)
+            {
+                harin.SetFace(line.Face);
+                harin.SetGlitch(0f);
+            }
         }
 
         string OpeningText(Slot slot)
@@ -312,6 +374,8 @@ namespace Oddity.Game
         {
             _act2 = true;
             _awaitingTap = false;
+            _script = _scripts[1]; // d1_after lives in the day 1 file
+            WireRunner(new DialogueRunner(_script, State));
             _runner.StartScene(AfterSceneId);
         }
 
@@ -332,7 +396,8 @@ namespace Oddity.Game
             }
             Clock.CloseCurrent();
             _store.Save(State);
-            if (slot == Slot.Night)
+            // CloseCurrent has moved the day on, so the day that just ended is State.Day - 1
+            if (slot == Slot.Night && State.Day - 1 >= CoreInfo.EmergenceDay)
             {
                 NightFinished?.Invoke();
                 emergence.Play();
@@ -348,6 +413,21 @@ namespace Oddity.Game
         {
             Clock.SkipWait();
             if (_waiting) BeginOrWait(true);
+        }
+
+        /// <summary>Dev panel: jump to the morning of the next day and start it now.</summary>
+        public void NextDayNow() => JumpTo(State.Day + 1, Slot.Morning);
+
+        /// <summary>Dev panel and shots: go to the given day and slot and start it now.</summary>
+        public void JumpTo(int day, Slot slot)
+        {
+            _waiting = false;
+            _awaitingTap = false;
+            State.Day = day;
+            State.Slot = slot;
+            Clock.SkipWait();
+            _store.Save(State);
+            BeginOrWait(false);
         }
 
         /// <summary>Dev panel: delete the save file and load the scene again as a new game.</summary>

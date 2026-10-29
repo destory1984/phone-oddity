@@ -29,7 +29,7 @@ namespace Oddity.PlayTests
             GameBootstrap.SkipPrologue = true; // these tests start at day 1
             ChatView.TypingEnabled = false;
             GameBootstrap.ClockOverride = () => _now;
-            var state = new GameState { PlayerName = "민수", Slot = Slot.Night, NextOpenUtc = _now.AddMinutes(-1) };
+            var state = new GameState { PlayerName = "민수", Day = CoreInfo.EmergenceDay, Slot = Slot.Night, NextOpenUtc = _now.AddMinutes(-1) };
             new SaveStore(_savePath).Save(state);
         }
 

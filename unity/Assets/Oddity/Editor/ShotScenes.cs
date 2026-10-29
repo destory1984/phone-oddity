@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Oddity.Core;
 using Oddity.Game;
 using UnityEngine;
 
@@ -34,6 +35,19 @@ namespace Oddity.EditorTools
             chat.SubmitName("민수");
             for (int i = 0; i < 30 && !stop(chat); i++) chat.Tap();
             return chat;
+        }
+
+        // New game as "민수", jump to the day and slot, tap `taps` times.
+        static void PlayDay(int day, Slot slot, int taps)
+        {
+            FitPhoneCamera();
+            var chat = UnityEngine.Object.FindFirstObjectByType<ChatView>();
+            var boot = UnityEngine.Object.FindFirstObjectByType<GameBootstrap>();
+            if (chat == null || boot == null) throw new Exception("no ChatView or GameBootstrap in the scene");
+            ChatView.TypingEnabled = false;
+            chat.SubmitName("민수");
+            boot.JumpTo(day, slot);
+            for (int i = 0; i < taps; i++) chat.Tap();
         }
 
         static void FitPhoneCamera()
@@ -126,6 +140,20 @@ namespace Oddity.EditorTools
                     int taps = 0;
                     PlayMorning(c => taps++ >= 1); // second line of the morning
                 },
+            },
+            new ShotScene
+            {
+                Name = "chat_day2_morning", // day 2 morning, third line
+                ScenePath = PrototypeScene,
+                CameraName = "MainCamera",
+                Setup = () => PlayDay(2, Slot.Morning, 2),
+            },
+            new ShotScene
+            {
+                Name = "chat_day3_night", // day 3 night, fourth line
+                ScenePath = PrototypeScene,
+                CameraName = "MainCamera",
+                Setup = () => PlayDay(3, Slot.Night, 3),
             },
             new ShotScene
             {

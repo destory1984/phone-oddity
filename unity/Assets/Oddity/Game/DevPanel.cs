@@ -61,6 +61,9 @@ namespace Oddity.Game
         /// <summary>The "next slot" button: skip the wait and start the open slot now.</summary>
         public void NextSlot() => _boot.SkipToNextSlot();
 
+        /// <summary>The "day +1" button: jump to the next day's morning and start it now.</summary>
+        public void NextDay() => _boot.NextDayNow();
+
         public void ClearSave() => _boot.ClearSaveAndReload();
 
         /// <summary>Forget that the prologue was seen and reload, so it plays again.</summary>
@@ -196,6 +199,7 @@ namespace Oddity.Game
                 plus.onClick.AddListener(() => Adjust(index, 1));
             }
             MakeButton(prt, "다음 슬롯", new Color(0.38f, 0.33f, 0.62f, 1f), 0f, RowHeight).onClick.AddListener(NextSlot);
+            MakeButton(prt, "날 +1", new Color(0.38f, 0.33f, 0.62f, 1f), 0f, RowHeight).onClick.AddListener(NextDay);
             MakeButton(prt, "저장 지우기", new Color(0.6f, 0.25f, 0.3f, 1f), 0f, RowHeight).onClick.AddListener(ClearSave);
             MakeButton(prt, "나오는 장면 바로", new Color(0.38f, 0.33f, 0.62f, 1f), 0f, RowHeight).onClick.AddListener(JumpToEmergence);
             MakeButton(prt, "프롤로그 다시 보기", new Color(0.38f, 0.33f, 0.62f, 1f), 0f, RowHeight).onClick.AddListener(ReplayPrologue);

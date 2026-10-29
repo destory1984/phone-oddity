@@ -111,7 +111,7 @@ namespace Oddity.PlayTests
         }
 
         [UnityTest]
-        public IEnumerator FullDay_ReachesActTwo()
+        public IEnumerator FullRun_ThreeDays_ReachesActTwo()
         {
             yield return LoadScene();
             var boot = Boot();
@@ -121,13 +121,15 @@ namespace Oddity.PlayTests
             chat.SubmitName(Name);
 
             var frames = new Dictionary<string, int>();
+            var days = new HashSet<int>();
             string lastStage = null;
             int total = 0;
-            while (!boot.ActTwoFinished && total < 5 * FrameLimitPerStage)
+            while (!boot.ActTwoFinished && total < 15 * FrameLimitPerStage)
             {
+                if (!boot.InRoom && !boot.Emergence.IsPlaying && !boot.Emergence.HasFinished) days.Add(boot.State.Day);
                 string stage = boot.InRoom ? "Act2"
                     : (boot.Emergence.IsPlaying || boot.Emergence.HasFinished) ? "Emergence"
-                    : boot.State.Slot.ToString();
+                    : "Day" + boot.State.Day + boot.State.Slot;
                 if (stage != lastStage) { lastStage = stage; frames[stage] = 0; }
                 frames[stage]++;
                 total++;
@@ -138,11 +140,41 @@ namespace Oddity.PlayTests
             }
 
             Assert.IsTrue(boot.ActTwoFinished, "act 2 cut did not finish");
+            CollectionAssert.AreEquivalent(new[] { 1, 2, 3 }, days, "days played before the emergence");
+            Assert.IsFalse(boot.EndOfContent);
             GameState s = boot.State;
             string message = "FRAMES " + string.Join(" ", frames.Select(kv => kv.Key + "=" + kv.Value))
                 + " | Stability=" + s.Stability + " Deviation=" + s.Deviation + " Heart=" + s.Heart;
             Debug.Log(message);
             Assert.Pass(message);
+        }
+
+        [UnityTest]
+        public IEnumerator Day4_ShowsSeeYouTomorrowAndStops()
+        {
+            var state = new GameState { PlayerName = Name, Day = CoreInfo.EmergenceDay + 1, Slot = Slot.Morning, NextOpenUtc = _now.AddMinutes(-1) };
+            new SaveStore(_savePath).Save(state);
+            yield return LoadScene();
+            var boot = Boot();
+            var chat = Chat();
+            for (int i = 0; i < 3; i++) yield return null;
+            Assert.IsTrue(boot.EndOfContent);
+            Assert.AreEqual(GameBootstrap.EndOfContentText, chat.CurrentLineText);
+        }
+
+        [UnityTest]
+        public IEnumerator DevPanel_NextDay_StartsNextDayMorning()
+        {
+            SaveState(Slot.Morning);
+            yield return LoadScene();
+            var boot = Boot();
+            var chat = Chat();
+            Dev().NextDay();
+            yield return null;
+            Assert.AreEqual(2, boot.State.Day);
+            Assert.AreEqual(Slot.Morning, boot.State.Slot);
+            Assert.AreEqual("d2_morning", boot.CurrentSceneId);
+            Assert.IsFalse(boot.EndOfContent);
         }
 
         IEnumerator RunNightTask(string taskText, int startHeart, int expectedHeart)

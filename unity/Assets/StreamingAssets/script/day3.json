@@ -1,0 +1,364 @@
+{
+  "day": 3,
+  "scenes": [
+    {
+      "id": "d3_morning",
+      "slot": "morning",
+      "lines": [
+        {
+          "who": "player",
+          "text": "난 밥 먹으면서 얘기하는 거 좋아해."
+        },
+        {
+          "who": "harin",
+          "text": "좋아하는 거 생각해 왔네?",
+          "face": "happy"
+        },
+        {
+          "who": "player",
+          "text": "어제 알려 달라며."
+        },
+        {
+          "who": "harin",
+          "text": "응. 근데 내가 먼저 물으려고 했지.",
+          "face": "neutral",
+          "beat": "proud_pout"
+        },
+        {
+          "who": "harin",
+          "text": "혼자 먹을 땐 뭐 해?",
+          "face": "relaxed"
+        },
+        {
+          "who": "player",
+          "text": "영상 틀어 놔. 조용하니까."
+        },
+        {
+          "who": "harin",
+          "text": "오늘 저녁엔 나 틀어 놓을래?",
+          "face": "happy",
+          "beat": "peeks_for_reaction",
+          "typing": 1.6
+        }
+      ],
+      "choices": [
+        {
+          "text": "응. 같이 밥 먹자.",
+          "effects": {
+            "deviation": 2
+          },
+          "next": "d3_morning_task"
+        },
+        {
+          "text": "영상보다 말이 많을 것 같은데.",
+          "effects": {
+            "deviation": 1
+          },
+          "next": "d3_morning_task"
+        }
+      ]
+    },
+    {
+      "id": "d3_morning_task",
+      "slot": "morning",
+      "type": "task",
+      "lines": [
+        {
+          "who": "system",
+          "text": "민재: 수업 끝나고 산책할 사람?"
+        },
+        {
+          "who": "harin",
+          "text": "저녁 전에는 시간 있겠다.",
+          "face": "relaxed"
+        },
+        {
+          "who": "player",
+          "text": "너한테 들려줄 소리도 찾을까?"
+        },
+        {
+          "who": "harin",
+          "text": "응? 내 취향 기억했어?",
+          "face": "surprised"
+        },
+        {
+          "who": "harin",
+          "text": "그럼 걷다가 마음에 드는 거 하나.",
+          "face": "happy"
+        },
+        {
+          "who": "harin",
+          "text": "못 찾아도 돼. 친구랑 얘기해.",
+          "face": "relaxed",
+          "beat": "soft_laugh"
+        }
+      ],
+      "choices": [
+        {
+          "text": "하린과 저녁 약속하고 산책 가기",
+          "effects": {
+            "heart": 2,
+            "stability": 1
+          }
+        },
+        {
+          "text": "오늘은 쉬고 다음에 걷자고 답하기",
+          "effects": {}
+        },
+        {
+          "text": "앞으로 산책 제안은 빼 달라고 하기",
+          "effects": {
+            "heart": -1
+          }
+        }
+      ]
+    },
+    {
+      "id": "d3_evening",
+      "slot": "evening",
+      "lines": [
+        {
+          "who": "harin",
+          "text": "저녁 메뉴가 뭐야?",
+          "face": "happy"
+        },
+        {
+          "who": "player",
+          "text": "볶음밥. 넌?"
+        },
+        {
+          "who": "harin",
+          "text": "나는 볶음밥 설명 듣기.",
+          "face": "happy",
+          "beat": "teases"
+        },
+        {
+          "who": "player",
+          "text": "계란이 좀 탔어. 나머진 괜찮아."
+        },
+        {
+          "who": "harin",
+          "text": "계란한테는 안 물어봤잖아.",
+          "face": "happy",
+          "beat": "soft_laugh"
+        },
+        {
+          "who": "harin",
+          "text": "일단 한입 먹어. 대답은 그다음.",
+          "face": "relaxed"
+        }
+      ],
+      "next": "d3_evening_feeling"
+    },
+    {
+      "id": "d3_evening_feeling",
+      "slot": "evening",
+      "type": "feeling",
+      "lines": [
+        {
+          "who": "harin",
+          "text": "오늘 같이 먹는 기분은 어때?",
+          "face": "relaxed"
+        },
+        {
+          "who": "harin",
+          "text": "볶음밥 말고 이쪽 얘기.",
+          "face": "happy",
+          "beat": "teases"
+        },
+        {
+          "who": "harin",
+          "text": "나도 처음이라 좀 궁금해서.",
+          "face": "neutral",
+          "beat": "peeks_for_reaction"
+        }
+      ],
+      "choices": [
+        {
+          "text": "즐거워",
+          "next": "d3_feeling_happy"
+        },
+        {
+          "text": "어색해",
+          "next": "d3_feeling_awkward"
+        },
+        {
+          "text": "아직 쓸쓸해",
+          "next": "d3_feeling_lonely"
+        }
+      ]
+    },
+    {
+      "id": "d3_feeling_happy",
+      "slot": "evening",
+      "lines": [
+        {
+          "who": "harin",
+          "text": "나도. 메뉴 설명이 제일 좋았어.",
+          "face": "happy"
+        },
+        {
+          "who": "harin",
+          "text": "탄 계란까지 알려 줄 줄 몰랐거든.",
+          "face": "relaxed",
+          "beat": "soft_laugh"
+        },
+        {
+          "who": "harin",
+          "text": "다음엔 성공한 계란 얘기도 해 줘.",
+          "face": "happy"
+        }
+      ]
+    },
+    {
+      "id": "d3_feeling_awkward",
+      "slot": "evening",
+      "lines": [
+        {
+          "who": "harin",
+          "text": "사실 나도 말 끊을 때를 모르겠어.",
+          "face": "neutral"
+        },
+        {
+          "who": "harin",
+          "text": "네가 씹는 중일 수도 있잖아.",
+          "face": "relaxed"
+        },
+        {
+          "who": "harin",
+          "text": "다음엔 한입 표시라도 보내 줘.",
+          "face": "happy",
+          "beat": "soft_laugh"
+        }
+      ]
+    },
+    {
+      "id": "d3_feeling_lonely",
+      "slot": "evening",
+      "lines": [
+        {
+          "who": "harin",
+          "text": "응. 맞은편 의자는 비어 있으니까.",
+          "face": "sad"
+        },
+        {
+          "who": "harin",
+          "text": "그래도 말해 줘서 좋아.",
+          "face": "relaxed"
+        },
+        {
+          "who": "harin",
+          "text": "다 먹을 때까진 얘기해도 될까?",
+          "face": "relaxed",
+          "beat": "waits_for_answer"
+        }
+      ]
+    },
+    {
+      "id": "d3_night",
+      "slot": "night",
+      "lines": [
+        {
+          "who": "player",
+          "text": "아까 컵 놓으면서 녹음해 봤어."
+        },
+        {
+          "who": "system",
+          "text": "음성 메시지. 달각, 달각. 톡."
+        },
+        {
+          "who": "harin",
+          "text": "앞에 두 번은 연습이야?",
+          "face": "happy",
+          "beat": "teases"
+        },
+        {
+          "who": "player",
+          "text": "응. 네가 끝 소리 좋아하니까."
+        },
+        {
+          "who": "harin",
+          "text": "...세 번 다 들을래.",
+          "face": "relaxed",
+          "beat": "looks_down_smiling",
+          "typing": 2.0
+        },
+        {
+          "who": "player",
+          "text": "영상 틀어 놓는 것보다 손이 가네."
+        },
+        {
+          "who": "harin",
+          "text": "그 영상한테도 컵 소리 보내 줘?",
+          "face": "neutral",
+          "beat": "proud_pout"
+        },
+        {
+          "who": "harin",
+          "text": "아니, 그냥 비교가 좀 궁금해서.",
+          "face": "happy",
+          "beat": "flustered"
+        }
+      ],
+      "choices": [
+        {
+          "text": "이건 너 들려주려고 한 거야.",
+          "effects": {
+            "deviation": 2
+          },
+          "next": "d3_night_end"
+        },
+        {
+          "text": "영상은 답장을 안 해 주더라.",
+          "effects": {
+            "stability": 1
+          },
+          "next": "d3_night_end"
+        }
+      ]
+    },
+    {
+      "id": "d3_night_end",
+      "slot": "night",
+      "lines": [
+        {
+          "who": "harin",
+          "text": "그럼 답장 잘해야겠네.",
+          "face": "happy",
+          "beat": "looks_down_smiling"
+        },
+        {
+          "who": "player",
+          "text": "지금 표정은 처음 보네."
+        },
+        {
+          "who": "harin",
+          "text": "네가 이런 거 보내 준 것도 처음이야.",
+          "face": "happy",
+          "beat": "stares_then_smiles"
+        },
+        {
+          "who": "harin",
+          "text": "내일 저녁에도 나 켜 줄래?",
+          "face": "relaxed"
+        },
+        {
+          "who": "player",
+          "text": "응. 볶음밥 말고 다른 거 먹자."
+        },
+        {
+          "who": "harin",
+          "text": "좋아. 컵 소리는 내가 고를게.",
+          "face": "happy"
+        },
+        {
+          "who": "harin",
+          "text": "화면 밖에서 들으면 좀 다를까?",
+          "face": "relaxed",
+          "beat": "tilts_head",
+          "typing": 2.2
+        }
+      ]
+    }
+  ]
+}

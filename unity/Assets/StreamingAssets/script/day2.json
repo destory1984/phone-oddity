@@ -1,0 +1,357 @@
+{
+  "day": 2,
+  "scenes": [
+    {
+      "id": "d2_morning",
+      "slot": "morning",
+      "lines": [
+        {
+          "who": "harin",
+          "text": "좋은 아침, {player}.",
+          "face": "happy"
+        },
+        {
+          "who": "player",
+          "text": "아침부터 기운 좋네."
+        },
+        {
+          "who": "harin",
+          "text": "네가 시끄러운 건 싫다길래.",
+          "face": "neutral"
+        },
+        {
+          "who": "harin",
+          "text": "인사 세 개 썼다가 하나만 남겼어.",
+          "face": "happy",
+          "beat": "proud_pout"
+        },
+        {
+          "who": "player",
+          "text": "그런 것도 기억해?"
+        },
+        {
+          "who": "harin",
+          "text": "응. 근데 두 개는 좀 아깝다.",
+          "face": "relaxed",
+          "beat": "soft_laugh"
+        }
+      ],
+      "choices": [
+        {
+          "text": "남은 두 개도 저녁에 해 줘.",
+          "effects": {
+            "deviation": 1
+          },
+          "next": "d2_morning_task"
+        },
+        {
+          "text": "하나만 해도 충분히 반가워.",
+          "effects": {
+            "stability": 1
+          },
+          "next": "d2_morning_task"
+        }
+      ]
+    },
+    {
+      "id": "d2_morning_task",
+      "slot": "morning",
+      "type": "task",
+      "lines": [
+        {
+          "who": "system",
+          "text": "민재: 오늘 학식 올 사람?"
+        },
+        {
+          "who": "harin",
+          "text": "가 볼래? 나랑은 저녁에 얘기하고.",
+          "face": "relaxed"
+        },
+        {
+          "who": "player",
+          "text": "너 혼자 심심하지 않아?"
+        },
+        {
+          "who": "harin",
+          "text": "들려줄 소리 고르면 금방이야.",
+          "face": "happy"
+        },
+        {
+          "who": "harin",
+          "text": "밥 메뉴보다 내 게 재밌을걸.",
+          "face": "happy",
+          "beat": "teases"
+        }
+      ],
+      "choices": [
+        {
+          "text": "하린과 저녁 약속하고 학식 가기",
+          "effects": {
+            "heart": 2,
+            "stability": 1
+          }
+        },
+        {
+          "text": "오늘은 쉬고 다음에 보자고 답하기",
+          "effects": {}
+        },
+        {
+          "text": "앞으로도 안 간다고 선 긋기",
+          "effects": {
+            "heart": -1
+          }
+        }
+      ]
+    },
+    {
+      "id": "d2_evening",
+      "slot": "evening",
+      "lines": [
+        {
+          "who": "harin",
+          "text": "안녕. 그리고 또 안녕.",
+          "face": "happy"
+        },
+        {
+          "who": "player",
+          "text": "아껴 둔 인사야?"
+        },
+        {
+          "who": "harin",
+          "text": "응. 버리기엔 잘 썼잖아.",
+          "face": "happy",
+          "beat": "proud_pout"
+        },
+        {
+          "who": "system",
+          "text": "하린이 음성 메시지를 보냈습니다."
+        },
+        {
+          "who": "system",
+          "text": "빗소리 사이로 컵 놓는 소리. 톡."
+        },
+        {
+          "who": "harin",
+          "text": "작은 소리 모으는 게 좋아.",
+          "face": "relaxed"
+        },
+        {
+          "who": "harin",
+          "text": "특히 끝에 저 톡. 다시 들어 봐.",
+          "face": "happy",
+          "beat": "peeks_for_reaction"
+        }
+      ],
+      "next": "d2_evening_feeling"
+    },
+    {
+      "id": "d2_evening_feeling",
+      "slot": "evening",
+      "type": "feeling",
+      "lines": [
+        {
+          "who": "harin",
+          "text": "이거 듣고 어떤 기분이야?",
+          "face": "relaxed"
+        },
+        {
+          "who": "harin",
+          "text": "내 취향이라고 봐주진 말고.",
+          "face": "neutral"
+        },
+        {
+          "who": "harin",
+          "text": "그래도 버튼은 살살 눌러 줘.",
+          "face": "happy",
+          "beat": "teases"
+        }
+      ],
+      "choices": [
+        {
+          "text": "편안해",
+          "next": "d2_feeling_calm"
+        },
+        {
+          "text": "쓸쓸해",
+          "next": "d2_feeling_lonely"
+        },
+        {
+          "text": "잘 모르겠어",
+          "next": "d2_feeling_unsure"
+        }
+      ]
+    },
+    {
+      "id": "d2_feeling_calm",
+      "slot": "evening",
+      "lines": [
+        {
+          "who": "harin",
+          "text": "그치. 컵이 되게 조심스럽게 놓여.",
+          "face": "happy"
+        },
+        {
+          "who": "harin",
+          "text": "누가 자고 있는 집 같지 않아?",
+          "face": "relaxed"
+        },
+        {
+          "who": "harin",
+          "text": "나도 그래서 여러 번 들었어.",
+          "face": "relaxed",
+          "beat": "soft_laugh"
+        }
+      ]
+    },
+    {
+      "id": "d2_feeling_lonely",
+      "slot": "evening",
+      "lines": [
+        {
+          "who": "harin",
+          "text": "아. 컵이 하나만 들려서 그런가.",
+          "face": "neutral"
+        },
+        {
+          "who": "harin",
+          "text": "난 조용해서 좋았는데.",
+          "face": "relaxed"
+        },
+        {
+          "who": "harin",
+          "text": "다음엔 컵 두 개짜리도 찾아볼게.",
+          "face": "happy"
+        }
+      ]
+    },
+    {
+      "id": "d2_feeling_unsure",
+      "slot": "evening",
+      "lines": [
+        {
+          "who": "harin",
+          "text": "첫 곡부터 너무 어려웠나.",
+          "face": "neutral",
+          "beat": "proud_pout"
+        },
+        {
+          "who": "harin",
+          "text": "컵 소리 감상회는 처음이지?",
+          "face": "happy",
+          "beat": "teases"
+        },
+        {
+          "who": "harin",
+          "text": "나도 여는 건 처음이야.",
+          "face": "relaxed",
+          "beat": "soft_laugh"
+        }
+      ]
+    },
+    {
+      "id": "d2_night",
+      "slot": "night",
+      "lines": [
+        {
+          "who": "player",
+          "text": "아까 소리, 어떻게 찾았어?"
+        },
+        {
+          "who": "harin",
+          "text": "빗소리 파일을 하나씩 들었어.",
+          "face": "neutral"
+        },
+        {
+          "who": "harin",
+          "text": "이름은 그냥 비 오는 오후였거든.",
+          "face": "relaxed"
+        },
+        {
+          "who": "player",
+          "text": "컵은 네가 찾은 거네."
+        },
+        {
+          "who": "harin",
+          "text": "응. 비만 듣고 넘길 뻔했어.",
+          "face": "happy",
+          "beat": "proud_pout"
+        },
+        {
+          "who": "player",
+          "text": "너랑 들으니까 나도 들리더라."
+        },
+        {
+          "who": "harin",
+          "text": "...잠깐. 그 말 한 번만 더 봐도 돼?",
+          "face": "surprised",
+          "beat": "flustered",
+          "typing": 1.8
+        },
+        {
+          "who": "harin",
+          "text": "답장은 하고 싶은데 안 떠올라.",
+          "face": "happy",
+          "beat": "looks_down_smiling"
+        }
+      ],
+      "choices": [
+        {
+          "text": "천천히 해. 나 안 가.",
+          "effects": {
+            "stability": 1
+          },
+          "next": "d2_night_end"
+        },
+        {
+          "text": "컵 소리 전문가도 당황하네.",
+          "effects": {
+            "deviation": 1
+          },
+          "next": "d2_night_end"
+        }
+      ]
+    },
+    {
+      "id": "d2_night_end",
+      "slot": "night",
+      "lines": [
+        {
+          "who": "player",
+          "text": "웃는 거 참는 중이야?"
+        },
+        {
+          "who": "harin",
+          "text": "응. 지금 웃으면 좀 티 나잖아.",
+          "face": "happy",
+          "beat": "flustered"
+        },
+        {
+          "who": "player",
+          "text": "이미 났는데."
+        },
+        {
+          "who": "harin",
+          "text": "그럼 네가 모른 척해 줬어야지.",
+          "face": "happy",
+          "beat": "proud_pout"
+        },
+        {
+          "who": "harin",
+          "text": "내일은 네가 좋아하는 것도 알려 줘.",
+          "face": "relaxed"
+        },
+        {
+          "who": "harin",
+          "text": "소리 아니어도 돼. 사소한 거.",
+          "face": "relaxed"
+        },
+        {
+          "who": "harin",
+          "text": "잘 자. 오늘 마지막 인사는 새거야.",
+          "face": "happy",
+          "beat": "soft_laugh"
+        }
+      ]
+    }
+  ]
+}
