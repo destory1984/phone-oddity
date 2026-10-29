@@ -1,6 +1,6 @@
 {
   "name": "Oddity.Game",
   "rootNamespace": "Oddity.Game",
-  "references": ["Oddity.Core", "Unity.Timeline", "VRM10", "VRM10.MToon10", "UniGLTF", "UnityEngine.UI"],
+  "references": ["Oddity.Core", "Unity.Timeline", "VRM10", "VRM10.MToon10", "UniGLTF", "UnityEngine.UI", "Unity.RenderPipelines.Universal.Runtime"],
   "autoReferenced": true
 }

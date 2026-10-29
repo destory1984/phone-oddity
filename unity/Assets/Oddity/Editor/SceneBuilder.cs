@@ -200,6 +200,33 @@ namespace Oddity.EditorTools
             win.transform.localScale = new Vector3(1.4f, 1.0f, 1f);
             win.GetComponent<Renderer>().sharedMaterial = WindowMaterial();
             Object.DestroyImmediate(win.GetComponent<Collider>());
+
+            // the GPT wall picture (curtained window, shelf, plant, photos) on the inner face of the west wall,
+            // the wall behind the bed that cuts 11 and 12 look at. It has its own window, and the old night window
+            // above stays on the north wall (the desk wall), so the two never overlap.
+            var backdrop = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            backdrop.name = "WallBackdrop";
+            backdrop.transform.SetParent(room, false);
+            backdrop.transform.localPosition = new Vector3(BackdropX, BackdropHeight * 0.5f, BackdropZ);
+            backdrop.transform.localRotation = Quaternion.Euler(0f, -90f, 0f); // faces +X, into the room
+            backdrop.transform.localScale = new Vector3(BackdropHeight * 1080f / 1920f * BackdropStretch, BackdropHeight, 1f);
+            backdrop.GetComponent<Renderer>().sharedMaterial = BackdropMaterial();
+            Object.DestroyImmediate(backdrop.GetComponent<Collider>());
+        }
+
+        // floor to ceiling (2.6 m); the blank lower wall of the picture meets the bed (top 0.45 m) behind its pillow end
+        const float BackdropX = -1.995f, BackdropZ = -1.25f, BackdropHeight = 2.6f;
+        // a little wider than the picture's own shape so the cut 11 camera, which looks along the wall, does not see its side edges
+        const float BackdropStretch = 1.5f;
+        const float BackdropTint = 0.9f; // unlit, so this is the whole brightness (0.8 to 1.0)
+
+        static Material BackdropMaterial()
+        {
+            var m = Mat("RoomWallBackdrop", new Color(BackdropTint, BackdropTint, BackdropTint), "Universal Render Pipeline/Unlit");
+            var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(ArtDir + "/room_wall_backdrop.png");
+            m.SetTexture("_BaseMap", tex);
+            EditorUtility.SetDirty(m);
+            return m;
         }
 
         static void BuildLights()
@@ -341,6 +368,7 @@ namespace Oddity.EditorTools
             so.FindProperty("cut10DeskPhone").objectReferenceValue = AssetDatabase.LoadAssetAtPath<Texture2D>(ArtDir + "/cut10_desk_phone.png");
             so.FindProperty("screenNoise").objectReferenceValue = AssetDatabase.LoadAssetAtPath<Texture2D>(ArtDir + "/screen_noise.png");
             so.FindProperty("portalRing").objectReferenceValue = AssetDatabase.LoadAssetAtPath<Texture2D>(ArtDir + "/portal_ring.png");
+            so.FindProperty("wristSwirl").objectReferenceValue = AssetDatabase.LoadAssetAtPath<Texture2D>(ArtDir + "/wrist_swirl.png");
             so.ApplyModifiedPropertiesWithoutUndo();
         }
     }

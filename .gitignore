@@ -22,3 +22,5 @@ unity/*.slnx
 shots/*.png
 shots/baseline/
 unity/.utmp/
+shots/voice_test/
+unity/Assets/Oddity/Audio/Placeholder/

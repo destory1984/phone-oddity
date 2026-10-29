@@ -23,6 +23,7 @@ namespace Oddity.Game
         [SerializeField] Texture2D cut10DeskPhone;
         [SerializeField] Texture2D screenNoise;
         [SerializeField] Texture2D portalRing;
+        [SerializeField] Texture2D wristSwirl;
 
         /// <summary>Act 2 scene played in the room after the emergence.</summary>
         public const string AfterSceneId = "d1_after";
@@ -64,7 +65,7 @@ namespace Oddity.Game
             if (harin == null) harin = FindFirstObjectByType<HarinPuppet>();
             if (emergence == null) emergence = FindFirstObjectByType<EmergenceSequence>();
             if (emergence == null) emergence = gameObject.AddComponent<EmergenceSequence>();
-            emergence.SetArt(cut10DeskPhone, screenNoise, portalRing);
+            emergence.SetArt(cut10DeskPhone, screenNoise, portalRing, wristSwirl);
             emergence.Finished += OnEmergenceFinished;
 
             string scriptPath = Path.Combine(Application.streamingAssetsPath, "script", "day1.json");

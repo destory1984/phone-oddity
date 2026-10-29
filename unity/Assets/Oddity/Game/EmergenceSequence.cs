@@ -38,12 +38,20 @@ namespace Oddity.Game
         static readonly Vector2[] ScreenPx = { new Vector2(71, 1803), new Vector2(426, 1683), new Vector2(824, 2166), new Vector2(383, 2357) };
         static readonly Vector2 HandTowardsPx = new Vector2(1250, 2550); // the hand reaches towards here
         const int DeskGridX = 24, DeskGridY = 40;
-        const float WristAbove = 0.045f;     // wrist height over the screen once out
-        const float WristOut = 0.064f;       // wrist distance from the crossing point along the forearm (45° rise)
-        const float UpperArmSteeper = 25f;   // upper arm angle over the forearm angle (under the desk)
+        const float WristAbove = 0.07f;      // wrist height over the screen once out (forearm shows 5 to 10 cm)
+        const float WristOut = 0.09f;        // wrist distance from the crossing point along the forearm (about 51° rise)
+        const float BodyTiltDeg = 5f;        // her up axis under the desk, lifted this much from the reach direction (head and feet both stay under the plane)
+        const float UpperArmSteeper = 10f;   // upper arm angle over the forearm angle (under the desk)
         const float RingRadius = 0.05f;
         const float GlowRadius = 0.13f;
         const float ShadowSize = 0.05f;
+        // wrist light: the swirl picture lies over the ring and turns 20 → 40 °/s from 1.0 to 4.0 s,
+        // brightest while the wrist comes out (2.0 to 3.0 s)
+        const float SwirlFrom = 1f, SwirlPeakAt = 2.5f, SwirlSpeed0 = 20f, SwirlSpeed1 = 40f, SwirlRadius = 0.065f;
+        const float SwirlEllipseW = 0.92f, SwirlEllipseH = 0.55f;   // the swirl's ellipse in its picture (fraction of the side)
+        // warm lamp light on her in cut 10 only, from the upper left of the picture (the desk lamp side)
+        const float Cut10WarmKelvin = 4800f, Cut10WarmIntensity = 1f;
+        static readonly Vector3 Cut10WarmDir = new Vector3(0.85f, -0.4f, -0.1f);
         const float Cut10Glitch = 0.2f;      // body jitter while the arm is out (1 cm at 1)
 
         // ---------------------------------------------------------------- cut 11 and 12 (the room)
@@ -71,6 +79,7 @@ namespace Oddity.Game
         [SerializeField] Texture2D deskPicture;
         [SerializeField] Texture2D screenNoise;
         [SerializeField] Texture2D portalRing;
+        [SerializeField] Texture2D wristSwirl;
 
         /// <summary>Playback speed multiplier (tests use more than 1).</summary>
         public float Speed = 1f;
@@ -105,8 +114,8 @@ namespace Oddity.Game
         Vector3[] _screenCorners;
         Vector3 _cross;        // where the arm passes through the screen
         Vector3 _reachDir;     // horizontal direction of the reach on the desk
-        Material _noiseMat, _ringMat, _glowMat, _shadowMat;
-        Transform _ring, _glow, _shadow;
+        Material _noiseMat, _ringMat, _glowMat, _shadowMat, _swirlMat;
+        Transform _ring, _glow, _shadow, _swirlPivot;
 
         Light _lamp, _window, _keyLight;
         Color _lampColor, _windowColor, _keyColor;
@@ -115,11 +124,12 @@ namespace Oddity.Game
         void Awake() => FindReferences();
 
         /// <summary>Art for cut 10 (GameBootstrap passes its serialized textures).</summary>
-        public void SetArt(Texture2D desk, Texture2D noise, Texture2D ring)
+        public void SetArt(Texture2D desk, Texture2D noise, Texture2D ring, Texture2D swirl = null)
         {
             if (desk != null) deskPicture = desk;
             if (noise != null) screenNoise = noise;
             if (ring != null) portalRing = ring;
+            if (swirl != null) wristSwirl = swirl;
         }
 
         void FindReferences()
@@ -296,7 +306,7 @@ namespace Oddity.Game
             if (_keyLight != null)
             {
                 // the app-stage fill light turned her skin pink in the room; in cut 10 it plays the desk lamp
-                _keyLight.enabled = !room;
+                _keyLight.enabled = !room && !cut10; // cut 10 has its own warm light
                 _keyLight.color = cut10 ? Mathf.CorrelatedColorTemperatureToRGB(Cut10KeyKelvin) : _keyColor;
                 _keyLight.intensity = cut10 ? _keyIntensity * Cut10KeyScale : _keyIntensity;
             }
@@ -407,6 +417,27 @@ namespace Oddity.Game
             _ring.localScale = new Vector3(RingRadius * 2f / 0.88f, RingRadius * 2f / 0.2f, 1f);
             _ring.rotation = Quaternion.LookRotation(Vector3.down, _reachDir) * Quaternion.Euler(0f, 0f, 90f);
 
+            // wrist swirl: a pivot that turns about the desk normal, with the picture stretched into a circle on it
+            _swirlPivot = new GameObject("Cut10SwirlPivot").transform;
+            _swirlPivot.SetParent(_rig, true);
+            _swirlPivot.position = _cross + Vector3.up * 0.0025f;
+            var swirl = FxQuad("Cut10Swirl", wristSwirl, true, 3004, out _swirlMat);
+            swirl.SetParent(_swirlPivot, true);
+            swirl.localPosition = Vector3.zero;
+            swirl.rotation = Quaternion.LookRotation(Vector3.down, _reachDir);
+            swirl.localScale = new Vector3(SwirlRadius * 2f / SwirlEllipseW, SwirlRadius * 2f / SwirlEllipseH, 1f);
+
+            var warm = new GameObject("Cut10WarmLight");
+            warm.transform.SetParent(_rig, false);
+            warm.transform.rotation = Quaternion.LookRotation(Cut10WarmDir);
+            var wl = warm.AddComponent<Light>();
+            wl.type = LightType.Directional;
+            wl.color = Mathf.CorrelatedColorTemperatureToRGB(Cut10WarmKelvin);
+            wl.intensity = Cut10WarmIntensity;
+            wl.shadows = LightShadows.None;
+            var wd = warm.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalLightData>();
+            wd.renderingLayers = uint.MaxValue;
+
             _shadow = FxQuad("Cut10ContactShadow", soft, false, 3002, out _shadowMat);
             _shadow.localScale = new Vector3(ShadowSize, ShadowSize * 0.7f, 1f);
             _rig.gameObject.SetActive(false);
@@ -504,9 +535,11 @@ namespace Oddity.Game
             var tipPos = wrist + handDir * hl;
 
             // her body hangs under the desk: her up axis along the upper arm, her sides level
-            var side = Vector3.Cross(upperDir, Vector3.up).normalized;
-            var front = Vector3.Cross(side, upperDir).normalized;
-            var rot = Quaternion.LookRotation(front, upperDir);
+            // (nearly level, so hair and feet both stay under the desk plane)
+            var bodyUp = (_reachDir * Mathf.Cos(BodyTiltDeg * Mathf.Deg2Rad) + Vector3.up * Mathf.Sin(BodyTiltDeg * Mathf.Deg2Rad)).normalized;
+            var side = Vector3.Cross(bodyUp, Vector3.up).normalized;
+            var front = Vector3.Cross(side, bodyUp).normalized;
+            var rot = Quaternion.LookRotation(front, bodyUp);
             var root = shoulder - rot * Vector3.Scale(harin.RightShoulderLocal, _homeScale);
             _anchor.SetPositionAndRotation(root, rot);
             harin.MoveTo(_anchor);
@@ -528,6 +561,14 @@ namespace Oddity.Game
             float ringGrow = 1f + 0.25f * flare;
             _ring.localScale = new Vector3(RingRadius * 2f / 0.88f * ringGrow, RingRadius * 2f / 0.2f * ringGrow, 1f);
             _glowMat.SetColor("_Color", new Color(0.6f, 0.35f, 1f, 0.25f * ringA + 0.3f * flare));
+
+            // wrist light: turns 20 → 40 °/s from 1.0 s, brightest at 2.5 s (the wrist coming out), then eases to 40%
+            float st = Mathf.Max(0f, t - SwirlFrom), sd = RoomAt - SwirlFrom;
+            float spin = SwirlSpeed0 * st + (SwirlSpeed1 - SwirlSpeed0) / sd * st * st * 0.5f;
+            _swirlPivot.rotation = Quaternion.AngleAxis(spin, Vector3.up);
+            float swirlA = Smooth((t - SwirlFrom) / (SwirlPeakAt - SwirlFrom))
+                * Mathf.Lerp(1f, 0.4f, Smooth((t - SwirlPeakAt) / (RoomAt - SwirlPeakAt)));
+            _swirlMat.SetColor("_Color", new Color(1f, 1f, 1f, 0.9f * swirlA));
 
             float touch = 1f - Mathf.Clamp01((tipPos.y - DeskPlaneY) / 0.02f);
             var shadowAt = tipPos - _reachDir * 0.02f;

@@ -101,7 +101,7 @@
         },
         {
           "who": "harin",
-          "text": "...나 아니야. 진짜로.",
+          "text": "...이거 내가 한 거 아니야. 진짜로.",
           "face": "surprised"
         },
         {
@@ -282,6 +282,11 @@
       "lines": [
         {
           "who": "harin",
+          "text": "말로 하기 어려우면 이렇게 해.",
+          "face": "relaxed"
+        },
+        {
+          "who": "harin",
           "text": "지금 기분, 하나만 골라 줘.",
           "face": "neutral"
         },
@@ -458,7 +463,7 @@
       "lines": [
         {
           "who": "system",
-          "text": "대화방을 나갔습니다. 대화 내용이 모두 삭제됩니다.",
+          "text": "대화방이 삭제되었습니다.",
           "face": "neutral"
         },
         {
