@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Harin viewer</title>
+<script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
+<style>
+  body { margin: 0; background: #2a2a2e; }
+  model-viewer { width: 100vw; height: 100vh; background: #2a2a2e; }
+</style>
+</head>
+<body>
+<!-- ?m=<path to glb>&orbit=<theta phi radius>&target=<x y z> -->
+<model-viewer id="mv" camera-controls exposure="1.1" shadow-intensity="0" field-of-view="20deg"></model-viewer>
+<script>
+  const p = new URLSearchParams(location.search);
+  const mv = document.getElementById('mv');
+  mv.src = p.get('m');
+  if (p.get('orbit')) mv.cameraOrbit = p.get('orbit');
+  if (p.get('target')) mv.cameraTarget = p.get('target');
+</script>
+</body>
+</html>

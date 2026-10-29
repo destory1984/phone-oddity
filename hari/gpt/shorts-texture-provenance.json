@@ -1,0 +1,11 @@
+{
+  "tool": "built-in image_gen",
+  "source_uv": "harin-output/shorts-native-uv.png",
+  "output": "harin-output/shorts-charcoal-piping-v1.png",
+  "prompt_summary": "Preserve UV layout and alpha cutoff; charcoal gray fabric with off-white piping",
+  "dimensions": [
+    1254,
+    1254
+  ],
+  "resampled": false
+}
