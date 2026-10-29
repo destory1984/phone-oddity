@@ -23,6 +23,8 @@ namespace Oddity.Core
         public string Text;
         public string Face = "neutral";
         public float Glitch;
+        /// <summary>Seconds of the typing indicator before this line; -1 = automatic, 0 = none.</summary>
+        public float Typing = -1f;
     }
 
     public class Choice

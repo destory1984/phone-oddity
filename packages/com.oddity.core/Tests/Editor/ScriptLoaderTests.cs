@@ -50,6 +50,26 @@ namespace Oddity.Core.Tests
         }
 
         [Test]
+        public void Parse_ReadsTyping()
+        {
+            const string json = @"{ ""day"": 1, ""scenes"": [
+  { ""id"": ""a"", ""slot"": ""night"",
+    ""lines"": [ { ""who"": ""harin"", ""text"": ""hi"", ""typing"": 2.4 } ] } ] }";
+
+            Assert.AreEqual(2.4f, ScriptLoader.Parse(json).Get("a").Lines[0].Typing, 0.0001f);
+        }
+
+        [Test]
+        public void Parse_TypingDefaultsToAuto()
+        {
+            const string json = @"{ ""day"": 1, ""scenes"": [
+  { ""id"": ""a"", ""slot"": ""night"",
+    ""lines"": [ { ""who"": ""harin"", ""text"": ""hi"" } ] } ] }";
+
+            Assert.AreEqual(-1f, ScriptLoader.Parse(json).Get("a").Lines[0].Typing);
+        }
+
+        [Test]
         public void Parse_DefaultsMissingFields()
         {
             const string json = @"{ ""day"": 1, ""scenes"": [

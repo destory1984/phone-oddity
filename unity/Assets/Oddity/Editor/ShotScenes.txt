@@ -1,5 +1,6 @@
 appstage
 chat_morning
+chat_typing
 chat_choices
 room_overview
 emergence_hand

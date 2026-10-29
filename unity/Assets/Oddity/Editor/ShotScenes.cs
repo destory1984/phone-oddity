@@ -28,6 +28,7 @@ namespace Oddity.EditorTools
         {
             var chat = UnityEngine.Object.FindFirstObjectByType<ChatView>();
             if (chat == null) throw new Exception("no ChatView in the scene");
+            ChatView.TypingEnabled = false; // shots tap through lines without waiting
             chat.SubmitName("민수");
             for (int i = 0; i < 30 && !stop(chat); i++) chat.Tap();
             return chat;
@@ -65,6 +66,21 @@ namespace Oddity.EditorTools
                     FitPhoneCamera();
                     int taps = 0;
                     PlayMorning(c => taps++ >= 1); // second line of the morning
+                },
+            },
+            new ShotScene
+            {
+                Name = "chat_typing", // the typing bubble before the first morning line
+                ScenePath = PrototypeScene,
+                CameraName = "MainCamera",
+                Setup = () =>
+                {
+                    FitPhoneCamera();
+                    var chat = UnityEngine.Object.FindFirstObjectByType<ChatView>();
+                    if (chat == null) throw new Exception("no ChatView in the scene");
+                    ChatView.TypingEnabled = true;
+                    chat.SubmitName("민수");
+                    for (int i = 0; i < 5 && !chat.IsTyping; i++) chat.Tap(); // past the system lines
                 },
             },
             new ShotScene

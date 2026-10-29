@@ -23,6 +23,12 @@ namespace Oddity.Game
         const float NoticeSeconds = 3f;
         const float BubbleMaxTextWidth = 640f;
         const int BodyFontSize = 40;
+        const float DotPeriod = 0.9f;
+        const float DotStagger = 0.15f;
+        const float DotLift = 14f;
+
+        /// <summary>When false, Harin's lines appear at once (tests that do not look at typing).</summary>
+        public static bool TypingEnabled = true;
 
         [SerializeField] Font font;
         [SerializeField] RenderTexture harinTexture;
@@ -50,6 +56,12 @@ namespace Oddity.Game
         readonly List<Button> _buttons = new List<Button>();
         readonly List<string> _buttonTexts = new List<string>();
         int _lastWaitingShown = int.MinValue;
+        Sprite _dotSprite;
+        RectTransform _typingRow;
+        RectTransform[] _dots;
+        Text _typingLabel;
+        Coroutine _typingRoutine;
+        Line _pendingLine;
 
         /// <summary>Text of the line most recently passed to <see cref="ShowLine"/>, or "".</summary>
         public string CurrentLineText { get; private set; } = "";
@@ -66,6 +78,12 @@ namespace Oddity.Game
         public string LockNoticeText => _noticeText != null ? _noticeText.text : "";
         public int BubbleCount => _content != null ? _content.childCount : 0;
         public float GlitchAmount { get; private set; }
+        /// <summary>True while Harin's typing bubble is shown and her next line is held back.</summary>
+        public bool IsTyping => _typingRoutine != null;
+        /// <summary>True when the typing bubble row exists in the chat.</summary>
+        public bool IsTypingBubbleVisible => _typingRow != null && _typingRow.gameObject.activeSelf;
+        /// <summary>True while the small typing text beside the name is shown.</summary>
+        public bool IsTypingLabelVisible => _typingLabel != null && _typingLabel.gameObject.activeSelf;
         /// <summary>Font used by the messenger (Pretendard in the scene), for other UI to match.</summary>
         public Font Font => _font != null ? _font : font;
 
@@ -94,12 +112,126 @@ namespace Oddity.Game
 
         // ---------------------------------------------------------------- public API
 
+        /// <summary>Seconds Harin "types" before the line: its own value, or 0.5 + 0.035 per character (0.6 to 1.8).</summary>
+        public static float TypingSeconds(Line line)
+        {
+            if (line.Typing >= 0f) return line.Typing;
+            int length = line.Text != null ? line.Text.Length : 0;
+            return Mathf.Clamp(0.5f + 0.035f * length, 0.6f, 1.8f);
+        }
+
         public void ShowLine(Line line)
+        {
+            FinishTyping();
+            HideBottom();
+            float wait = TypingEnabled && line.Who == "harin" && isActiveAndEnabled ? TypingSeconds(line) : 0f;
+            if (wait <= 0f)
+            {
+                Present(line);
+                return;
+            }
+            _pendingLine = line;
+            BuildTypingRow();
+            _typingLabel.gameObject.SetActive(true);
+            _typingRoutine = StartCoroutine(TypingRoutine(wait));
+        }
+
+        void Present(Line line)
         {
             CurrentLineText = line.Text ?? "";
             CurrentLineWho = line.Who ?? "";
-            HideBottom();
             AddBubble(line.Who, line.Text);
+        }
+
+        /// <summary>Ends the typing indicator and shows the held line (no-op when not typing).</summary>
+        void FinishTyping()
+        {
+            if (_typingRoutine == null) return;
+            StopCoroutine(_typingRoutine);
+            _typingRoutine = null;
+            RemoveTypingRow();
+            if (_typingLabel != null) _typingLabel.gameObject.SetActive(false);
+            Line line = _pendingLine;
+            _pendingLine = null;
+            if (line != null) Present(line);
+        }
+
+        IEnumerator TypingRoutine(float seconds)
+        {
+            float start = Time.unscaledTime;
+            while (Time.unscaledTime - start < seconds)
+            {
+                float t = Time.unscaledTime - start;
+                for (int i = 0; i < _dots.Length; i++)
+                {
+                    float phase = Mathf.Repeat((t - i * DotStagger) / DotPeriod, 1f);
+                    float lift = Mathf.Max(0f, Mathf.Sin(phase * Mathf.PI * 2f)) * DotLift;
+                    _dots[i].anchoredPosition = new Vector2(_dots[i].anchoredPosition.x, lift);
+                }
+                yield return null;
+            }
+            FinishTyping();
+        }
+
+        void BuildTypingRow()
+        {
+            var row = new GameObject("TypingRow", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            row.transform.SetParent(_content, false);
+            _typingRow = (RectTransform)row.transform;
+            var rlg = row.GetComponent<HorizontalLayoutGroup>();
+            rlg.childControlWidth = true;
+            rlg.childControlHeight = true;
+            rlg.childForceExpandWidth = false;
+            rlg.childForceExpandHeight = false;
+            rlg.childAlignment = TextAnchor.UpperLeft;
+
+            var bubble = MakeImage("Bubble", _typingRow, Color.white);
+            bubble.raycastTarget = false;
+            var le = bubble.gameObject.AddComponent<LayoutElement>();
+            le.preferredWidth = 150f;
+            le.preferredHeight = 76f;
+
+            _dots = new RectTransform[3];
+            for (int i = 0; i < 3; i++)
+            {
+                var dot = MakeImage("Dot" + i, bubble.rectTransform, new Color(0.55f, 0.5f, 0.7f, 1f));
+                dot.sprite = DotSprite();
+                dot.raycastTarget = false;
+                var drt = dot.rectTransform;
+                drt.anchorMin = drt.anchorMax = new Vector2(0.5f, 0.5f);
+                drt.pivot = new Vector2(0.5f, 0.5f);
+                drt.sizeDelta = new Vector2(20f, 20f);
+                drt.anchoredPosition = new Vector2((i - 1) * 36f, 0f);
+                _dots[i] = drt;
+            }
+            LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
+            _scroll.verticalNormalizedPosition = 0f;
+        }
+
+        void RemoveTypingRow()
+        {
+            if (_typingRow != null) DestroyImmediate(_typingRow.gameObject);
+            _typingRow = null;
+            _dots = null;
+        }
+
+        Sprite DotSprite()
+        {
+            if (_dotSprite != null) return _dotSprite;
+            const int size = 32;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
+            float r = size / 2f;
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(r, r));
+                    tex.SetPixel(x, y, new Color(1f, 1f, 1f, Mathf.Clamp01(r - d)));
+                }
+            }
+            tex.Apply();
+            _dotSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
+            return _dotSprite;
         }
 
         public void ShowChoices(IReadOnlyList<Choice> choices, bool feeling = false)
@@ -156,7 +288,15 @@ namespace Oddity.Game
         }
 
         /// <summary>Raised by a tap on the phone screen (and callable from tests).</summary>
-        public void Tap() => Tapped?.Invoke();
+        public void Tap()
+        {
+            if (IsTyping)
+            {
+                FinishTyping(); // a tap while she is typing shows the line at once
+                return;
+            }
+            Tapped?.Invoke();
+        }
 
         /// <summary>Press choice button <paramref name="index"/> (and callable from tests).</summary>
         public void PickChoice(int index)
@@ -215,6 +355,29 @@ namespace Oddity.Game
                 window.material = _glitch;
             }
             window.raycastTarget = false;
+
+            // name tag over the window; the typing text appears beside it while Harin types
+            var tag = MakeImage("NameTag", _root, new Color(0.12f, 0.1f, 0.2f, 0.55f));
+            var tagRt = tag.rectTransform;
+            tagRt.anchorMin = tagRt.anchorMax = new Vector2(0f, 1f);
+            tagRt.pivot = new Vector2(0f, 1f);
+            tagRt.sizeDelta = new Vector2(330f, 64f);
+            tagRt.anchoredPosition = new Vector2(30f, -30f);
+            tag.raycastTarget = false;
+            var nameText = MakeText("Name", tagRt, "하린", 34, TextAnchor.MiddleLeft, Color.white);
+            nameText.rectTransform.anchorMin = Vector2.zero;
+            nameText.rectTransform.anchorMax = new Vector2(0f, 1f);
+            nameText.rectTransform.pivot = new Vector2(0f, 0.5f);
+            nameText.rectTransform.sizeDelta = new Vector2(90f, 0f);
+            nameText.rectTransform.anchoredPosition = new Vector2(22f, 0f);
+            nameText.raycastTarget = false;
+            _typingLabel = MakeText("TypingLabel", tagRt, "입력 중...", 28, TextAnchor.MiddleLeft, new Color(0.85f, 0.82f, 0.98f, 1f));
+            _typingLabel.rectTransform.anchorMin = Vector2.zero;
+            _typingLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
+            _typingLabel.rectTransform.offsetMin = new Vector2(120f, 0f);
+            _typingLabel.rectTransform.offsetMax = new Vector2(-10f, 0f);
+            _typingLabel.raycastTarget = false;
+            _typingLabel.gameObject.SetActive(false);
 
             // chat history
             var viewport = new GameObject("ChatViewport", typeof(RectTransform), typeof(RectMask2D), typeof(Image), typeof(ScrollRect));

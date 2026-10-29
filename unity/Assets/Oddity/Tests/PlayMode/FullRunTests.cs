@@ -28,6 +28,7 @@ namespace Oddity.PlayTests
             _savePath = Path.Combine(Path.GetTempPath(), "oddity_playtest_" + Guid.NewGuid().ToString("N") + ".json");
             _now = new DateTime(2026, 10, 30, 12, 0, 0, DateTimeKind.Utc);
             GameBootstrap.SavePathOverride = _savePath;
+            ChatView.TypingEnabled = false;
             GameBootstrap.ClockOverride = () => _now;
         }
 
@@ -35,6 +36,7 @@ namespace Oddity.PlayTests
         public void TearDown()
         {
             GameBootstrap.SavePathOverride = null;
+            ChatView.TypingEnabled = true;
             GameBootstrap.ClockOverride = null;
             if (File.Exists(_savePath)) File.Delete(_savePath);
         }

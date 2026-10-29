@@ -237,7 +237,8 @@
           "who": "harin",
           "text": "아프지 않게 해줄게",
           "face": "relaxed",
-          "glitch": 0.05
+          "glitch": 0.05,
+          "typing": 2.4
         },
         {
           "who": "harin",

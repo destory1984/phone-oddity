@@ -141,7 +141,8 @@ namespace Oddity.Core
                 Who = line.Who,
                 Text = line.Text == null ? null : line.Text.Replace(PlayerToken, name),
                 Face = line.Face,
-                Glitch = line.Glitch
+                Glitch = line.Glitch,
+                Typing = line.Typing
             };
         }
     }
