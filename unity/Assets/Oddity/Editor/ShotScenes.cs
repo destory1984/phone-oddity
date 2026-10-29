@@ -20,11 +20,15 @@ namespace Oddity.EditorTools
         public Action Setup;
         /// <summary>True: start like a first launch, with the prologue. False: skip it (day 1 as before).</summary>
         public bool Prologue;
+        /// <summary>Frames between Setup and the capture. Seeking straight into a pose leaves the skirt and hair
+        /// spring bones swinging for about a second, so the seated shots wait longer.</summary>
+        public int SettleFrames = 5;
     }
 
     public static class ShotScenes
     {
         const string PrototypeScene = "Assets/Scenes/Prototype.unity";
+        const int SpringSettleFrames = 120;
 
         // New game as "민수", then tap through the morning until `stop` says to stay.
         static ChatView PlayMorning(Func<ChatView, bool> stop)
@@ -255,6 +259,7 @@ namespace Oddity.EditorTools
                 Name = "emergence_seated", // storyboard cut 12, eyes to the camera
                 ScenePath = PrototypeScene,
                 CameraName = "MainCamera",
+                SettleFrames = SpringSettleFrames,
                 Setup = () => HoldEmergence(8f),
             },
             new ShotScene
@@ -262,6 +267,7 @@ namespace Oddity.EditorTools
                 Name = "room_after", // storyboard cut 12, first act 2 line
                 ScenePath = PrototypeScene,
                 CameraName = "MainCamera",
+                SettleFrames = SpringSettleFrames,
                 Setup = () => HoldEmergence(10f),
             },
         };

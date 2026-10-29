@@ -21,7 +21,6 @@ namespace Oddity.EditorTools
     {
         const int Width = 800;
         const int WarmupFrames = 20;
-        const int SettleFrames = 5;
 
         static Queue<ShotScene> _queue;
         static string _dir;
@@ -99,7 +98,7 @@ namespace Oddity.EditorTools
             try
             {
                 if (_frames == WarmupFrames) _current.Setup?.Invoke();
-                if (_frames == WarmupFrames + SettleFrames)
+                if (_frames == WarmupFrames + _current.SettleFrames)
                 {
                     Capture(_current);
                     _current = null;

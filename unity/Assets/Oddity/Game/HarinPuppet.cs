@@ -72,12 +72,27 @@ namespace Oddity.Game
         {
             _vrm = GetComponent<Vrm10Instance>();
             _basePosition = transform.position;
+            DampSkirt();
             CaptureOverrideBones();
             CapturePoseBones();
             CaptureLeanBones();
             CaptureIdleBones();
             if (lowerArms) CaptureRestPose();
             ScheduleBlink();
+        }
+
+        /// <summary>
+        /// Drag on the skirt spring joints. VRoid exported the summer-B pleated skirt with 0.05, so it kept
+        /// swinging for about 5 s after any move (and 1 cm at the hem 1.5 s after loading); 0.3 settles it
+        /// in about a second without making it stiff. Hair keeps its own values.
+        /// </summary>
+        public const float SkirtDrag = 0.3f;
+
+        // Runs in Awake, before the VRM runtime builds its spring bones from these components.
+        void DampSkirt()
+        {
+            foreach (var j in GetComponentsInChildren<VRM10SpringBoneJoint>(true))
+                if (j.name.Contains("Skirt") && j.m_dragForce < SkirtDrag) j.m_dragForce = SkirtDrag;
         }
 
         // The VRM is exported in a T-pose; swing both arms down so she stands naturally.
