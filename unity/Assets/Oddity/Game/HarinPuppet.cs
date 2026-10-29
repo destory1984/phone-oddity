@@ -10,7 +10,7 @@ namespace Oddity.Game
     /// </summary>
     [DefaultExecutionOrder(-100)] // before Vrm10Instance's LateUpdate so spring bones see the pose
     [RequireComponent(typeof(Vrm10Instance))]
-    public class HarinPuppet : MonoBehaviour
+    public partial class HarinPuppet : MonoBehaviour
     {
         const float BlinkMinInterval = 3f;
         const float BlinkMaxInterval = 6f;
@@ -73,6 +73,7 @@ namespace Oddity.Game
             _vrm = GetComponent<Vrm10Instance>();
             _basePosition = transform.position;
             CaptureOverrideBones();
+            CapturePoseBones();
             if (lowerArms) CaptureRestPose();
             ScheduleBlink();
         }
@@ -141,7 +142,13 @@ namespace Oddity.Game
 
         void LateUpdate()
         {
-            if (_armPose != null)
+            if (_pose != Pose.None || _poseDirty)
+            {
+                ResetPoseBones();
+                _poseDirty = _pose != Pose.None;
+            }
+            if (_pose != Pose.None) ApplyPoseNow();
+            else if (_armPose != null)
                 foreach (var (t, q) in _armPose) t.localRotation = q;
 
             var root = transform.rotation;

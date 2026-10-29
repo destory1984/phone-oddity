@@ -4,5 +4,6 @@ chat_choices
 room_overview
 emergence_hand
 emergence_pullback
+emergence_seated
 room_after
 dev_panel

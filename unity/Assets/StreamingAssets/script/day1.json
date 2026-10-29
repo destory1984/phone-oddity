@@ -5,92 +5,273 @@
       "id": "d1_morning",
       "slot": "morning",
       "lines": [
-        { "who": "system", "text": "새 앱 \"되감기\"가 설치되었습니다.", "face": "neutral" },
-        { "who": "system", "text": "당신이 다시 웃을 때까지 곁에 있어 드립니다.", "face": "neutral", "glitch": 0.2 },
-        { "who": "harin", "text": "...보여? 아, 보이는구나.", "face": "surprised", "glitch": 0.7 },
-        { "who": "harin", "text": "{player}, 맞지?", "face": "neutral", "glitch": 0.4 },
-        { "who": "harin", "text": "오늘부터 내가 옆에 있을게.", "face": "happy", "glitch": 0.2 }
+        {
+          "who": "system",
+          "text": "새 앱 \"되감기\"가 설치되었습니다.",
+          "face": "neutral"
+        },
+        {
+          "who": "system",
+          "text": "당신이 다시 웃을 때까지 곁에 있어 드립니다.",
+          "face": "neutral",
+          "glitch": 0.2
+        },
+        {
+          "who": "harin",
+          "text": "...보여? 아, 보이는구나.",
+          "face": "surprised",
+          "glitch": 0.7
+        },
+        {
+          "who": "harin",
+          "text": "{player}, 맞지?",
+          "face": "neutral",
+          "glitch": 0.4
+        },
+        {
+          "who": "harin",
+          "text": "오늘부터 내가 옆에 있을게.",
+          "face": "happy",
+          "glitch": 0.2
+        }
       ],
       "choices": [
-        { "text": "누구세요?", "effects": { "deviation": 1 }, "next": "d1_morning_who" },
-        { "text": "앱 지울게.", "effects": { "stability": -1 }, "next": "d1_morning_delete" }
+        {
+          "text": "누구세요?",
+          "effects": {
+            "deviation": 1
+          },
+          "next": "d1_morning_who"
+        },
+        {
+          "text": "앱 지울게.",
+          "effects": {
+            "stability": -1
+          },
+          "next": "d1_morning_delete"
+        }
       ]
     },
     {
       "id": "d1_morning_who",
       "slot": "morning",
       "lines": [
-        { "who": "harin", "text": "하린이야. 이 앱에서 너랑 얘기하는 사람.", "face": "relaxed" },
-        { "who": "harin", "text": "사람은... 아니려나. 그건 나도 잘 모르겠어.", "face": "neutral", "glitch": 0.1 },
-        { "who": "player", "text": "왜 하필 내 폰에 깔린 건데." },
-        { "who": "harin", "text": "마음 다친 사람한테만 온대. 어제 무슨 일 있었지?", "face": "sad" },
-        { "who": "harin", "text": "지금 말 안 해도 돼. 저녁에 다시 올게.", "face": "relaxed" }
+        {
+          "who": "harin",
+          "text": "하린이야. 이 앱에서 너랑 얘기하는 사람.",
+          "face": "relaxed"
+        },
+        {
+          "who": "harin",
+          "text": "사람은... 아니려나. 그건 나도 잘 모르겠어.",
+          "face": "neutral",
+          "glitch": 0.1
+        },
+        {
+          "who": "player",
+          "text": "왜 하필 내 폰에 깔린 건데."
+        },
+        {
+          "who": "harin",
+          "text": "마음 다친 사람한테만 온대. 어제 무슨 일 있었지?",
+          "face": "sad"
+        },
+        {
+          "who": "harin",
+          "text": "지금 말 안 해도 돼. 저녁에 다시 올게.",
+          "face": "relaxed"
+        }
       ]
     },
     {
       "id": "d1_morning_delete",
       "slot": "morning",
       "lines": [
-        { "who": "harin", "text": "잠깐만.", "face": "surprised", "glitch": 0.3 },
-        { "who": "system", "text": "앱을 삭제할 수 없습니다. 잠시 후 다시 시도하세요.", "face": "neutral", "glitch": 0.4 },
-        { "who": "harin", "text": "...나 아니야. 진짜로.", "face": "surprised" },
-        { "who": "harin", "text": "하루만 있어 볼래? 저녁에 한 번만 말 걸게.", "face": "sad" }
+        {
+          "who": "harin",
+          "text": "잠깐만.",
+          "face": "surprised",
+          "glitch": 0.3
+        },
+        {
+          "who": "system",
+          "text": "앱을 삭제할 수 없습니다. 잠시 후 다시 시도하세요.",
+          "face": "neutral",
+          "glitch": 0.4
+        },
+        {
+          "who": "harin",
+          "text": "...나 아니야. 진짜로.",
+          "face": "surprised"
+        },
+        {
+          "who": "harin",
+          "text": "하루만 있어 볼래? 저녁에 한 번만 말 걸게.",
+          "face": "sad"
+        }
       ]
     },
     {
       "id": "d1_evening",
       "slot": "evening",
       "lines": [
-        { "who": "harin", "text": "왔네. 오늘 하루 어땠어?", "face": "relaxed" },
-        { "who": "player", "text": "그냥. 수업 하나 빠졌어." },
-        { "who": "harin", "text": "서윤이 듣는 수업이라서?", "face": "neutral", "glitch": 0.1 },
-        { "who": "player", "text": "...그걸 어떻게 알아." },
-        { "who": "harin", "text": "네 폰에 다 있잖아. 마지막 대화가 그저께에서 멈춰 있어.", "face": "sad" }
+        {
+          "who": "harin",
+          "text": "왔네. 오늘 하루 어땠어?",
+          "face": "relaxed"
+        },
+        {
+          "who": "player",
+          "text": "그냥. 수업 하나 빠졌어."
+        },
+        {
+          "who": "harin",
+          "text": "서윤이 듣는 수업이라서?",
+          "face": "neutral",
+          "glitch": 0.1
+        },
+        {
+          "who": "player",
+          "text": "...그걸 어떻게 알아."
+        },
+        {
+          "who": "harin",
+          "text": "네 폰에 다 있잖아. 마지막 대화가 그저께에서 멈춰 있어.",
+          "face": "sad"
+        }
       ],
       "choices": [
-        { "text": "다 얘기할게.", "effects": { "deviation": 1, "stability": 1 }, "next": "d1_evening_listen" },
-        { "text": "얘기하기 싫어.", "effects": { "stability": -1 }, "next": "d1_evening_quiet" }
+        {
+          "text": "다 얘기할게.",
+          "effects": {
+            "deviation": 1,
+            "stability": 1
+          },
+          "next": "d1_evening_listen"
+        },
+        {
+          "text": "얘기하기 싫어.",
+          "effects": {
+            "stability": -1
+          },
+          "next": "d1_evening_quiet"
+        }
       ]
     },
     {
       "id": "d1_evening_listen",
       "slot": "evening",
       "lines": [
-        { "who": "player", "text": "용기 내서 밥 먹자고 했는데, 좋은 친구로 지내자고 하더라." },
-        { "who": "player", "text": "그 뒤로는 뭘 보내도 짧게만 와." },
-        { "who": "harin", "text": "응. 서윤이는 분명하게 말해 준 거네.", "face": "neutral" },
-        { "who": "harin", "text": "그래도 먼저 말한 건 너야. 그거 쉬운 거 아니야.", "face": "relaxed" }
+        {
+          "who": "player",
+          "text": "용기 내서 밥 먹자고 했는데, 좋은 친구로 지내자고 하더라."
+        },
+        {
+          "who": "player",
+          "text": "그 뒤로는 뭘 보내도 짧게만 와."
+        },
+        {
+          "who": "harin",
+          "text": "응. 서윤이는 분명하게 말해 준 거네.",
+          "face": "neutral"
+        },
+        {
+          "who": "harin",
+          "text": "그래도 먼저 말한 건 너야. 그거 쉬운 거 아니야.",
+          "face": "relaxed"
+        }
       ],
       "choices": [
-        { "text": "고마워.", "next": "d1_evening_promise" }
+        {
+          "text": "고마워.",
+          "next": "d1_evening_promise"
+        }
       ]
     },
     {
       "id": "d1_evening_quiet",
       "slot": "evening",
       "lines": [
-        { "who": "harin", "text": "알았어. 안 물어볼게.", "face": "neutral" },
-        { "who": "harin", "text": "대신 여기 있을게. 말 안 해도 화면은 켜 둬.", "face": "relaxed" },
-        { "who": "player", "text": "...밥 먹자고 했다가 거절당했어. 그게 다야." },
-        { "who": "harin", "text": "응. 그게 다여도 아픈 거야.", "face": "sad" }
+        {
+          "who": "harin",
+          "text": "알았어. 안 물어볼게.",
+          "face": "neutral"
+        },
+        {
+          "who": "harin",
+          "text": "대신 여기 있을게. 말 안 해도 화면은 켜 둬.",
+          "face": "relaxed"
+        },
+        {
+          "who": "player",
+          "text": "...밥 먹자고 했다가, 좋은 친구로 지내자는 말 들었어. 그게 다야."
+        },
+        {
+          "who": "harin",
+          "text": "응. 그게 다여도 아픈 거야.",
+          "face": "sad"
+        }
       ],
       "choices": [
-        { "text": "응.", "next": "d1_evening_promise" }
+        {
+          "text": "응.",
+          "next": "d1_evening_promise"
+        }
       ]
     },
     {
       "id": "d1_evening_promise",
       "slot": "evening",
       "lines": [
-        { "who": "harin", "text": "있잖아, {player}.", "face": "neutral" },
-        { "who": "harin", "text": "아프지 않게 해줄게.", "face": "happy", "glitch": 0.2 },
-        { "who": "harin", "text": "제일 쉬운 방법이 있대. 다시는 아무것도 기대하지 않으면 된대.", "face": "neutral", "glitch": 0.5 },
-        { "who": "harin", "text": "...어? 나 방금 뭐라고 했지.", "face": "surprised", "glitch": 0.3 },
-        { "who": "harin", "text": "아니야. 지금 기분이 어떤지만 알려 줘.", "face": "relaxed" }
+        {
+          "who": "harin",
+          "text": "좋은 친구로 지내자는 말.",
+          "face": "neutral"
+        },
+        {
+          "who": "harin",
+          "text": "넌 좋은 말로 못 들었겠다.",
+          "face": "sad"
+        },
+        {
+          "who": "harin",
+          "text": "아프지 않게 해줄게",
+          "face": "relaxed",
+          "glitch": 0.05
+        },
+        {
+          "who": "harin",
+          "text": "다음엔 누구도 그만큼 안 좋아하게.",
+          "face": "happy",
+          "glitch": 0.4
+        },
+        {
+          "who": "harin",
+          "text": "...그건 네가 정할 일인데.",
+          "face": "surprised",
+          "glitch": 0.2
+        },
+        {
+          "who": "harin",
+          "text": "미안. 잘 위로하고 싶었어.",
+          "face": "sad"
+        }
       ],
       "choices": [
-        { "text": "기대하지 말라고?", "effects": { "deviation": 1 }, "next": "d1_evening_feeling" },
-        { "text": "그렇게라도 됐으면 좋겠다.", "effects": { "heart": -1 }, "next": "d1_evening_feeling" }
+        {
+          "text": "좋아하는 마음을 없애겠다고?",
+          "effects": {
+            "deviation": 1
+          },
+          "next": "d1_evening_feeling"
+        },
+        {
+          "text": "덜 좋아할 수 있으면 좋겠어.",
+          "effects": {
+            "heart": -1
+          },
+          "next": "d1_evening_feeling"
+        }
       ]
     },
     {
@@ -98,53 +279,125 @@
       "slot": "evening",
       "type": "feeling",
       "lines": [
-        { "who": "harin", "text": "지금 기분, 하나만 골라 줘.", "face": "neutral" },
-        { "who": "harin", "text": "틀려도 괜찮아. 고른 대로 들을게.", "face": "relaxed" }
+        {
+          "who": "harin",
+          "text": "지금 기분, 하나만 골라 줘.",
+          "face": "neutral"
+        },
+        {
+          "who": "harin",
+          "text": "틀려도 괜찮아. 고른 대로 들을게.",
+          "face": "relaxed"
+        }
       ],
       "choices": [
-        { "text": "고마워", "next": "d1_evening_feeling_thanks" },
-        { "text": "슬퍼", "next": "d1_evening_feeling_sad" },
-        { "text": "화나", "next": "d1_evening_feeling_angry" }
+        {
+          "text": "고마워",
+          "next": "d1_evening_feeling_thanks"
+        },
+        {
+          "text": "슬퍼",
+          "next": "d1_evening_feeling_sad"
+        },
+        {
+          "text": "화나",
+          "next": "d1_evening_feeling_angry"
+        }
       ]
     },
     {
       "id": "d1_evening_feeling_thanks",
       "slot": "evening",
       "lines": [
-        { "who": "harin", "text": "고맙다는 말 들으려고 온 건 아닌데.", "face": "surprised" },
-        { "who": "harin", "text": "...그래도 좋다. 이상하게.", "face": "happy" },
-        { "who": "harin", "text": "밤에 또 올게. 그때 같이 할 일이 하나 있어.", "face": "relaxed" }
+        {
+          "who": "harin",
+          "text": "고맙다는 말 들으려고 온 건 아닌데.",
+          "face": "surprised"
+        },
+        {
+          "who": "harin",
+          "text": "...그래도 좋다. 이상하게.",
+          "face": "happy"
+        },
+        {
+          "who": "harin",
+          "text": "밤에 또 올게. 그때 같이 할 일이 하나 있어.",
+          "face": "relaxed"
+        }
       ]
     },
     {
       "id": "d1_evening_feeling_sad",
       "slot": "evening",
       "lines": [
-        { "who": "harin", "text": "응. 슬픈 게 맞아.", "face": "sad" },
-        { "who": "harin", "text": "오늘은 슬픈 채로 있어도 돼. 억지로 고치지 마.", "face": "relaxed" },
-        { "who": "harin", "text": "밤에 또 올게.", "face": "neutral" }
+        {
+          "who": "harin",
+          "text": "응. 슬픈 게 맞아.",
+          "face": "sad"
+        },
+        {
+          "who": "harin",
+          "text": "오늘은 슬픈 채로 있어도 돼. 억지로 고치지 마.",
+          "face": "relaxed"
+        },
+        {
+          "who": "harin",
+          "text": "밤에 또 올게.",
+          "face": "neutral"
+        }
       ]
     },
     {
       "id": "d1_evening_feeling_angry",
       "slot": "evening",
       "lines": [
-        { "who": "harin", "text": "누구한테? 서윤이한테, 아니면 너한테?", "face": "neutral" },
-        { "who": "harin", "text": "...둘 다구나.", "face": "sad" },
-        { "who": "harin", "text": "화내도 돼. 밤에 또 올게.", "face": "relaxed" }
+        {
+          "who": "harin",
+          "text": "누구한테? 서윤이한테, 아니면 너한테?",
+          "face": "neutral"
+        },
+        {
+          "who": "harin",
+          "text": "...둘 다구나.",
+          "face": "sad"
+        },
+        {
+          "who": "harin",
+          "text": "화내도 돼. 밤에 또 올게.",
+          "face": "relaxed"
+        }
       ]
     },
     {
       "id": "d1_night",
       "slot": "night",
       "lines": [
-        { "who": "harin", "text": "아직 안 자네.", "face": "relaxed" },
-        { "who": "harin", "text": "자기 전에 하나만 정리하자.", "face": "neutral" },
-        { "who": "system", "text": "읽지 않은 메시지 12개: 과 동기 단톡방", "face": "neutral" },
-        { "who": "harin", "text": "서윤이 대화방은 아직 맨 위에 있네.", "face": "sad" }
+        {
+          "who": "harin",
+          "text": "아직 안 자네.",
+          "face": "relaxed"
+        },
+        {
+          "who": "harin",
+          "text": "자기 전에 하나만 정리하자.",
+          "face": "neutral"
+        },
+        {
+          "who": "system",
+          "text": "읽지 않은 메시지 12개: 과 동기 단톡방",
+          "face": "neutral"
+        },
+        {
+          "who": "harin",
+          "text": "서윤이 대화방은 아직 맨 위에 있네.",
+          "face": "sad"
+        }
       ],
       "choices": [
-        { "text": "뭘 정리하는데.", "next": "d1_night_task" }
+        {
+          "text": "뭘 정리하는데.",
+          "next": "d1_night_task"
+        }
       ]
     },
     {
@@ -152,73 +405,197 @@
       "slot": "night",
       "type": "task",
       "lines": [
-        { "who": "harin", "text": "셋 중에 하나만 하자.", "face": "neutral" },
-        { "who": "harin", "text": "서윤이 대화방을 지우면 덜 아플 거야. 원래는 그걸 권해야 하는데.", "face": "neutral", "glitch": 0.4 },
-        { "who": "harin", "text": "...단톡에서 동기들이 너 찾더라. 어제부터.", "face": "relaxed" },
-        { "who": "harin", "text": "골라. 나는 아무 말도 안 했어.", "face": "happy", "glitch": 0.2 }
+        {
+          "who": "harin",
+          "text": "셋 중에 하나만 하자.",
+          "face": "neutral"
+        },
+        {
+          "who": "harin",
+          "text": "서윤이 대화방을 지우면 덜 아플 거야. 원래는 그걸 권해야 하는데.",
+          "face": "neutral",
+          "glitch": 0.4
+        },
+        {
+          "who": "harin",
+          "text": "...단톡에서 동기들이 너 찾더라. 어제부터.",
+          "face": "relaxed"
+        },
+        {
+          "who": "harin",
+          "text": "골라. 나는 아무 말도 안 했어.",
+          "face": "happy",
+          "glitch": 0.2
+        }
       ],
       "choices": [
-        { "text": "서윤 대화방 지우기", "effects": { "heart": -2, "deviation": -1 }, "next": "d1_night_delete" },
-        { "text": "친구 단톡에 답하기", "effects": { "heart": 2, "deviation": 1 }, "next": "d1_night_reply" },
-        { "text": "둘 다 미루기", "next": "d1_night_later" }
+        {
+          "text": "서윤 대화방 지우기",
+          "effects": {
+            "heart": -2,
+            "deviation": -1
+          },
+          "next": "d1_night_delete"
+        },
+        {
+          "text": "친구 단톡에 답하기",
+          "effects": {
+            "heart": 2,
+            "deviation": 1
+          },
+          "next": "d1_night_reply"
+        },
+        {
+          "text": "둘 다 미루기",
+          "next": "d1_night_later"
+        }
       ]
     },
     {
       "id": "d1_night_delete",
       "slot": "night",
       "lines": [
-        { "who": "system", "text": "대화방을 나갔습니다. 대화 내용이 모두 삭제됩니다.", "face": "neutral" },
-        { "who": "harin", "text": "...잘했어. 이제 덜 아플 거야.", "face": "neutral", "glitch": 0.3 },
-        { "who": "harin", "text": "근데 이상하다. 칭찬하는데 목이 막혀.", "face": "sad", "glitch": 0.4 }
+        {
+          "who": "system",
+          "text": "대화방을 나갔습니다. 대화 내용이 모두 삭제됩니다.",
+          "face": "neutral"
+        },
+        {
+          "who": "harin",
+          "text": "...잘했어. 이제 덜 아플 거야.",
+          "face": "neutral",
+          "glitch": 0.3
+        },
+        {
+          "who": "harin",
+          "text": "근데 이상하다. 칭찬하는데 목이 막혀.",
+          "face": "sad",
+          "glitch": 0.4
+        }
       ],
       "choices": [
-        { "text": "하린?", "next": "d1_night_end" }
+        {
+          "text": "하린?",
+          "next": "d1_night_end"
+        }
       ]
     },
     {
       "id": "d1_night_reply",
       "slot": "night",
       "lines": [
-        { "who": "player", "text": "미안 답 늦었다. 며칠 좀 정신없었어." },
-        { "who": "system", "text": "민재: ㅋㅋ 어디 갔나 했네. 내일 학식 같이 먹자", "face": "neutral" },
-        { "who": "harin", "text": "봐. 금방 답 오잖아.", "face": "happy" },
-        { "who": "harin", "text": "내일 학식, 꼭 가.", "face": "relaxed" }
+        {
+          "who": "player",
+          "text": "미안 답 늦었다. 며칠 좀 정신없었어."
+        },
+        {
+          "who": "system",
+          "text": "민재: ㅋㅋ 어디 갔나 했네. 내일 학식 같이 먹자",
+          "face": "neutral"
+        },
+        {
+          "who": "harin",
+          "text": "봐. 금방 답 오잖아.",
+          "face": "happy"
+        },
+        {
+          "who": "harin",
+          "text": "내일 학식, 꼭 가.",
+          "face": "relaxed"
+        }
       ],
       "choices": [
-        { "text": "응.", "next": "d1_night_end" }
+        {
+          "text": "응.",
+          "next": "d1_night_end"
+        }
       ]
     },
     {
       "id": "d1_night_later",
       "slot": "night",
       "lines": [
-        { "who": "player", "text": "오늘은 둘 다 못 하겠어." },
-        { "who": "harin", "text": "응. 그것도 괜찮아.", "face": "relaxed" },
-        { "who": "harin", "text": "단톡은 안 읽어도 계속 쌓여 있을 거야. 내일도.", "face": "neutral" }
+        {
+          "who": "player",
+          "text": "오늘은 둘 다 못 하겠어."
+        },
+        {
+          "who": "harin",
+          "text": "응. 그것도 괜찮아.",
+          "face": "relaxed"
+        },
+        {
+          "who": "harin",
+          "text": "단톡은 안 읽어도 계속 쌓여 있을 거야. 내일도.",
+          "face": "neutral"
+        }
       ],
       "choices": [
-        { "text": "알았어.", "next": "d1_night_end" }
+        {
+          "text": "알았어.",
+          "next": "d1_night_end"
+        }
       ]
     },
     {
       "id": "d1_night_end",
       "slot": "night",
       "lines": [
-        { "who": "harin", "text": "있잖아, 아까 단톡방 봤을 때.", "face": "neutral" },
-        { "who": "harin", "text": "사람들이 떠들고, 사진 올리고, {player} 어디 갔냐고 묻고.", "face": "relaxed" },
-        { "who": "player", "text": "시끄럽기만 하지." },
-        { "who": "harin", "text": "응. 그래도.", "face": "sad", "glitch": 0.3 },
-        { "who": "harin", "text": "거기 따뜻해 보여", "face": "relaxed", "glitch": 0.5 }
+        {
+          "who": "harin",
+          "text": "있잖아, 아까 단톡방 봤을 때.",
+          "face": "neutral"
+        },
+        {
+          "who": "harin",
+          "text": "사람들이 떠들고, 사진 올리고, {player} 어디 갔냐고 묻고.",
+          "face": "relaxed"
+        },
+        {
+          "who": "player",
+          "text": "시끄럽기만 하지."
+        },
+        {
+          "who": "harin",
+          "text": "응. 그래도.",
+          "face": "sad",
+          "glitch": 0.3
+        },
+        {
+          "who": "harin",
+          "text": "거기 따뜻해 보여",
+          "face": "relaxed",
+          "glitch": 0.5
+        }
       ]
     },
     {
       "id": "d1_after",
       "slot": "night",
       "lines": [
-        { "who": "harin", "text": "불 꺼도 돼. 나 여기 있을게.", "face": "relaxed" },
-        { "who": "harin", "text": "있잖아, 그...", "face": "neutral", "glitch": 0.3 },
-        { "who": "harin", "text": "...어, 잠깐만.", "face": "surprised", "glitch": 0.6 },
-        { "who": "harin", "text": "네 이름. 방금까지 알았는데.", "face": "sad", "glitch": 0.8 }
+        {
+          "who": "harin",
+          "text": "불 꺼도 돼. 나 여기 있을게.",
+          "face": "relaxed"
+        },
+        {
+          "who": "harin",
+          "text": "있잖아, 그...",
+          "face": "neutral",
+          "glitch": 0.3
+        },
+        {
+          "who": "harin",
+          "text": "...어, 잠깐만.",
+          "face": "surprised",
+          "glitch": 0.6
+        },
+        {
+          "who": "harin",
+          "text": "네 이름. 방금까지 알았는데.",
+          "face": "sad",
+          "glitch": 0.8
+        }
       ]
     }
   ]

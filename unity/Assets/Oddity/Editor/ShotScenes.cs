@@ -109,17 +109,28 @@ namespace Oddity.EditorTools
             },
             new ShotScene
             {
-                Name = "emergence_hand", // storyboard cut 10
+                Name = "emergence_hand", // storyboard cut 10, finger tips reach the desk
                 ScenePath = PrototypeScene,
-                CameraName = "MainCamera",
-                Setup = () => HoldEmergence(2.75f),
+                CameraName = "Cut10Camera",
+                Setup = () =>
+                {
+                    var seq = HoldEmergence(3f);
+                    seq.Cut10Camera.aspect = 9f / 16f;
+                },
             },
             new ShotScene
             {
-                Name = "emergence_pullback", // storyboard cut 11, mid pull-back
+                Name = "emergence_pullback", // storyboard cut 11, looking at her hands
                 ScenePath = PrototypeScene,
                 CameraName = "MainCamera",
-                Setup = () => HoldEmergence(7f),
+                Setup = () => HoldEmergence(5f),
+            },
+            new ShotScene
+            {
+                Name = "emergence_seated", // storyboard cut 12, eyes to the camera
+                ScenePath = PrototypeScene,
+                CameraName = "MainCamera",
+                Setup = () => HoldEmergence(8f),
             },
             new ShotScene
             {

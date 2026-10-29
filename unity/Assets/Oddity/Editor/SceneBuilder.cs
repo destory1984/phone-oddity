@@ -181,10 +181,10 @@ namespace Oddity.EditorTools
             Box("WallEast", room, new Vector3(2.05f, 1.3f, 0f), new Vector3(0.1f, 2.6f, 5.4f), wallMat);
             Box("WallWest", room, new Vector3(-2.05f, 1.3f, 0f), new Vector3(0.1f, 2.6f, 5.4f), wallMat);
 
-            // bed against the west wall
-            Box("BedFrame", room, new Vector3(-1.4f, 0.2f, -0.9f), new Vector3(1.0f, 0.4f, 2.0f), woodMat);
-            Box("Mattress", room, new Vector3(-1.4f, 0.5f, -0.9f), new Vector3(0.96f, 0.2f, 1.9f), bedMat);
-            Box("Pillow", room, new Vector3(-1.4f, 0.65f, -1.65f), new Vector3(0.6f, 0.1f, 0.3f), pillowMat);
+            // bed against the west wall; mattress top at 0.45 m so she can sit with both feet on the floor
+            Box("BedFrame", room, new Vector3(-1.4f, 0.115f, -0.9f), new Vector3(1.0f, 0.23f, 2.0f), woodMat);
+            Box("Mattress", room, new Vector3(-1.4f, 0.34f, -0.9f), new Vector3(0.96f, 0.22f, 1.9f), bedMat);
+            Box("Pillow", room, new Vector3(-1.4f, 0.5f, -1.65f), new Vector3(0.6f, 0.1f, 0.3f), pillowMat);
 
             // desk under the window on the north wall
             Box("DeskTop", room, new Vector3(0.2f, DeskTop - 0.025f, 2.1f), new Vector3(1.4f, 0.05f, 0.7f), woodMat);
@@ -338,6 +338,9 @@ namespace Oddity.EditorTools
             var so = new SerializedObject(boot);
             so.FindProperty("chat").objectReferenceValue = chat;
             so.FindProperty("harin").objectReferenceValue = Object.FindFirstObjectByType<HarinPuppet>();
+            so.FindProperty("cut10DeskPhone").objectReferenceValue = AssetDatabase.LoadAssetAtPath<Texture2D>(ArtDir + "/cut10_desk_phone.png");
+            so.FindProperty("screenNoise").objectReferenceValue = AssetDatabase.LoadAssetAtPath<Texture2D>(ArtDir + "/screen_noise.png");
+            so.FindProperty("portalRing").objectReferenceValue = AssetDatabase.LoadAssetAtPath<Texture2D>(ArtDir + "/portal_ring.png");
             so.ApplyModifiedPropertiesWithoutUndo();
         }
     }
