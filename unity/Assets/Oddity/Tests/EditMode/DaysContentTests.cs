@@ -18,9 +18,10 @@ namespace Oddity.Tests
 
         private static readonly Slot[] Slots = { Slot.Morning, Slot.Evening, Slot.Night };
 
-        private static string FindScript(int day)
+        private static string FindScript(int day) { return FindScriptFile("day" + day + ".json"); }
+
+        private static string FindScriptFile(string name)
         {
-            string name = "day" + day + ".json";
             string[] starts = { Directory.GetCurrentDirectory(), AppContext.BaseDirectory };
             foreach (string start in starts)
             {
@@ -48,6 +49,40 @@ namespace Oddity.Tests
         private static IEnumerable<DayScript> AllDays()
         {
             for (int day = 1; day <= CoreInfo.EmergenceDay; day++) yield return Load(day);
+        }
+
+        private static readonly HashSet<string> PokeFaces = new HashSet<string>
+        {
+            "neutral", "happy", "sad", "angry", "surprised", "relaxed", "smile", "flustered"
+        };
+
+        private static readonly HashSet<string> PokeMotions = new HashSet<string>
+        {
+            "갸웃", "올려봄", "눈맞춤", "기울임", "깜빡", "곁눈질", "돌림", "끄덕"
+        };
+
+        [Test]
+        public void Poke_ContentOk()
+        {
+            PokeTable table = PokeTable.Parse(File.ReadAllText(FindScriptFile("poke.json")));
+            Assert.AreEqual(18, table.Lines.Count);
+            foreach (string zone in new[] { "head", "cheek", "window" })
+            {
+                for (int stage = 1; stage <= 3; stage++)
+                {
+                    int n = 0;
+                    foreach (PokeLine l in table.Lines) if (l.Zone == zone && l.Stage == stage) n++;
+                    Assert.AreEqual(2, n, zone + " stage " + stage);
+                }
+            }
+            foreach (PokeLine l in table.Lines)
+            {
+                Assert.IsFalse(string.IsNullOrWhiteSpace(l.Text), "empty text in " + l.Zone);
+                Assert.LessOrEqual(l.Text.Length, 20, l.Text);
+                Assert.IsFalse(l.Text.Contains("~"), l.Text + " has a tilde");
+                Assert.IsTrue(PokeFaces.Contains(l.Face), l.Text + " uses unknown face \"" + l.Face + "\".");
+                Assert.IsTrue(PokeMotions.Contains(l.Motion), l.Text + " uses unknown motion \"" + l.Motion + "\".");
+            }
         }
 
         [Test]

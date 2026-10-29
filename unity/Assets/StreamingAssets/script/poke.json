@@ -1,0 +1,130 @@
+{
+  "lines": [
+    {
+      "zone": "head",
+      "stage": 1,
+      "text": "어. 나 불렀어?",
+      "face": "surprised",
+      "motion": "갸웃"
+    },
+    {
+      "zone": "head",
+      "stage": 1,
+      "text": "머리에 뭐 묻었어?",
+      "face": "neutral",
+      "motion": "올려봄"
+    },
+    {
+      "zone": "head",
+      "stage": 2,
+      "text": "응. 네 손가락 보여.",
+      "face": "smile",
+      "motion": "눈맞춤"
+    },
+    {
+      "zone": "head",
+      "stage": 2,
+      "text": "내 머리가 버튼이야?",
+      "face": "smile",
+      "motion": "갸웃"
+    },
+    {
+      "zone": "head",
+      "stage": 3,
+      "text": "머리 헝클어지잖아.",
+      "face": "neutral",
+      "motion": "기울임"
+    },
+    {
+      "zone": "head",
+      "stage": 3,
+      "text": "이제 말로 불러 줘.",
+      "face": "neutral",
+      "motion": "눈맞춤"
+    },
+    {
+      "zone": "cheek",
+      "stage": 1,
+      "text": "어, 깜짝이야.",
+      "face": "surprised",
+      "motion": "깜빡"
+    },
+    {
+      "zone": "cheek",
+      "stage": 1,
+      "text": "나 보고 누른 거지?",
+      "face": "neutral",
+      "motion": "갸웃"
+    },
+    {
+      "zone": "cheek",
+      "stage": 2,
+      "text": "왜 웃어. 네가 눌렀잖아.",
+      "face": "flustered",
+      "motion": "곁눈질"
+    },
+    {
+      "zone": "cheek",
+      "stage": 2,
+      "text": "...응. 나도 너 보여.",
+      "face": "happy",
+      "motion": "눈맞춤"
+    },
+    {
+      "zone": "cheek",
+      "stage": 3,
+      "text": "볼은 이제 그만.",
+      "face": "neutral",
+      "motion": "돌림"
+    },
+    {
+      "zone": "cheek",
+      "stage": 3,
+      "text": "잠깐. 그냥 보고 있어.",
+      "face": "neutral",
+      "motion": "눈맞춤"
+    },
+    {
+      "zone": "window",
+      "stage": 1,
+      "text": "응? 나 여기 있어.",
+      "face": "smile",
+      "motion": "갸웃"
+    },
+    {
+      "zone": "window",
+      "stage": 1,
+      "text": "나 찾는 거야?",
+      "face": "neutral",
+      "motion": "눈맞춤"
+    },
+    {
+      "zone": "window",
+      "stage": 2,
+      "text": "나 여기 보고 있는데.",
+      "face": "smile",
+      "motion": "눈맞춤"
+    },
+    {
+      "zone": "window",
+      "stage": 2,
+      "text": "불러 놓고 왜 말이 없어.",
+      "face": "smile",
+      "motion": "갸웃"
+    },
+    {
+      "zone": "window",
+      "stage": 3,
+      "text": "천천히. 안 없어져.",
+      "face": "neutral",
+      "motion": "끄덕"
+    },
+    {
+      "zone": "window",
+      "stage": 3,
+      "text": "응. 이제 네 얘기 해.",
+      "face": "smile",
+      "motion": "눈맞춤"
+    }
+  ]
+}

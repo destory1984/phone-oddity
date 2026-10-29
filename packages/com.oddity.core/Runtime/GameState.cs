@@ -30,6 +30,10 @@ namespace Oddity.Core
         public DateTime NextOpenUtc;
         /// <summary>True once the act 2 cut after the emergence has been played to its last line. Old saves: false.</summary>
         public bool ActTwoSeen;
+        /// <summary>Game day the poke counter below belongs to (the counter starts again when the day changes).</summary>
+        public int PokeDay;
+        /// <summary>Touch reactions with a line shown on <see cref="PokeDay"/> (at most PokeRules.DailyCap).</summary>
+        public int PokesToday;
 
         /// <summary>The emergence night is over (Day moved past it) but act 2 was not seen to the end.</summary>
         public bool NeedsEmergence()

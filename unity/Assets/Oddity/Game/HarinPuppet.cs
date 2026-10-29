@@ -163,8 +163,9 @@ namespace Oddity.Game
                 var to = Quaternion.LookRotation(_reachDir, _reachPalm);
                 _rightUpper.rotation = root * (to * Quaternion.Inverse(from)) * _rightUpperRel;
             }
-            if (_head != null && (_headYaw != 0f || _headPitch != 0f))
-                _head.rotation = root * Quaternion.Euler(_headPitch, _headYaw, 0f) * _headRel;
+            var poke = PokeHeadOffset;
+            if (_head != null && (_headYaw != 0f || _headPitch != 0f || poke != Vector3.zero))
+                _head.rotation = root * Quaternion.Euler(_headPitch + poke.y, _headYaw + poke.x, poke.z) * _headRel;
         }
 
         void Update()
@@ -176,6 +177,7 @@ namespace Oddity.Game
             foreach (var kv in Faces)
                 expression.SetWeight(kv.Value, FaceWeight(kv.Value));
 
+            UpdatePoke();
             expression.SetWeight(ExpressionKey.Blink, BlinkWeight());
             ApplyMouth();
             UpdateIdleGaze();

@@ -143,6 +143,28 @@ namespace Oddity.EditorTools
             },
             new ShotScene
             {
+                Name = "chat_poke_cheek", // the cheek touched twice: the stage 2 reaction
+                ScenePath = PrototypeScene,
+                CameraName = "MainCamera",
+                Setup = () =>
+                {
+                    FitPhoneCamera();
+                    int taps = 0;
+                    var chat = PlayMorning(c => taps++ >= 1);
+                    var boot = UnityEngine.Object.FindFirstObjectByType<GameBootstrap>();
+                    var harin = UnityEngine.Object.FindFirstObjectByType<HarinPuppet>();
+                    var cam = GameObject.Find("AppStageCamera").GetComponent<Camera>();
+                    double clock = 100;
+                    PokeController.ClockOverride = () => clock;
+                    boot.Voice.Stop();
+                    var cheek = PokeZones.ViewportOf(cam, harin, 0f, -0.04f);
+                    chat.PokeWindow(cheek);
+                    clock = 103;
+                    chat.PokeWindow(cheek);
+                },
+            },
+            new ShotScene
+            {
                 Name = "chat_day2_morning", // day 2 morning, third line
                 ScenePath = PrototypeScene,
                 CameraName = "MainCamera",

@@ -41,8 +41,11 @@ namespace Oddity.Game
         public event Action Tapped;
         public event Action<int> ChoicePicked;
         public event Action<string> NameEntered;
+        /// <summary>A touch on Harin's window, as a point (0..1) of the square picture her camera draws (origin bottom left).</summary>
+        public event Action<Vector2> WindowPoked;
 
         Font _font;
+        RectTransform _windowRect;
         Material _glitch;
         RectTransform _root;
         RectTransform _content;
@@ -308,6 +311,24 @@ namespace Oddity.Game
             Tapped?.Invoke();
         }
 
+        /// <summary>
+        /// Point of Harin's camera picture (viewport 0..1) under a point local to the window rectangle.
+        /// The window shows the top band of the square picture at full width.
+        /// </summary>
+        public static Vector2 WindowToViewport(Vector2 local, Rect windowRect)
+        {
+            return new Vector2((local.x - windowRect.xMin) / windowRect.width, 1f + local.y / windowRect.width);
+        }
+
+        /// <summary>A touch on the window at this viewport point of her camera (and callable from tests).</summary>
+        public void PokeWindow(Vector2 viewport) => WindowPoked?.Invoke(viewport);
+
+        /// <summary>
+        /// Adds one Harin bubble that is not a script line: the current line, the typing state and the
+        /// script position stay as they are. Used for touch reactions.
+        /// </summary>
+        public void ShowHarinNote(string text) => AddBubble("harin", text);
+
         /// <summary>Press choice button <paramref name="index"/> (and callable from tests).</summary>
         public void PickChoice(int index)
         {
@@ -364,7 +385,9 @@ namespace Oddity.Game
                 _glitch = new Material(glitchMaterial);
                 window.material = _glitch;
             }
-            window.raycastTarget = false;
+            window.raycastTarget = true; // touches on her go to WindowPoked, not to the script
+            _windowRect = wrt;
+            window.gameObject.AddComponent<WindowCatcher>().Init(this);
 
             // name tag over the window; the typing text appears beside it while Harin types
             var tag = MakeImage("NameTag", _root, new Color(0.12f, 0.1f, 0.2f, 0.55f));
@@ -662,6 +685,19 @@ namespace Oddity.Game
             rt.anchorMax = Vector2.one;
             rt.offsetMin = Vector2.zero;
             rt.offsetMax = Vector2.zero;
+        }
+
+        void OnWindowClick(PointerEventData eventData)
+        {
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(_windowRect, eventData.position, eventData.pressEventCamera, out var local)) return;
+            PokeWindow(WindowToViewport(local, _windowRect.rect));
+        }
+
+        class WindowCatcher : MonoBehaviour, IPointerClickHandler
+        {
+            ChatView _view;
+            public void Init(ChatView view) => _view = view;
+            public void OnPointerClick(PointerEventData eventData) => _view.OnWindowClick(eventData);
         }
 
         /// <summary>Forwards a click on the object to <see cref="ChatView.Tap"/>.</summary>

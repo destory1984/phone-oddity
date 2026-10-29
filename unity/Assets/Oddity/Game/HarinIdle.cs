@@ -91,7 +91,7 @@ namespace Oddity.Game
         // Update: a small glance away and back, only when nothing else steers the eyes.
         void UpdateIdleGaze()
         {
-            if (!_idle || _vrm == null || _vrm.Runtime == null) return;
+            if (!_idle || _vrm == null || _vrm.Runtime == null || _pokeStart >= 0f) return;
             if (_vrm.LookAtTarget != null || _vrm.LookAtTargetType != VRM10ObjectLookAt.LookAtTargetTypes.YawPitchValue) return;
             float now = Time.time;
             if (_glanceStart < 0f)

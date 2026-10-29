@@ -83,6 +83,8 @@ namespace Oddity.Game
         Line _pendingFace;        // a Harin line whose face waits for the typing indicator
         bool _pendingMoment;
         bool _bigChoice;          // the next Harin line follows a big choice
+        PokeController _poke;
+        string _pokeJson;
 
         /// <summary>Fired after the Night slot is closed and saved, just before the emergence plays.</summary>
         public event Action NightFinished;
@@ -113,6 +115,10 @@ namespace Oddity.Game
         /// <summary>True while a prologue line waits for a tap.</summary>
         public bool PrologueAwaitingTap => _inPrologue && _awaitingTap;
         public bool PrologueSeen => File.Exists(PrologueSeenPath);
+        /// <summary>True while the emergence cut plays.</summary>
+        public bool EmergenceBusy => emergence != null && emergence.IsPlaying;
+        /// <summary>Touch reactions of Harin in the phone (null when poke.json is missing).</summary>
+        public PokeController Poke => _poke;
 
         string PrologueSeenPath => string.IsNullOrEmpty(SavePathOverride)
             ? Path.Combine(Application.persistentDataPath, PrologueSeenFile)
@@ -205,6 +211,20 @@ namespace Oddity.Game
                     else Debug.LogWarning("GameBootstrap: no prologue: " + req.error);
                 }
             }
+            string pokePath = Path.Combine(dir, "poke.json");
+            if (!android)
+            {
+                if (File.Exists(pokePath)) _pokeJson = File.ReadAllText(pokePath);
+            }
+            else
+            {
+                using (var req = UnityEngine.Networking.UnityWebRequest.Get(pokePath))
+                {
+                    yield return req.SendWebRequest();
+                    if (req.result == UnityEngine.Networking.UnityWebRequest.Result.Success) _pokeJson = req.downloadHandler.text;
+                    else Debug.LogWarning("GameBootstrap: no touch reactions: " + req.error);
+                }
+            }
             Init(days, prologue);
         }
 
@@ -239,6 +259,7 @@ namespace Oddity.Game
             _voice = gameObject.AddComponent<HarinVoice>();
             _voice.Init(harin);
             SetPhoneIdle();
+            InitPoke();
 
             if (State.NeedsEmergence() && emergence != null)
             {
@@ -254,6 +275,22 @@ namespace Oddity.Game
                 return;
             }
             StartDayOne(false);
+        }
+
+        // Touch reactions: a bad or missing poke.json only turns them off.
+        void InitPoke()
+        {
+            if (string.IsNullOrEmpty(_pokeJson) || harin == null) return;
+            try
+            {
+                var table = PokeTable.Parse(_pokeJson);
+                _poke = gameObject.AddComponent<PokeController>();
+                _poke.Init(this, chat, harin, State, table);
+            }
+            catch (ScriptFormatException e)
+            {
+                Debug.LogWarning("GameBootstrap: touch reactions off: " + e.Message);
+            }
         }
 
         // Makes the script of the day current and builds its runner. False when the day has no script.
@@ -408,6 +445,8 @@ namespace Oddity.Game
         void OnLineShown(Line line)
         {
             _awaitingTap = true;
+            if (_poke != null) _poke.Cancel();
+            if (harin != null) harin.StopPokeMotion();
             int number = NextLineNumber(CurrentSceneId);
             if (_voice != null)
             {
@@ -497,7 +536,8 @@ namespace Oddity.Game
         {
             _pendingFace = null;
             if (_glitchMoment != null) { StopCoroutine(_glitchMoment); _glitchMoment = null; }
-            if (harin != null) harin.SetIdle(false);
+            if (harin != null) { harin.SetIdle(false); harin.StopPokeMotion(); }
+            if (_poke != null) _poke.Cancel();
             if (_voice != null) _voice.Stop();
         }
 
