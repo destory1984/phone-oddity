@@ -9,6 +9,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../packages/com.oddity.core/Tests/Editor/**/*.cs" />
+    <Compile Include="../../unity/Assets/Oddity/Tests/EditMode/Day1ContentTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <!-- Unity Test Framework ships NUnit 3.5; stay on the 3.x API. -->
