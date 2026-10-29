@@ -206,8 +206,16 @@ namespace Oddity.Game
                 drt.anchoredPosition = new Vector2((i - 1) * 36f, 0f);
                 _dots[i] = drt;
             }
+            ScrollToNewest();
+        }
+
+        /// <summary>Lines stack from the top; once the content is taller than the chat area, follow the newest line.</summary>
+        void ScrollToNewest()
+        {
             LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
-            _scroll.verticalNormalizedPosition = 0f;
+            var viewport = (RectTransform)_scroll.transform;
+            if (_content.rect.height > viewport.rect.height) _scroll.verticalNormalizedPosition = 0f;
+            else _content.anchoredPosition = Vector2.zero;
         }
 
         void RemoveTypingRow()
@@ -397,9 +405,9 @@ namespace Oddity.Game
             var content = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
             content.transform.SetParent(vrt, false);
             _content = (RectTransform)content.transform;
-            _content.anchorMin = new Vector2(0f, 0f);
-            _content.anchorMax = new Vector2(1f, 0f);
-            _content.pivot = new Vector2(0.5f, 0f);
+            _content.anchorMin = new Vector2(0f, 1f);
+            _content.anchorMax = new Vector2(1f, 1f);
+            _content.pivot = new Vector2(0.5f, 1f);
             _content.sizeDelta = Vector2.zero;
             _content.anchoredPosition = Vector2.zero;
             var vlg = content.GetComponent<VerticalLayoutGroup>();
@@ -409,7 +417,7 @@ namespace Oddity.Game
             vlg.childControlHeight = true;
             vlg.childForceExpandWidth = true;
             vlg.childForceExpandHeight = false;
-            vlg.childAlignment = TextAnchor.LowerCenter;
+            vlg.childAlignment = TextAnchor.UpperCenter;
             content.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
             _scroll = viewport.GetComponent<ScrollRect>();
@@ -587,8 +595,7 @@ namespace Oddity.Game
             le.preferredWidth = Mathf.Ceil(width) + 2f;
 
             while (_content.childCount > 40) DestroyImmediate(_content.GetChild(0).gameObject);
-            LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
-            _scroll.verticalNormalizedPosition = 0f;
+            ScrollToNewest();
         }
 
         IEnumerator NoticeRoutine()
