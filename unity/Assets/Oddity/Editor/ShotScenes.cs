@@ -92,7 +92,41 @@ namespace Oddity.EditorTools
                     overview.enabled = true;
                 },
             },
+            new ShotScene
+            {
+                Name = "emergence_hand", // storyboard cut 10
+                ScenePath = PrototypeScene,
+                CameraName = "MainCamera",
+                Setup = () => HoldEmergence(2.75f),
+            },
+            new ShotScene
+            {
+                Name = "emergence_pullback", // storyboard cut 11, mid pull-back
+                ScenePath = PrototypeScene,
+                CameraName = "MainCamera",
+                Setup = () => HoldEmergence(7f),
+            },
+            new ShotScene
+            {
+                Name = "room_after", // storyboard cut 12, first act 2 line
+                ScenePath = PrototypeScene,
+                CameraName = "MainCamera",
+                Setup = () => HoldEmergence(10f),
+            },
         };
+
+        // New game as "민수", then hold the emergence at time t (Speed 0 keeps it there).
+        static EmergenceSequence HoldEmergence(float t)
+        {
+            FitPhoneCamera();
+            PlayMorning(c => true);
+            var boot = UnityEngine.Object.FindFirstObjectByType<GameBootstrap>();
+            var seq = boot.Emergence;
+            seq.Speed = 0f;
+            seq.Play();
+            seq.Seek(t);
+            return seq;
+        }
 
         static Camera FindInactive(string name) => UnityEngine.Object
             .FindObjectsByType<Camera>(FindObjectsInactive.Include, FindObjectsSortMode.None)

@@ -50,6 +50,18 @@ namespace Oddity.Core
             EnterScene(entry);
         }
 
+        /// <summary>Starts a scene by id. The slot reported on finish is the scene's own slot.</summary>
+        public void StartScene(string id)
+        {
+            Scene scene = _script.Get(id);
+            if (scene == null)
+            {
+                throw new InvalidOperationException("Unknown scene '" + id + "'.");
+            }
+            _slot = scene.Slot;
+            EnterScene(scene);
+        }
+
         public void Advance()
         {
             if (_phase != Phase.Lines)

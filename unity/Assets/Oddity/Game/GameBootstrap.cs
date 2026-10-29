@@ -18,18 +18,35 @@ namespace Oddity.Game
 
         [SerializeField] ChatView chat;
         [SerializeField] HarinPuppet harin;
+        [SerializeField] EmergenceSequence emergence;
+
+        /// <summary>Act 2 scene played in the room after the emergence.</summary>
+        public const string AfterSceneId = "d1_after";
+        /// <summary>The act 2 line with this glitch (she loses the player's name) dips Harin's fade.</summary>
+        const float FadeDipGlitch = 0.6f;
+        const float FadeDipAlpha = 0.4f;
+        const float FadeDipSeconds = 1f;
 
         DayScript _script;
         SaveStore _store;
         DialogueRunner _runner;
         bool _awaitingTap;
         bool _waiting;
+        bool _act2;
+        SubtitleBar _subtitle;
+        Coroutine _fadeDip;
 
-        /// <summary>Fired after the Night slot is closed and saved. Task 9 plays the emergence from here.</summary>
+        /// <summary>Fired after the Night slot is closed and saved, just before the emergence plays.</summary>
         public event Action NightFinished;
 
         public GameState State { get; private set; }
         public SlotClock Clock { get; private set; }
+        public EmergenceSequence Emergence => emergence;
+        public SubtitleBar Subtitle => _subtitle;
+        /// <summary>True once the emergence has finished and act 2 plays in the room.</summary>
+        public bool InRoom => _act2;
+        /// <summary>Id of the scene the runner is playing, or null.</summary>
+        public string CurrentSceneId => _runner != null && _runner.Current != null ? _runner.Current.Id : null;
 
         static DateTime Now() => ClockOverride != null ? ClockOverride() : DateTime.UtcNow;
 
@@ -37,6 +54,9 @@ namespace Oddity.Game
         {
             if (chat == null) chat = FindFirstObjectByType<ChatView>();
             if (harin == null) harin = FindFirstObjectByType<HarinPuppet>();
+            if (emergence == null) emergence = FindFirstObjectByType<EmergenceSequence>();
+            if (emergence == null) emergence = gameObject.AddComponent<EmergenceSequence>();
+            emergence.Finished += OnEmergenceFinished;
 
             string json = File.ReadAllText(Path.Combine(Application.streamingAssetsPath, "script", "day1.json"));
             _script = ScriptLoader.Parse(json);
@@ -58,6 +78,12 @@ namespace Oddity.Game
             chat.ChoicePicked += OnChoicePicked;
             chat.NameEntered += OnNameEntered;
 
+            if (emergence.MainCamera != null)
+            {
+                _subtitle = SubtitleBar.Create(emergence.MainCamera, chat.Font);
+                _subtitle.Tapped += OnTapped;
+            }
+
             if (string.IsNullOrWhiteSpace(State.PlayerName))
             {
                 chat.AskName();
@@ -76,6 +102,8 @@ namespace Oddity.Game
                 chat.ChoicePicked -= OnChoicePicked;
                 chat.NameEntered -= OnNameEntered;
             }
+            if (emergence != null) emergence.Finished -= OnEmergenceFinished;
+            if (_subtitle != null) _subtitle.Tapped -= OnTapped;
         }
 
         void Update()
@@ -131,13 +159,40 @@ namespace Oddity.Game
         void OnLineShown(Line line)
         {
             _awaitingTap = true;
-            chat.ShowLine(line);
-            chat.SetGlitch(line.Glitch);
+            if (_act2)
+            {
+                _subtitle.ShowLine(line);
+                if (harin != null && Mathf.Abs(line.Glitch - FadeDipGlitch) < 0.01f)
+                {
+                    if (_fadeDip != null) StopCoroutine(_fadeDip);
+                    _fadeDip = StartCoroutine(FadeDip());
+                }
+            }
+            else
+            {
+                chat.ShowLine(line);
+                chat.SetGlitch(line.Glitch);
+            }
             if (harin != null)
             {
                 harin.SetFace(line.Face);
                 harin.SetGlitch(line.Glitch);
             }
+        }
+
+        System.Collections.IEnumerator FadeDip()
+        {
+            harin.SetFade(FadeDipAlpha);
+            yield return new WaitForSeconds(FadeDipSeconds);
+            harin.SetFade(1f);
+            _fadeDip = null;
+        }
+
+        void OnEmergenceFinished()
+        {
+            _act2 = true;
+            _awaitingTap = false;
+            _runner.StartScene(AfterSceneId);
         }
 
         void OnChoicesShown(System.Collections.Generic.IReadOnlyList<Choice> choices)
@@ -149,11 +204,17 @@ namespace Oddity.Game
         void OnSlotFinished(Slot slot)
         {
             _awaitingTap = false;
+            if (_act2)
+            {
+                Debug.Log("GameBootstrap: act 2 cut finished");
+                return;
+            }
             Clock.CloseCurrent();
             _store.Save(State);
             if (slot == Slot.Night)
             {
                 NightFinished?.Invoke();
+                emergence.Play();
                 return;
             }
             BeginOrWait(false);

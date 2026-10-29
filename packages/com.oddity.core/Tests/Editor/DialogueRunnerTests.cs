@@ -150,6 +150,25 @@ namespace Oddity.Core.Tests
         }
 
         [Test]
+        public void StartScene_ShowsFirstLine()
+        {
+            var r = new DialogueRunner(MakeScript(), new GameState());
+            var lines = Capture(r);
+            r.StartScene("m2");
+            Assert.AreEqual(1, lines.Count);
+            Assert.AreEqual("다음", lines[0].Text);
+            Assert.AreEqual("m2", r.Current.Id);
+        }
+
+        [Test]
+        public void StartScene_UnknownId_Throws()
+        {
+            var r = new DialogueRunner(MakeScript(), new GameState());
+            var ex = Assert.Throws<System.InvalidOperationException>(() => r.StartScene("nope"));
+            StringAssert.Contains("nope", ex.Message);
+        }
+
+        [Test]
         public void Misuse_Throws()
         {
             var r = new DialogueRunner(MakeScript(), new GameState());

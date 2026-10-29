@@ -2,3 +2,6 @@ appstage
 chat_morning
 chat_choices
 room_overview
+emergence_hand
+emergence_pullback
+room_after

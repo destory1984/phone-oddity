@@ -66,6 +66,24 @@ namespace Oddity.Game
         public string LockNoticeText => _noticeText != null ? _noticeText.text : "";
         public int BubbleCount => _content != null ? _content.childCount : 0;
         public float GlitchAmount { get; private set; }
+        /// <summary>Font used by the messenger (Pretendard in the scene), for other UI to match.</summary>
+        public Font Font => _font != null ? _font : font;
+
+        /// <summary>Shows or hides the whole phone UI without stopping its components.</summary>
+        public void SetVisible(bool visible)
+        {
+            var canvas = GetComponent<Canvas>();
+            if (canvas != null) canvas.enabled = visible;
+        }
+
+        public bool IsVisible
+        {
+            get
+            {
+                var canvas = GetComponent<Canvas>();
+                return canvas == null || canvas.enabled;
+            }
+        }
 
         void Awake()
         {
