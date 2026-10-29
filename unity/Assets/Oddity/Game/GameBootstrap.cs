@@ -295,7 +295,7 @@ namespace Oddity.Game
             chat.SetGlitch(0f);
             if (harin != null)
             {
-                harin.SetFace(line.Face);
+                harin.SetFace(HarinPuppet.FaceForBeat(line.Face, line.Beat));
                 harin.SetGlitch(0f);
             }
         }
@@ -357,7 +357,7 @@ namespace Oddity.Game
             }
             if (harin != null)
             {
-                harin.SetFace(line.Face);
+                harin.SetFace(HarinPuppet.FaceForBeat(line.Face, line.Beat));
                 harin.SetGlitch(line.Glitch);
             }
         }

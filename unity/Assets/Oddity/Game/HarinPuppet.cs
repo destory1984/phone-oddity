@@ -170,7 +170,7 @@ namespace Oddity.Game
             if (_vrm == null || _vrm.Runtime == null) return;
             var expression = _vrm.Runtime.Expression;
 
-            // face: exactly one preset at 1, the rest at 0
+            // face: one preset (plus an optional second one for mixes), the rest at 0
             foreach (var kv in Faces)
                 expression.SetWeight(kv.Value, FaceWeight(kv.Value));
 
@@ -206,6 +206,7 @@ namespace Oddity.Game
         public void SetFace(string face)
         {
             var key = (face ?? "").Trim().ToLowerInvariant();
+            if (TrySetCompositeFace(key)) return;
             if (Faces.TryGetValue(key, out var expr))
             {
                 _currentFace = expr;

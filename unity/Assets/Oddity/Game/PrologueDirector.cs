@@ -18,9 +18,15 @@ namespace Oddity.Game
     {
         public enum Stage { Seated, Standing }
 
-        // camera: vertical field of view and distances from her eyes
-        public const float Fov = 45f;
-        public const float Wide = 1.6f, Medium = 0.9f, Close = 0.78f, Extreme = 0.66f;
+        // camera: vertical field of view and distances from her eyes. The beat table below still uses the
+        // older 45 degree distances; DistScale turns them into the 35 degree framing (Medium 0.77 m, Extreme 0.66 m).
+        public const float Fov = 35f;
+        public const float Wide = 1.6f, Medium = 0.9f, Close = 0.78f, Extreme = 0.78f;
+        public const float DistScale = 0.85f;
+        /// <summary>Camera height below her eyes (m): at eye level or a little under, never looking down on her.</summary>
+        public const float EyeDrop = 0.03f;
+        /// <summary>Her eyes sit this far down from the top of the frame (0 = top, 1 = bottom).</summary>
+        public const float EyeLine = 0.35f;
         const float HappyWeight = 0.55f;
         const float CameraSmooth = 0.3f;     // SmoothDamp time; settles in about 1 s
         const float SeatedSideDeg = 12f, StandingSideDeg = -16f;
@@ -77,6 +83,7 @@ namespace Oddity.Game
         readonly List<GameObject> _made = new List<GameObject>();
         Transform _standAnchor;
         Light _faceLight;
+        Light _catchLight;
         Canvas _overlay;
         RectTransform _overlayRect;
         GameObject _notice;
@@ -214,7 +221,7 @@ namespace Oddity.Game
                 else if (l.name == "RoomLamp")
                 {
                     l.enabled = true;
-                    l.color = Mathf.CorrelatedColorTemperatureToRGB(3300f);
+                    l.color = Mathf.CorrelatedColorTemperatureToRGB(3500f);
                     l.intensity *= 0.9f; // evening, the room light is on
                 }
                 else
@@ -269,14 +276,15 @@ namespace Oddity.Game
             _made.Add(go);
         }
 
-        // A soft warm key from the camera's upper right that lights only Harin, so her face reads in every shot.
+        // A soft neutral-white key from the camera's upper right that lights only Harin, so her face reads in
+        // every shot, plus a weak point light just in front of her face for the eye highlights.
         void BuildFaceLight(uint harinMask)
         {
             var go = new GameObject("PrologueFaceLight");
             _made.Add(go);
             _faceLight = go.AddComponent<Light>();
             _faceLight.type = LightType.Spot;
-            _faceLight.color = Mathf.CorrelatedColorTemperatureToRGB(5200f);
+            _faceLight.color = Mathf.CorrelatedColorTemperatureToRGB(6500f);
             _faceLight.intensity = 0.5f;
             _faceLight.range = 4f;
             _faceLight.spotAngle = 50f;
@@ -284,6 +292,16 @@ namespace Oddity.Game
             _faceLight.shadows = LightShadows.None;
             var data = _faceLight.GetUniversalAdditionalLightData();
             data.renderingLayers = harinMask;
+
+            var c = new GameObject("PrologueCatchLight");
+            _made.Add(c);
+            _catchLight = c.AddComponent<Light>();
+            _catchLight.type = LightType.Point;
+            _catchLight.color = Mathf.CorrelatedColorTemperatureToRGB(6500f);
+            _catchLight.intensity = 0.015f;
+            _catchLight.range = 1.2f;
+            _catchLight.shadows = LightShadows.None;
+            _catchLight.GetUniversalAdditionalLightData().renderingLayers = harinMask;
         }
 
         // ------------------------------------------------------------------ lines and beats
@@ -387,11 +405,11 @@ namespace Oddity.Game
                     f.HeadPitch = 16f * r; f.EyesOnCamera = false; f.EyePitch = 15f; f.Lean = 10f * r; break;
                 case "proud_pout": f.Dist = 0.8f; f.HeadYaw = 12f * Ramp(t, 0.3f); f.HeadPitch = -4f * r; break;
                 case "flustered":
-                    f.Dist = 0.78f; f.HeadPitch = 13f * r; f.HeadYaw = 10f * r; f.Lean = -3f * r;
+                    f.Face = "flustered"; f.Dist = 0.78f; f.HeadPitch = 13f * r; f.HeadYaw = 10f * r; f.Lean = -3f * r;
                     f.EyesOnCamera = false; f.EyeYaw = 14f; f.EyePitch = 12f;
                     break;
                 case "looks_down_smiling":
-                    f.Face = "happy"; f.Dist = 0.86f; f.HeadPitch = 15f * r;
+                    f.Face = "smile"; f.Dist = 0.86f; f.HeadPitch = 15f * r;
                     f.EyesOnCamera = false; f.EyePitch = 14f;
                     break;
                 case "peeks_for_reaction": f.Dist = Close; f.HeadPitch = 11f * r; f.Lean = 6f * r; break;
@@ -402,10 +420,10 @@ namespace Oddity.Game
                     break;
                 }
                 case "avoids_eye_contact": f.HeadYaw = 15f * r; f.EyesOnCamera = false; f.EyeYaw = 18f; break;
-                case "soft_smile": f.Dist = 0.78f; f.HeadPitch = 3f * r; break;
-                case "holds_eye_contact": f.Dist = 0.72f; f.HeadPitch = -1f; break;
-                case "stares_then_smiles": f.Dist = 0.72f; f.Face = t < 1f ? "neutral" : "happy"; break;
-                case "quiet_confession": f.Dist = Extreme; f.HeadPitch = 6f * r; f.Lean = 4f * r; break;
+                case "soft_smile": f.Face = "smile"; f.Dist = 0.78f; f.HeadPitch = 3f * r; break;
+                case "holds_eye_contact": f.Face = "smile"; f.Dist = 0.72f; f.HeadPitch = -1f; break;
+                case "stares_then_smiles": f.Dist = 0.72f; f.Face = t < 1f ? "neutral" : "smile"; break;
+                case "quiet_confession": f.Face = "smile"; f.Dist = Extreme; f.HeadPitch = 3f * r; f.Lean = 2f * r; break;
                 case "fingertips_brush":
                 case "offers_sponge":
                     f.Reach = t < 1.6f;
@@ -414,7 +432,7 @@ namespace Oddity.Game
                     break;
                 case "tilts_head": f.Dist = 0.86f; f.HeadYaw = -10f * r; f.HeadPitch = -3f * r; break;
                 case "mock_indignation": f.Dist = 0.92f; f.Lean = -6f * r; f.HeadPitch = -5f * r; f.HeadYaw = 6f * r; break;
-                case "dinner_finished": f.Dist = 1.3f; f.Face = "happy"; break;
+                case "dinner_finished": f.Dist = 1.3f; f.Face = "smile"; break;
                 case "brief_pause":
                     f.Dist = 0.88f;
                     if (t < 0.7f) { f.EyesOnCamera = false; f.EyeYaw = -12f; f.EyePitch = 6f; }
@@ -443,7 +461,7 @@ namespace Oddity.Game
 
         void ApplyFrame(Frame f, float t, bool snap)
         {
-            string face = f.Face ?? _baseFace;
+            string face = HarinPuppet.FaceForBeat(f.Face ?? _baseFace, _beat);
             // the full "happy" preset opens the mouth wide and shuts the eyes; up close a softer mix reads better
             if (face == "happy") _harin.SetFaceMix("happy", HappyWeight, "relaxed", 1f - HappyWeight);
             else _harin.SetFace(face);
@@ -465,6 +483,7 @@ namespace Oddity.Game
                 snap = true;
             }
 
+            f.Dist *= DistScale;
             TargetDistance = f.Dist;
             if (snap) { _dist = f.Dist; _distVel = 0f; }
             else _dist = Mathf.SmoothDamp(_dist, f.Dist, ref _distVel, CameraSmooth);
@@ -490,15 +509,26 @@ namespace Oddity.Game
             return Quaternion.AngleAxis(side, Vector3.up) * fwd.normalized;
         }
 
-        // Eyes in the upper third of the frame, camera a little above eye level.
+        /// <summary>
+        /// Camera for a face shot at distance d: just under her eye level, tilted so her eyes sit
+        /// <see cref="EyeLine"/> of the way down the frame. With the 35 degree lens the bottom edge is
+        /// about 0.41 d below her eyes (0.27 m at Extreme: shoulder line; 0.32 m at Medium: above the chest).
+        /// </summary>
+        public static UnityEngine.Pose FaceCameraPose(Vector3 eyes, Vector3 facingDir, float d)
+        {
+            var pos = eyes + facingDir * d - Vector3.up * EyeDrop;
+            float tanHalf = Mathf.Tan(Fov * 0.5f * Mathf.Deg2Rad);
+            float above = Mathf.Atan((1f - 2f * EyeLine) * tanHalf) * Mathf.Rad2Deg; // eyes above the optical axis
+            float rise = Mathf.Atan2(EyeDrop, d) * Mathf.Rad2Deg;                    // eyes above the camera
+            var yaw = Quaternion.LookRotation(-facingDir, Vector3.up);
+            return new UnityEngine.Pose(pos, yaw * Quaternion.Euler(above - rise, 0f, 0f));
+        }
+
         void PlaceFaceCamera(float d)
         {
-            var dir = FacingDir();
-            var pos = _eyes + dir * d + Vector3.up * (0.02f + d * 0.08f);
-            float halfH = d * Mathf.Tan(Fov * 0.5f * Mathf.Deg2Rad);
-            var look = _eyes - Vector3.up * (halfH / 3f);
+            var p = FaceCameraPose(_eyes, FacingDir(), d);
             _cam.fieldOfView = Fov;
-            _cam.transform.SetPositionAndRotation(pos, Quaternion.LookRotation(look - pos));
+            _cam.transform.SetPositionAndRotation(p.position, p.rotation);
             AimFaceLight();
         }
 
@@ -519,6 +549,12 @@ namespace Oddity.Game
             var ct = _cam.transform;
             var p = ct.position + ct.right * 0.35f + Vector3.up * 0.4f;
             _faceLight.transform.SetPositionAndRotation(p, Quaternion.LookRotation(_eyes - p));
+            if (_catchLight != null)
+            {
+                // between the camera and her face, a little above the lens
+                var toCam = ct.position - _eyes;
+                _catchLight.transform.position = _eyes + toCam.normalized * Mathf.Min(0.35f, toCam.magnitude * 0.6f) + Vector3.up * 0.05f;
+            }
         }
 
         // ------------------------------------------------------------------ overlay (notice + rewind)

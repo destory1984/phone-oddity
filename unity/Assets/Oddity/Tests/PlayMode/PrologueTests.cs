@@ -233,6 +233,89 @@ namespace Oddity.PlayTests
         }
 
         [UnityTest]
+        public IEnumerator Closeup_FaceInUpperHalf()
+        {
+            yield return LoadScene();
+            var boot = Boot();
+            for (int i = 0; i < FrameLimit && !(boot.PrologueSceneId == "p_side_by_side" && boot.Prologue.CurrentBeat == "quiet_confession"); i++)
+            {
+                Input(boot);
+                yield return null;
+            }
+            Assert.AreEqual("quiet_confession", boot.Prologue.CurrentBeat, "reached the close-up line");
+            boot.Voice.Stop();
+            boot.Prologue.SeekBeat(1f);
+            for (int i = 0; i < 5; i++) yield return null;
+
+            var cam = boot.Prologue.Camera;
+            cam.aspect = 9f / 16f;
+            var harin = UnityEngine.Object.FindFirstObjectByType<HarinPuppet>();
+            // the VRoid model has no eye bones mapped; the director uses Head + 7.5 cm for her eyes, and so does this test.
+            // The Head bone itself sits at the top of the neck, about 0.19 of the frame under the eyes.
+            var headWorld = harin.BonePosition(HumanBodyBones.Head);
+            var eyesWorld = headWorld + Vector3.up * 0.075f * harin.transform.lossyScale.y;
+            var head = cam.WorldToViewportPoint(headWorld);
+            var eyes = cam.WorldToViewportPoint(eyesWorld);
+            Assert.Greater(head.z, 0f, "her head is in front of the camera");
+            Assert.That(eyes.y, Is.InRange(0.55f, 0.7f), $"eye line on screen (0 bottom, 1 top): {eyes.y:F3}");
+            Assert.That(head.y, Is.InRange(0.4f, 0.55f), $"Head bone (top of the neck) on screen: {head.y:F3}");
+            Assert.That(head.x, Is.InRange(0.3f, 0.7f), "head roughly centred");
+            Assert.LessOrEqual(cam.transform.position.y, eyesWorld.y + 0.005f, "the camera is not above her eyes");
+        }
+
+        [UnityTest]
+        public IEnumerator Smile_MouthClosed()
+        {
+            GameBootstrap.SkipPrologue = true;
+            yield return LoadScene();
+            var harin = UnityEngine.Object.FindFirstObjectByType<HarinPuppet>();
+            harin.SetMouth(0f, 0f, 0f);
+            harin.SetFace("smile");
+            for (int i = 0; i < 3; i++) yield return null;
+            Assert.AreEqual("smile", harin.CurrentFace);
+            Assert.Greater(harin.ExpressionWeight(UniVRM10.ExpressionKey.Relaxed), 0.4f);
+            Assert.LessOrEqual(harin.ExpressionWeight(UniVRM10.ExpressionKey.Happy), 0.3f, "happy kept low so the mouth stays shut");
+            foreach (var mouth in new[] { UniVRM10.ExpressionKey.Aa, UniVRM10.ExpressionKey.Ih, UniVRM10.ExpressionKey.Ou,
+                         UniVRM10.ExpressionKey.Ee, UniVRM10.ExpressionKey.Oh })
+                Assert.AreEqual(0f, harin.ExpressionWeight(mouth), mouth.ToString());
+
+            // "happy" lines show the smile unless the beat is a laugh
+            Assert.AreEqual("smile", HarinPuppet.FaceForBeat("happy", "quiet_confession"));
+            Assert.AreEqual("smile", HarinPuppet.FaceForBeat("happy", null));
+            Assert.AreEqual("happy", HarinPuppet.FaceForBeat("happy", "laughs"));
+            Assert.AreEqual("happy", HarinPuppet.FaceForBeat("happy", "teases"));
+            Assert.AreEqual("relaxed", HarinPuppet.FaceForBeat("relaxed", "laughs"));
+        }
+
+        [UnityTest]
+        public IEnumerator Voice_SetSwitch_CyclesPresentSets()
+        {
+            string old = HarinVoice.VoiceSet;
+            try
+            {
+                HarinVoice.VoiceSet = "karina";
+                var seen = new System.Collections.Generic.List<string>();
+                for (int i = 0; i < HarinVoice.VoiceSets.Length; i++)
+                {
+                    HarinVoice.VoiceSet = HarinVoice.NextVoiceSet();
+                    seen.Add(HarinVoice.VoiceSet);
+                }
+                // with every set's files present the button visits them all in order and comes back to karina
+                bool all = true;
+                foreach (var set in HarinVoice.VoiceSets) all &= HarinVoice.HasVoiceSet(set);
+                if (all)
+                    CollectionAssert.AreEqual(new[] { "harinA", "harinB", "harinC", "harinD", "karina" }, seen);
+                foreach (var set in seen)
+                    CollectionAssert.Contains(HarinVoice.VoiceSets, set);
+                yield return null;
+            }
+            finally
+            {
+                HarinVoice.VoiceSet = old;
+            }
+        }
+
+        [UnityTest]
         public IEnumerator Voice_LipSync_FollowsAmplitude()
         {
             GameBootstrap.SkipPrologue = true;

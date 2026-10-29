@@ -71,7 +71,7 @@ namespace Oddity.Game
 
         static string VoiceLabel() => "목소리: " + HarinVoice.VoiceSet;
 
-        /// <summary>Next voice set (karina / harinA); the current line plays again in the new voice.</summary>
+        /// <summary>Next voice set whose files are present (karina, harinA, harinB, harinC, harinD); the current line plays again in the new voice.</summary>
         public void SwitchVoice()
         {
             HarinVoice.VoiceSet = HarinVoice.NextVoiceSet();

@@ -1,7 +1,7 @@
 {
   "name": "Oddity.PlayTests",
   "rootNamespace": "Oddity.PlayTests",
-  "references": ["Oddity.Core", "Oddity.Game", "UnityEngine.TestRunner"],
+  "references": ["Oddity.Core", "Oddity.Game", "VRM10", "UnityEngine.TestRunner"],
   "includePlatforms": [],
   "overrideReferences": true,
   "precompiledReferences": ["nunit.framework.dll"],

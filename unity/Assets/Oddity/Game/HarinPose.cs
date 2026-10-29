@@ -204,11 +204,15 @@ namespace Oddity.Game
             }
         }
 
-        // room look (cuts 10 to 12): no glow, and a less pink skin shade
+        // room look (prologue, cuts 10 to 12): a less pink skin shade, a skin base that stays a light neutral
+        // apricot under the 3,500 K room lamp (blue a little higher so the lamp does not turn it orange),
+        // and a faint teal glow on the hair so it reads close to the art's #1fb5b8 instead of dark and muddy.
         static readonly Color SkinShade = new Color(0.78f, 0.66f, 0.64f, 1f);
-        static readonly Color SkinBase = new Color(0.96f, 0.93f, 0.9f, 1f);
+        public static readonly Color SkinBase = new Color(0.94f, 0.9f, 0.93f, 1f);
+        public static readonly Color HairTeal = new Color(0x1f / 255f, 0xb5 / 255f, 0xb8 / 255f, 1f);
+        public const float HairGlow = 0.04f;
 
-        class LookState { public Material M; public Color Emission, Shade, Base, Matcap; public bool Skin; }
+        class LookState { public Material M; public Color Emission, Shade, Base, Matcap; public bool Skin, Hair; }
         List<LookState> _look;
 
         /// <summary>
@@ -233,12 +237,13 @@ namespace Oddity.Game
                         Base = m.GetColor("_Color"),
                         Matcap = m.HasProperty("_MatcapColor") ? m.GetColor("_MatcapColor") : Color.black,
                         Skin = m.name.Contains("SKIN"),
+                        Hair = m.name.Contains("HAIR"),
                     });
                 }
             }
             foreach (var l in _look)
             {
-                l.M.SetColor("_EmissionColor", on ? Color.black : l.Emission);
+                l.M.SetColor("_EmissionColor", !on ? l.Emission : l.Hair ? HairTeal * HairGlow : Color.black);
                 if (!l.Skin) continue;
                 l.M.SetColor("_ShadeColor", on ? SkinShade : l.Shade);
                 var c = on ? SkinBase : l.Base;

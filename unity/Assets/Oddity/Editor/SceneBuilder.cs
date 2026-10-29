@@ -68,6 +68,116 @@ namespace Oddity.EditorTools
             Debug.Log("SCENE built " + ScenePath);
         }
 
+        // ------------------------------------------------------------ Harin model swap
+
+        const string ModelDir = "Assets/Models";
+
+        /// <summary>
+        /// Replaces Harin's VRM in Prototype.unity with another VRoid export (for example the summer-B outfit).
+        /// <paramref name="vrmPath"/> is a project asset path ("Assets/Models/harin-summer-B.vrm") or a file on
+        /// disk, which is copied into Assets/Models first. The new model takes the old one's parent, transform,
+        /// layer and rendering layers; HarinPuppet (with HarinPose, HarinExpression) and any other Oddity
+        /// components are copied over, and scene references to the old puppet, object or transform are pointed
+        /// at the new one. Expression names are the VRM presets and the room look finds the materials by
+        /// their VRoid names (SKIN, HAIR), so they keep working. Batch mode:
+        /// Unity -batchmode -executeMethod Oddity.EditorTools.SceneBuilder.SwapHarinModelFromArgs -vrm path
+        /// </summary>
+        public static void SwapHarinModel(string vrmPath)
+        {
+            string assetPath = ImportVrm(vrmPath);
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
+            if (prefab == null) throw new System.Exception("no model imported from " + assetPath);
+
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var oldPuppet = Object.FindFirstObjectByType<HarinPuppet>(FindObjectsInactive.Include);
+            if (oldPuppet == null) throw new System.Exception("no HarinPuppet in " + ScenePath);
+            var old = oldPuppet.gameObject;
+
+            var fresh = (GameObject)PrefabUtility.InstantiatePrefab(prefab, scene);
+            fresh.name = old.name;
+            fresh.transform.SetParent(old.transform.parent, false);
+            fresh.transform.SetSiblingIndex(old.transform.GetSiblingIndex());
+            fresh.transform.localPosition = old.transform.localPosition;
+            fresh.transform.localRotation = old.transform.localRotation;
+            fresh.transform.localScale = old.transform.localScale;
+            fresh.SetActive(old.activeSelf);
+
+            uint renderingLayers = 0;
+            foreach (var r in old.GetComponentsInChildren<Renderer>(true)) renderingLayers |= r.renderingLayerMask;
+            foreach (var t in fresh.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = old.layer;
+            if (renderingLayers != 0)
+                foreach (var r in fresh.GetComponentsInChildren<Renderer>(true)) r.renderingLayerMask = renderingLayers;
+
+            // our components (HarinPuppet and anything else from Oddity.*), with their serialized settings
+            var map = new System.Collections.Generic.Dictionary<Object, Object>
+            {
+                { old, fresh }, { old.transform, fresh.transform },
+            };
+            foreach (var c in old.GetComponents<MonoBehaviour>())
+            {
+                if (c == null || c.GetType().Namespace == null || !c.GetType().Namespace.StartsWith("Oddity")) continue;
+                var copy = fresh.GetComponent(c.GetType()) ?? fresh.AddComponent(c.GetType());
+                EditorUtility.CopySerialized(c, copy);
+                map[c] = copy;
+            }
+            var oldAnimator = old.GetComponent<Animator>();
+            var newAnimator = fresh.GetComponent<Animator>();
+            if (oldAnimator != null && newAnimator != null)
+            {
+                newAnimator.runtimeAnimatorController = oldAnimator.runtimeAnimatorController;
+                newAnimator.applyRootMotion = oldAnimator.applyRootMotion;
+                newAnimator.cullingMode = oldAnimator.cullingMode;
+                map[oldAnimator] = newAnimator;
+            }
+
+            // point scene references at the new model
+            foreach (var root in scene.GetRootGameObjects())
+            foreach (var comp in root.GetComponentsInChildren<Component>(true))
+            {
+                if (comp == null || comp.transform.IsChildOf(old.transform)) continue;
+                var so = new SerializedObject(comp);
+                var it = so.GetIterator();
+                bool changed = false;
+                while (it.Next(true))
+                {
+                    if (it.propertyType != SerializedPropertyType.ObjectReference || it.objectReferenceValue == null) continue;
+                    if (map.TryGetValue(it.objectReferenceValue, out var to))
+                    {
+                        it.objectReferenceValue = to;
+                        changed = true;
+                    }
+                }
+                if (changed) so.ApplyModifiedPropertiesWithoutUndo();
+            }
+
+            Object.DestroyImmediate(old);
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            AssetDatabase.SaveAssets();
+            Debug.Log("HARIN model swapped to " + assetPath);
+        }
+
+        /// <summary>Batch-mode entry: -vrm &lt;path&gt; on the command line.</summary>
+        public static void SwapHarinModelFromArgs()
+        {
+            var args = System.Environment.GetCommandLineArgs();
+            int i = System.Array.IndexOf(args, "-vrm");
+            if (i < 0 || i + 1 >= args.Length) throw new System.Exception("usage: -vrm <path to .vrm>");
+            SwapHarinModel(args[i + 1]);
+        }
+
+        static string ImportVrm(string vrmPath)
+        {
+            string p = vrmPath.Replace('\\', '/');
+            if (p.StartsWith("Assets/") && File.Exists(p)) return p;
+            if (!File.Exists(p)) throw new FileNotFoundException("no VRM at " + vrmPath);
+            Directory.CreateDirectory(ModelDir);
+            string dest = ModelDir + "/" + Path.GetFileName(p);
+            File.Copy(p, dest, true);
+            AssetDatabase.ImportAsset(dest, ImportAssetOptions.ForceUpdate);
+            return dest;
+        }
+
         // ------------------------------------------------------------ layers
 
         static void EnsureLayer()

@@ -18,7 +18,7 @@ namespace Oddity.Game
         public const float Volume = 0.9f;
         public const float SfxChance = 0.5f;
         public const string DefaultVoiceSet = "karina";
-        public static readonly string[] VoiceSets = { "karina", "harinA" };
+        public static readonly string[] VoiceSets = { "karina", "harinA", "harinB", "harinC", "harinD" };
         const string VoiceSetPref = "oddity.voiceSet";
         static string _voiceSet;
         const float WindowSeconds = 0.05f;
@@ -82,10 +82,25 @@ namespace Oddity.Game
             }
         }
 
-        /// <summary>The next set after the current one in <see cref="VoiceSets"/>.</summary>
+        /// <summary>Clip every voice set records; a set counts as present when this clip loads.</summary>
+        public const string ProbeClip = "harin_sfx_breath_";
+
+        /// <summary>True when the set's files are in the voice folder.</summary>
+        public static bool HasVoiceSet(string set) =>
+            !string.IsNullOrEmpty(set) && Resources.Load<AudioClip>(Dir + ProbeClip + set) != null;
+
+        /// <summary>
+        /// The next set after the current one in <see cref="VoiceSets"/> whose files are present
+        /// (sets without files are skipped). With no files at all it is simply the next in the list.
+        /// </summary>
         public static string NextVoiceSet()
         {
             int i = Array.IndexOf(VoiceSets, VoiceSet);
+            for (int k = 1; k <= VoiceSets.Length; k++)
+            {
+                var set = VoiceSets[(i + k + VoiceSets.Length) % VoiceSets.Length];
+                if (HasVoiceSet(set)) return set;
+            }
             return VoiceSets[(i + 1) % VoiceSets.Length];
         }
 

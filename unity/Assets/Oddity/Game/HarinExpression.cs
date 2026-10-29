@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UniVRM10;
 using UnityEngine;
 
@@ -61,6 +62,47 @@ namespace Oddity.Game
             _hasMix = true;
             _mixKey = expr;
             _mixWeight = Mathf.Clamp01(secondWeight);
+        }
+
+        // "smile": a closed-mouth smile mixed from two presets (the full happy preset opens the mouth wide).
+        public const float SmileRelaxed = 0.5f, SmileHappy = 0.05f;
+        // "flustered": a weaker smile; the head and eyes look away (beat), no blush yet.
+        public const float FlusteredRelaxed = 0.35f, FlusteredHappy = 0.1f;
+
+        static readonly HashSet<string> LaughBeats = new HashSet<string> { "laughs", "teases", "soft_laugh" };
+
+        /// <summary>
+        /// The open-mouthed "happy" is kept for laughing beats (laughs, teases, soft_laugh); any other
+        /// "happy" line shows the closed-mouth "smile".
+        /// </summary>
+        public static string FaceForBeat(string face, string beat)
+        {
+            var key = (face ?? "").Trim().ToLowerInvariant();
+            if (key == "happy" && (beat == null || !LaughBeats.Contains(beat))) return "smile";
+            return key;
+        }
+
+        /// <summary>Composite faces made of two presets; false when the name is not one.</summary>
+        bool TrySetCompositeFace(string key)
+        {
+            float relaxed, happy;
+            if (key == "smile") { relaxed = SmileRelaxed; happy = SmileHappy; }
+            else if (key == "flustered") { relaxed = FlusteredRelaxed; happy = FlusteredHappy; }
+            else return false;
+            _currentFace = ExpressionKey.Relaxed;
+            CurrentFace = key;
+            _faceWeight = relaxed;
+            _hasMix = true;
+            _mixKey = ExpressionKey.Happy;
+            _mixWeight = happy;
+            return true;
+        }
+
+        /// <summary>Current weight of a preset or mouth shape on the VRM (0 before the runtime starts).</summary>
+        public float ExpressionWeight(ExpressionKey key)
+        {
+            if (_vrm == null || _vrm.Runtime == null) return 0f;
+            return _vrm.Runtime.Expression.GetWeight(key);
         }
 
         void ClearFaceMix()
