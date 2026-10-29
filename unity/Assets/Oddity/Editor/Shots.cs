@@ -83,6 +83,9 @@ namespace Oddity.EditorTools
                 // every scene starts as a new game, in a throwaway save file
                 GameBootstrap.SavePathOverride = Path.Combine(Application.temporaryCachePath, "shot_save.json");
                 File.Delete(GameBootstrap.SavePathOverride);
+                File.Delete(GameBootstrap.SavePathOverride + "." + GameBootstrap.PrologueSeenFile);
+                GameBootstrap.SkipPrologue = !_current.Prologue;
+                if (_current.Prologue) ChatView.TypingEnabled = false; // no breath pause before the first line
                 EditorSceneManager.OpenScene(_current.ScenePath, OpenSceneMode.Single);
                 EditorApplication.EnterPlaymode();
             }

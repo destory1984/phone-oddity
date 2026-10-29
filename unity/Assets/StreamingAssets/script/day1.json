@@ -164,20 +164,16 @@
       "lines": [
         {
           "who": "player",
-          "text": "용기 내서 밥 먹자고 했는데, 좋은 친구로 지내자고 하더라."
-        },
-        {
-          "who": "player",
-          "text": "그 뒤로는 뭘 보내도 짧게만 와."
+          "text": "밥 먹자니까, 친구로 지내자더라."
         },
         {
           "who": "harin",
-          "text": "응. 서윤이는 분명하게 말해 준 거네.",
+          "text": "응. 서윤이는 분명히 말해 줬네.",
           "face": "neutral"
         },
         {
           "who": "harin",
-          "text": "그래도 먼저 말한 건 너야. 그거 쉬운 거 아니야.",
+          "text": "그래도 먼저 말 꺼내긴 어려웠겠다.",
           "face": "relaxed"
         }
       ],
@@ -194,21 +190,16 @@
       "lines": [
         {
           "who": "harin",
-          "text": "알았어. 안 물어볼게.",
-          "face": "neutral"
-        },
-        {
-          "who": "harin",
-          "text": "대신 여기 있을게. 말 안 해도 화면은 켜 둬.",
+          "text": "응. 말 안 해도 돼. 여기 있을게.",
           "face": "relaxed"
         },
         {
           "who": "player",
-          "text": "...밥 먹자고 했다가, 좋은 친구로 지내자는 말 들었어. 그게 다야."
+          "text": "...그냥, 친구로 지내자고 했어."
         },
         {
           "who": "harin",
-          "text": "응. 그게 다여도 아픈 거야.",
+          "text": "응. 그 말만으로도 아팠겠다.",
           "face": "sad"
         }
       ],
@@ -379,24 +370,13 @@
       "slot": "night",
       "lines": [
         {
-          "who": "harin",
-          "text": "아직 안 자네.",
-          "face": "relaxed"
-        },
-        {
-          "who": "harin",
-          "text": "자기 전에 하나만 정리하자.",
-          "face": "neutral"
-        },
-        {
           "who": "system",
-          "text": "읽지 않은 메시지 12개: 과 동기 단톡방",
-          "face": "neutral"
+          "text": "읽지 않은 메시지 12개: 과 동기 단톡방"
         },
         {
           "who": "harin",
-          "text": "서윤이 대화방은 아직 맨 위에 있네.",
-          "face": "sad"
+          "text": "자기 전에, 대화방 좀 같이 볼래?",
+          "face": "relaxed"
         }
       ],
       "choices": [

@@ -60,6 +60,39 @@ namespace Oddity.Core.Tests
         }
 
         [Test]
+        public void Parse_ReadsBeat()
+        {
+            const string json = @"{ ""day"": 12, ""scenes"": [
+  { ""id"": ""a"", ""slot"": ""night"",
+    ""lines"": [ { ""who"": ""harin"", ""text"": ""hi"", ""beat"": ""teases"" }, { ""who"": ""player"", ""text"": ""yo"" } ] } ] }";
+
+            Scene a = ScriptLoader.Parse(json).Get("a");
+            Assert.AreEqual("teases", a.Lines[0].Beat);
+            Assert.IsNull(a.Lines[1].Beat);
+        }
+
+        [Test]
+        public void Parse_SceneNext()
+        {
+            const string json = @"{ ""day"": 12, ""scenes"": [
+  { ""id"": ""a"", ""slot"": ""night"", ""next"": ""b"", ""lines"": [ { ""who"": ""harin"", ""text"": ""hi"" } ] },
+  { ""id"": ""b"", ""slot"": ""night"", ""lines"": [ { ""who"": ""harin"", ""text"": ""bye"" } ] } ] }";
+
+            DayScript script = ScriptLoader.Parse(json);
+            Assert.AreEqual("b", script.Get("a").Next);
+            Assert.IsNull(script.Get("b").Next);
+        }
+
+        [Test]
+        public void Parse_SceneNext_Missing_Throws()
+        {
+            const string json = @"{ ""day"": 12, ""scenes"": [
+  { ""id"": ""a"", ""slot"": ""night"", ""next"": ""nope"", ""lines"": [ { ""who"": ""harin"", ""text"": ""hi"" } ] } ] }";
+
+            Assert.Throws<ScriptFormatException>(() => ScriptLoader.Parse(json));
+        }
+
+        [Test]
         public void Parse_TypingDefaultsToAuto()
         {
             const string json = @"{ ""day"": 1, ""scenes"": [

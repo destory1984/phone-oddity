@@ -121,6 +121,15 @@ namespace Oddity.Core
                 _phase = Phase.Choices;
                 ChoicesShown?.Invoke(Current.Choices);
             }
+            else if (!string.IsNullOrEmpty(Current.Next))
+            {
+                Scene next = _script.Get(Current.Next);
+                if (next == null)
+                {
+                    throw new InvalidOperationException("Scene leads to unknown scene '" + Current.Next + "'.");
+                }
+                EnterScene(next);
+            }
             else
             {
                 Finish();
@@ -142,7 +151,8 @@ namespace Oddity.Core
                 Text = line.Text == null ? null : line.Text.Replace(PlayerToken, name),
                 Face = line.Face,
                 Glitch = line.Glitch,
-                Typing = line.Typing
+                Typing = line.Typing,
+                Beat = line.Beat
             };
         }
     }

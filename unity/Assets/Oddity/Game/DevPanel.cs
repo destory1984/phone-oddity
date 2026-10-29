@@ -26,6 +26,7 @@ namespace Oddity.Game
         RectTransform _rect;
         GameObject _panel;
         Text _status;
+        Text _voiceLabel;
         Text[] _valueTexts;
         float _nextRefresh;
         float _fpsStart;
@@ -61,6 +62,19 @@ namespace Oddity.Game
         public void NextSlot() => _boot.SkipToNextSlot();
 
         public void ClearSave() => _boot.ClearSaveAndReload();
+
+        /// <summary>Forget that the prologue was seen and reload, so it plays again.</summary>
+        public void ReplayPrologue() => _boot.ReplayPrologue();
+
+        static string VoiceLabel() => "목소리: " + HarinVoice.VoiceSet;
+
+        /// <summary>Next voice set (karina / harinA); the current line plays again in the new voice.</summary>
+        public void SwitchVoice()
+        {
+            HarinVoice.VoiceSet = HarinVoice.NextVoiceSet();
+            if (_voiceLabel != null) _voiceLabel.text = VoiceLabel();
+            if (_boot.Voice != null) _boot.Voice.Replay();
+        }
 
         public void JumpToEmergence()
         {
@@ -184,6 +198,10 @@ namespace Oddity.Game
             MakeButton(prt, "다음 슬롯", new Color(0.38f, 0.33f, 0.62f, 1f), 0f, RowHeight).onClick.AddListener(NextSlot);
             MakeButton(prt, "저장 지우기", new Color(0.6f, 0.25f, 0.3f, 1f), 0f, RowHeight).onClick.AddListener(ClearSave);
             MakeButton(prt, "나오는 장면 바로", new Color(0.38f, 0.33f, 0.62f, 1f), 0f, RowHeight).onClick.AddListener(JumpToEmergence);
+            MakeButton(prt, "프롤로그 다시 보기", new Color(0.38f, 0.33f, 0.62f, 1f), 0f, RowHeight).onClick.AddListener(ReplayPrologue);
+            var voice = MakeButton(prt, VoiceLabel(), new Color(0.38f, 0.33f, 0.62f, 1f), 0f, RowHeight);
+            _voiceLabel = voice.GetComponentInChildren<Text>();
+            voice.onClick.AddListener(SwitchVoice);
 
             _panel.SetActive(false);
             _fpsStart = Time.unscaledTime;

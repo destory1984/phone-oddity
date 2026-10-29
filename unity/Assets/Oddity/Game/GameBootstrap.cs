@@ -15,6 +15,8 @@ namespace Oddity.Game
         public static string SavePathOverride;
         /// <summary>When set, replaces DateTime.UtcNow as the game clock.</summary>
         public static Func<DateTime> ClockOverride;
+        /// <summary>Tests and most shots set this to start at day 1 as before, without the prologue.</summary>
+        public static bool SkipPrologue;
 
         [SerializeField] ChatView chat;
         [SerializeField] HarinPuppet harin;
@@ -27,12 +29,24 @@ namespace Oddity.Game
 
         /// <summary>Act 2 scene played in the room after the emergence.</summary>
         public const string AfterSceneId = "d1_after";
+        /// <summary>Marker file name (next to the save) written once the prologue has been seen.</summary>
+        public const string PrologueSeenFile = "prologue_seen";
+        /// <summary>Pause before each Harin line of the prologue (instead of the messenger's typing indicator).</summary>
+        public const float PrologueBreathSeconds = 0.3f;
         /// <summary>The act 2 line with this glitch (she loses the player's name) dips Harin's fade.</summary>
         const float FadeDipGlitch = 0.6f;
         const float FadeDipAlpha = 0.4f;
         const float FadeDipSeconds = 1f;
 
         DayScript _script;
+        DayScript _prologue;
+        DialogueRunner _prologueRunner;
+        PrologueDirector _director;
+        HarinVoice _voice;
+        bool _inPrologue;
+        Coroutine _breath;
+        string _lineScene;
+        int _lineNumber;
         SaveStore _store;
         string _savePath;
         DialogueRunner _runner;
@@ -56,6 +70,19 @@ namespace Oddity.Game
         public DevPanel Dev { get; private set; }
         /// <summary>Id of the scene the runner is playing, or null.</summary>
         public string CurrentSceneId => _runner != null && _runner.Current != null ? _runner.Current.Id : null;
+        /// <summary>True from the first prologue line until the rewind has handed over to day 1.</summary>
+        public bool InPrologue => _inPrologue;
+        /// <summary>Id of the prologue scene being played, or null.</summary>
+        public string PrologueSceneId => _inPrologue && _prologueRunner != null && _prologueRunner.Current != null ? _prologueRunner.Current.Id : null;
+        public PrologueDirector Prologue => _director;
+        public HarinVoice Voice => _voice;
+        /// <summary>True while a prologue line waits for a tap.</summary>
+        public bool PrologueAwaitingTap => _inPrologue && _awaitingTap;
+        public bool PrologueSeen => File.Exists(PrologueSeenPath);
+
+        string PrologueSeenPath => string.IsNullOrEmpty(SavePathOverride)
+            ? Path.Combine(Application.persistentDataPath, PrologueSeenFile)
+            : SavePathOverride + "." + PrologueSeenFile;
 
         static DateTime Now() => ClockOverride != null ? ClockOverride() : DateTime.UtcNow;
 
@@ -69,17 +96,19 @@ namespace Oddity.Game
             emergence.Finished += OnEmergenceFinished;
 
             string scriptPath = Path.Combine(Application.streamingAssetsPath, "script", "day1.json");
+            string prologuePath = Path.Combine(Application.streamingAssetsPath, "script", "prologue.json");
             if (Application.platform == RuntimePlatform.Android)
             {
                 // StreamingAssets sits inside the apk on Android, so File cannot read it
-                StartCoroutine(LoadScriptThenInit(scriptPath));
+                StartCoroutine(LoadScriptThenInit(scriptPath, prologuePath));
                 return;
             }
-            Init(File.ReadAllText(scriptPath));
+            Init(File.ReadAllText(scriptPath), File.Exists(prologuePath) ? File.ReadAllText(prologuePath) : null);
         }
 
-        System.Collections.IEnumerator LoadScriptThenInit(string url)
+        System.Collections.IEnumerator LoadScriptThenInit(string url, string prologueUrl)
         {
+            string day1;
             using (var req = UnityEngine.Networking.UnityWebRequest.Get(url))
             {
                 yield return req.SendWebRequest();
@@ -89,13 +118,22 @@ namespace Oddity.Game
                     chat.ShowLockNotice("대본을 읽지 못했다: " + req.error);
                     yield break;
                 }
-                Init(req.downloadHandler.text);
+                day1 = req.downloadHandler.text;
             }
+            string prologue = null;
+            using (var req = UnityEngine.Networking.UnityWebRequest.Get(prologueUrl))
+            {
+                yield return req.SendWebRequest();
+                if (req.result == UnityEngine.Networking.UnityWebRequest.Result.Success) prologue = req.downloadHandler.text;
+                else Debug.LogWarning("GameBootstrap: no prologue: " + req.error);
+            }
+            Init(day1, prologue);
         }
 
-        void Init(string json)
+        void Init(string json, string prologueJson = null)
         {
             _script = ScriptLoader.Parse(json);
+            if (!string.IsNullOrEmpty(prologueJson)) _prologue = ScriptLoader.Parse(prologueJson);
 
             string path = string.IsNullOrEmpty(SavePathOverride)
                 ? Path.Combine(Application.persistentDataPath, "save.json")
@@ -119,9 +157,28 @@ namespace Oddity.Game
             {
                 _subtitle = SubtitleBar.Create(emergence.MainCamera, chat.Font);
                 _subtitle.Tapped += OnTapped;
+                _subtitle.ChoicePicked += OnSubtitleChoice;
                 Dev = DevPanel.Create(this, emergence.MainCamera, chat.Font);
             }
+            _voice = gameObject.AddComponent<HarinVoice>();
+            _voice.Init(harin);
 
+            if (_prologue != null && _subtitle != null && harin != null && !SkipPrologue && !PrologueSeen)
+            {
+                StartPrologue();
+                return;
+            }
+            StartDayOne(false);
+        }
+
+        void StartDayOne(bool afterPrologue)
+        {
+            if (afterPrologue && State.Day == _script.Day && State.Slot == Slot.Morning)
+            {
+                // the first thing after the rewind: the day 1 lock-screen notice
+                Scene entry = _script.EntryFor(Slot.Morning);
+                if (entry != null && entry.Lines.Count > 0) chat.ShowLockNotice(entry.Lines[0].Text);
+            }
             if (string.IsNullOrWhiteSpace(State.PlayerName))
             {
                 chat.AskName();
@@ -141,7 +198,11 @@ namespace Oddity.Game
                 chat.NameEntered -= OnNameEntered;
             }
             if (emergence != null) emergence.Finished -= OnEmergenceFinished;
-            if (_subtitle != null) _subtitle.Tapped -= OnTapped;
+            if (_subtitle != null)
+            {
+                _subtitle.Tapped -= OnTapped;
+                _subtitle.ChoicePicked -= OnSubtitleChoice;
+            }
         }
 
         void Update()
@@ -194,9 +255,30 @@ namespace Oddity.Game
             return name + ", 지금 얘기할 수 있어?";
         }
 
+        // Counts lines per scene (first line = 1), the numbering the voice files use.
+        int NextLineNumber(string sceneId)
+        {
+            if (sceneId != _lineScene)
+            {
+                _lineScene = sceneId;
+                _lineNumber = 0;
+            }
+            return ++_lineNumber;
+        }
+
         void OnLineShown(Line line)
         {
             _awaitingTap = true;
+            int number = NextLineNumber(CurrentSceneId);
+            if (_voice != null)
+            {
+                if (line.Who == "harin")
+                {
+                    if (_act2) _voice.PlayLine(CurrentSceneId, number, line.Face, line.Beat);
+                    else _voice.PlayLine(CurrentSceneId, number, line.Face, line.Beat, () => !chat.IsTyping);
+                }
+                else _voice.Stop();
+            }
             if (_act2)
             {
                 _subtitle.ShowLine(line);
@@ -289,9 +371,116 @@ namespace Oddity.Game
 
         void OnTapped()
         {
+            if (_inPrologue)
+            {
+                if (!_awaitingTap || (_director != null && _director.IsRewinding)) return;
+                _awaitingTap = false;
+                _prologueRunner.Advance();
+                return;
+            }
             if (!_awaitingTap) return;
             _awaitingTap = false;
             _runner.Advance();
+        }
+
+        void OnSubtitleChoice(int index)
+        {
+            if (_inPrologue) _prologueRunner.Choose(index);
+            else _runner.Choose(index);
+        }
+
+        // ---------------------------------------------------------------- prologue (day 12 flash-forward)
+
+        void StartPrologue()
+        {
+            _inPrologue = true;
+            _awaitingTap = false;
+            chat.SetVisible(false);
+            _director = PrologueDirector.Create(gameObject, harin, emergence, emergence.MainCamera, _subtitle, screenNoise, chat.Font);
+            _director.Begin();
+            // a throwaway state: the prologue never touches the hidden values, the day or the slot clock
+            _prologueRunner = new DialogueRunner(_prologue, new GameState());
+            _prologueRunner.LineShown += OnPrologueLine;
+            _prologueRunner.ChoicesShown += OnPrologueChoices;
+            _prologueRunner.SlotFinished += OnPrologueFinished;
+            _lineScene = null;
+            _prologueRunner.StartScene(_prologue.Scenes[0].Id);
+        }
+
+        void OnPrologueLine(Line line)
+        {
+            string sceneId = _prologueRunner.Current.Id;
+            int number = NextLineNumber(sceneId);
+            _awaitingTap = false;
+            if (_breath != null) { StopCoroutine(_breath); _breath = null; }
+            _voice.Stop();
+            _director.ShowLine(line, sceneId);
+            if (line.Beat == PrologueDirector.RewindBeat)
+            {
+                _subtitle.ShowLine(line);
+                _director.PlayRewind(EndPrologue);
+                return;
+            }
+            if (line.Who == "harin" && ChatView.TypingEnabled && PrologueBreathSeconds > 0f)
+                _breath = StartCoroutine(Breath(line, sceneId, number));
+            else RevealPrologueLine(line, sceneId, number);
+        }
+
+        System.Collections.IEnumerator Breath(Line line, string sceneId, int number)
+        {
+            _subtitle.HideBand();
+            yield return new WaitForSeconds(PrologueBreathSeconds);
+            _breath = null;
+            RevealPrologueLine(line, sceneId, number);
+        }
+
+        void RevealPrologueLine(Line line, string sceneId, int number)
+        {
+            _subtitle.ShowLine(line);
+            // the notice text sits on the lock-screen card, not on the subtitle band
+            if (line.Beat == PrologueDirector.NoticeBeat) _subtitle.HideBand();
+            if (line.Who == "harin") _voice.PlayLine(sceneId, number, line.Face, line.Beat);
+            _awaitingTap = true;
+        }
+
+        void OnPrologueChoices(System.Collections.Generic.IReadOnlyList<Choice> choices)
+        {
+            _awaitingTap = false;
+            _subtitle.ShowChoices(choices);
+        }
+
+        void OnPrologueFinished(Slot slot)
+        {
+            // only reached if the script has no rewind line
+            if (_inPrologue && (_director == null || !_director.IsRewinding)) EndPrologue();
+        }
+
+        void EndPrologue()
+        {
+            if (!_inPrologue) return;
+            try { File.WriteAllText(PrologueSeenPath, "1"); }
+            catch (Exception e) { Debug.LogWarning("GameBootstrap: cannot write the prologue marker: " + e.Message); }
+            _inPrologue = false;
+            _awaitingTap = false;
+            if (_breath != null) { StopCoroutine(_breath); _breath = null; }
+            _voice.Stop();
+            _prologueRunner.LineShown -= OnPrologueLine;
+            _prologueRunner.ChoicesShown -= OnPrologueChoices;
+            _prologueRunner.SlotFinished -= OnPrologueFinished;
+            if (_director != null) _director.End();
+            _director = null;
+            _subtitle.SetVisible(false);
+            chat.SetVisible(true);
+            _lineScene = null;
+            StartDayOne(true);
+        }
+
+        /// <summary>Dev panel: forget that the prologue was seen and load the scene again.</summary>
+        public void ReplayPrologue()
+        {
+            if (File.Exists(PrologueSeenPath)) File.Delete(PrologueSeenPath);
+            SkipPrologue = false;
+            UnityEngine.SceneManagement.SceneManager.LoadScene(gameObject.scene.buildIndex);
         }
 
         void OnChoicePicked(int index)

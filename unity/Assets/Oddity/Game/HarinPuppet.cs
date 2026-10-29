@@ -74,6 +74,7 @@ namespace Oddity.Game
             _basePosition = transform.position;
             CaptureOverrideBones();
             CapturePoseBones();
+            CaptureLeanBones();
             if (lowerArms) CaptureRestPose();
             ScheduleBlink();
         }
@@ -151,6 +152,7 @@ namespace Oddity.Game
             else if (_armPose != null)
                 foreach (var (t, q) in _armPose) t.localRotation = q;
 
+            ApplyLean();
             var root = transform.rotation;
             if (_reach)
             {
@@ -170,9 +172,10 @@ namespace Oddity.Game
 
             // face: exactly one preset at 1, the rest at 0
             foreach (var kv in Faces)
-                expression.SetWeight(kv.Value, kv.Value.Equals(_currentFace) ? 1f : 0f);
+                expression.SetWeight(kv.Value, FaceWeight(kv.Value));
 
             expression.SetWeight(ExpressionKey.Blink, BlinkWeight());
+            ApplyMouth();
 
             // jitter, applied on top of the base position
             if (Glitch > 0f)
@@ -207,12 +210,14 @@ namespace Oddity.Game
             {
                 _currentFace = expr;
                 CurrentFace = key;
+                ClearFaceMix();
             }
             else
             {
                 Debug.LogWarning($"HarinPuppet: unknown face '{face}', using neutral");
                 _currentFace = ExpressionKey.Neutral;
                 CurrentFace = "neutral";
+                ClearFaceMix();
             }
         }
 

@@ -17,6 +17,8 @@ namespace Oddity.EditorTools
         public string ScenePath;
         public string CameraName;
         public Action Setup;
+        /// <summary>True: start like a first launch, with the prologue. False: skip it (day 1 as before).</summary>
+        public bool Prologue;
     }
 
     public static class ShotScenes
@@ -40,8 +42,65 @@ namespace Oddity.EditorTools
             cam.aspect = 9f / 16f; // batch mode has no game view, so fix the phone's aspect
         }
 
+        // First launch: tap (or pick the first choice) through the prologue until `stop` says to stay.
+        static GameBootstrap PlayPrologue(Func<GameBootstrap, bool> stop)
+        {
+            FitPhoneCamera();
+            ChatView.TypingEnabled = false; // no breath pause, so taps land at once
+            var boot = UnityEngine.Object.FindFirstObjectByType<GameBootstrap>();
+            if (boot == null || !boot.InPrologue) throw new Exception("the prologue did not start");
+            for (int i = 0; i < 80 && !stop(boot); i++)
+            {
+                if (boot.Subtitle.VisibleChoiceTexts.Count > 0) boot.Subtitle.PickChoice(0);
+                else boot.Subtitle.Tap();
+            }
+            if (!stop(boot)) throw new Exception("prologue line not reached");
+            boot.Voice.Stop(); // the still shows the expression, not a random lip-sync frame
+            return boot;
+        }
+
+        static bool AtLine(GameBootstrap boot, string scene, string beat) =>
+            boot.PrologueSceneId == scene && boot.Prologue != null && boot.Prologue.CurrentBeat == beat;
+
         public static readonly IReadOnlyList<ShotScene> All = new List<ShotScene>
         {
+            new ShotScene
+            {
+                Name = "prologue_dinner", // p_dinner line 3 ("teases"), before any close-up
+                ScenePath = PrototypeScene,
+                CameraName = "MainCamera",
+                Prologue = true,
+                Setup = () => PlayPrologue(b => AtLine(b, "p_dinner", "teases")).Prologue.SeekBeat(0.8f),
+            },
+            new ShotScene
+            {
+                Name = "prologue_closeup", // p_side_by_side line 6 ("quiet_confession"), the closest shot
+                ScenePath = PrototypeScene,
+                CameraName = "MainCamera",
+                Prologue = true,
+                Setup = () => PlayPrologue(b => AtLine(b, "p_side_by_side", "quiet_confession")).Prologue.SeekBeat(1f),
+            },
+            new ShotScene
+            {
+                Name = "prologue_notice", // the lock-screen notice "19일 후 삭제됩니다"
+                ScenePath = PrototypeScene,
+                CameraName = "MainCamera",
+                Prologue = true,
+                Setup = () => PlayPrologue(b => AtLine(b, "p_rewind", PrologueDirector.NoticeBeat)).Prologue.SeekBeat(0.6f),
+            },
+            new ShotScene
+            {
+                Name = "prologue_rewind", // 1.2 s into the rewind
+                ScenePath = PrototypeScene,
+                CameraName = "MainCamera",
+                Prologue = true,
+                Setup = () =>
+                {
+                    var boot = PlayPrologue(b => b.Prologue != null && b.Prologue.IsRewinding);
+                    boot.Prologue.RewindSpeed = 0f;
+                    boot.Prologue.SeekRewind(1.2f);
+                },
+            },
             new ShotScene
             {
                 Name = "appstage",

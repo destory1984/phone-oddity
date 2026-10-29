@@ -71,6 +71,9 @@ namespace Oddity.Core
 
             foreach (Scene scene in script.Scenes)
             {
+                if (!string.IsNullOrEmpty(scene.Next) && !ids.Contains(scene.Next))
+                    throw new ScriptFormatException(
+                        "Scene \"" + scene.Id + "\" has a next \"" + scene.Next + "\" that does not exist.");
                 foreach (Choice choice in scene.Choices)
                 {
                     // No next means the slot ends here; only a dangling target is an error.

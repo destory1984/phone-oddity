@@ -26,6 +26,7 @@ namespace Oddity.PlayTests
             _savePath = Path.Combine(Path.GetTempPath(), "oddity_typingtest_" + Guid.NewGuid().ToString("N") + ".json");
             _now = new DateTime(2026, 10, 30, 12, 0, 0, DateTimeKind.Utc);
             GameBootstrap.SavePathOverride = _savePath;
+            GameBootstrap.SkipPrologue = true; // these tests start at day 1
             GameBootstrap.ClockOverride = () => _now;
             ChatView.TypingEnabled = true;
             string json = File.ReadAllText(Path.Combine(Application.streamingAssetsPath, "script", "day1.json"));
@@ -36,6 +37,7 @@ namespace Oddity.PlayTests
         public void TearDown()
         {
             GameBootstrap.SavePathOverride = null;
+            GameBootstrap.SkipPrologue = false;
             GameBootstrap.ClockOverride = null;
             ChatView.TypingEnabled = true;
             if (File.Exists(_savePath)) File.Delete(_savePath);

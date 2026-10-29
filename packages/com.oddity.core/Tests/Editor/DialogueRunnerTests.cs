@@ -43,6 +43,34 @@ namespace Oddity.Core.Tests
         }
 
         [Test]
+        public void Runner_SceneNext_AutoAdvances()
+        {
+            var script = new DayScript
+            {
+                Day = 12,
+                Scenes = new List<Scene>
+                {
+                    new Scene { Id = "a", Slot = Slot.Night, Next = "b",
+                        Lines = new List<Line> { new Line { Who = "harin", Text = "a1", Beat = "teases" } } },
+                    new Scene { Id = "b", Slot = Slot.Night,
+                        Lines = new List<Line> { new Line { Who = "harin", Text = "b1" } } }
+                }
+            };
+            var r = new DialogueRunner(script, new GameState());
+            var lines = Capture(r);
+            bool finished = false;
+            r.SlotFinished += _ => finished = true;
+            r.StartSlot(Slot.Night);
+            Assert.AreEqual("teases", lines[0].Beat);
+            r.Advance();
+            Assert.AreEqual("b", r.Current.Id);
+            Assert.AreEqual("b1", lines[1].Text);
+            Assert.IsFalse(finished);
+            r.Advance();
+            Assert.IsTrue(finished);
+        }
+
+        [Test]
         public void StartSlot_ShowsFirstLineOfEntry()
         {
             var r = new DialogueRunner(MakeScript(), new GameState { PlayerName = "민수" });
