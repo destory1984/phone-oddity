@@ -36,17 +36,29 @@
 
 ## 파일 구조
 
+Core는 유니티 로컬 패키지로 두고, 같은 소스를 dotnet 하네스로도 컴파일해 테스트한다. 유니티를 켜지 않고도 과제 2 → 5를 짓고 확인할 수 있다.
+
 ```
+packages/com.oddity.core/       유니티 로컬 패키지 (unity/Packages/manifest.json 에서 "file:../../packages/com.oddity.core")
+  package.json
+  Runtime/                      Oddity.Core.asmdef (noEngineReferences: true, Newtonsoft.Json.dll 참조)
+    ScriptModel.cs              Slot, Effects, Line, Choice, Scene, DayScript
+    ScriptLoader.cs             JSON → DayScript, 검증
+    GameState.cs                상태와 JSON 직렬화
+    SaveStore.cs                파일 읽기/쓰기
+    DialogueRunner.cs           장면 진행
+    SlotClock.cs                슬롯 대기 시간
+  Tests/Editor/                 Oddity.Core.Tests.asmdef (Editor 전용)
+    ScriptLoaderTests.cs
+    GameStateTests.cs
+    DialogueRunnerTests.cs
+    SlotClockTests.cs
+harness/
+  Oddity.Core/                  netstandard2.1, C# 9 로 Runtime 소스를 컴파일
+  Oddity.Core.Tests/            net8.0, NUnit 3.14 로 Tests/Editor 소스를 돌림
 unity/
   Assets/
     Oddity/
-      Core/                     Oddity.Core.asmdef (noEngineReferences: true)
-        ScriptModel.cs          Slot, Effects, Line, Choice, Scene, DayScript
-        ScriptLoader.cs         JSON → DayScript, 검증
-        GameState.cs            상태와 JSON 직렬화
-        SaveStore.cs            파일 읽기/쓰기
-        DialogueRunner.cs       장면 진행
-        SlotClock.cs            슬롯 대기 시간
       Game/                     Oddity.Game.asmdef (Core, UniVRM, Timeline 참조)
         GameBootstrap.cs        시작점. Core와 화면을 잇는다
         ChatView.cs             메신저 UI
@@ -56,10 +68,6 @@ unity/
       Shaders/
         HarinFade.shadergraph   흐려짐(투명도) + 노이즈
       Tests/EditMode/           Oddity.Tests.asmdef (Core 참조, Editor 전용)
-        ScriptLoaderTests.cs
-        GameStateTests.cs
-        DialogueRunnerTests.cs
-        SlotClockTests.cs
         Day1ContentTests.cs
     Scenes/Prototype.unity
     StreamingAssets/script/day1.json
@@ -68,7 +76,15 @@ unity/
 
 ## 테스트 돌리는 법
 
-에디터가 열려 있으면 MCP의 테스트 실행 도구로 EditMode 테스트를 돌린다. 에디터가 닫혀 있으면 아래 명령을 쓴다. `<VER>` 는 설치한 Unity 6 LTS 버전이다.
+Core(과제 2 → 5)는 dotnet 하네스로 돌린다. 유니티가 없어도 된다.
+
+```bash
+"/c/Program Files/dotnet/dotnet.exe" test harness/Oddity.Core.Tests
+```
+
+통과 기준: 마지막 줄의 실패 수가 0. 하네스는 C# 9, .NET Standard 2.1 로 컴파일하므로 유니티에서 안 되는 문법과 API는 여기서 먼저 걸린다. 유니티 버전은 6000.3.27f1(Unity 6.3 LTS)이다.
+
+유니티 쪽 테스트는 에디터가 열려 있으면 MCP의 테스트 실행 도구로 EditMode 테스트를 돌린다. 에디터가 닫혀 있으면 아래 명령을 쓴다. `<VER>` 는 설치한 Unity 6 LTS 버전이다.
 
 ```bash
 "/c/Program Files/Unity/Hub/Editor/<VER>/Editor/Unity.exe" -batchmode -projectPath unity -runTests -testPlatform EditMode -testResults unity/Logs/editmode.xml -logFile -
@@ -90,16 +106,16 @@ unity/
 - [ ] **Step 2:** AI Assistant 패키지(`com.unity.ai.assistant`)를 넣고 Project Settings > AI > Unity MCP를 켠다. Claude Code를 연결하고, 사용자가 연결 승인 창에서 허락한다. Personal 라이선스로 막히면 MCP for Unity(Coplay)를 Package Manager의 git URL로 넣고 Window > MCP for Unity의 자동 설정을 쓴다
 - [ ] **Step 3:** `manifest.json` 에 `com.unity.nuget.newtonsoft-json`, `com.unity.timeline`, `com.unity.test-framework`, UniVRM(`com.vrmc.gltf`, `com.vrmc.vrm`, 같은 릴리스 태그의 git URL)을 넣는다
 - [ ] **Step 4:** Player Settings: 세로 고정, 기준 해상도 1080 × 1920, Android 대상 추가
-- [ ] **Step 5:** 파일 구조대로 asmdef 세 개를 만든다. `Oddity.Core` 는 `noEngineReferences: true`, Newtonsoft dll만 참조. `Oddity.Tests` 는 Editor 플랫폼만, `nunit.framework.dll` 과 `Oddity.Core` 참조
+- [ ] **Step 5:** `manifest.json` 에 `"com.oddity.core": "file:../../packages/com.oddity.core"` 를 넣고 `testables` 에 `com.oddity.core` 를 넣는다. `Oddity.Game`, `Oddity.Tests` asmdef를 만든다. `Oddity.Tests` 는 Editor 플랫폼만, `nunit.framework.dll` 과 `Oddity.Core` 참조
 - [ ] **Step 6:** 루트 `.gitignore` 에 Global Constraints의 유니티 폴더 여섯 개를 넣는다
-- [ ] **Step 7:** 빈 테스트 하나(`Assert.Pass()`)를 넣고 테스트 실행. 기대: Passed 1
+- [ ] **Step 7:** 유니티 테스트 실행. 기대: 이미 지어 둔 Core 테스트가 유니티에서도 모두 Passed
 - [ ] **Step 8:** `git status` 에 `Library/` 등이 안 보이는지 확인하고 커밋 `chore: scaffold Unity 6 URP project`
 
 ### Task 2: 대사 모델과 로더
 
 **Files:**
-- Create: `Core/ScriptModel.cs`, `Core/ScriptLoader.cs`
-- Test: `Tests/EditMode/ScriptLoaderTests.cs`
+- Create: `packages/com.oddity.core/Runtime/ScriptModel.cs`, `Runtime/ScriptLoader.cs`
+- Test: `packages/com.oddity.core/Tests/Editor/ScriptLoaderTests.cs`
 
 **Interfaces:**
 - Produces:
@@ -127,8 +143,8 @@ unity/
 ### Task 3: 게임 상태와 저장
 
 **Files:**
-- Create: `Core/GameState.cs`, `Core/SaveStore.cs`
-- Test: `Tests/EditMode/GameStateTests.cs`
+- Create: `packages/com.oddity.core/Runtime/GameState.cs`, `Runtime/SaveStore.cs`
+- Test: `packages/com.oddity.core/Tests/Editor/GameStateTests.cs`
 
 **Interfaces:**
 - Consumes: `Effects`, `Slot`
@@ -152,8 +168,8 @@ unity/
 ### Task 4: 대화 진행
 
 **Files:**
-- Create: `Core/DialogueRunner.cs`
-- Test: `Tests/EditMode/DialogueRunnerTests.cs`
+- Create: `packages/com.oddity.core/Runtime/DialogueRunner.cs`
+- Test: `packages/com.oddity.core/Tests/Editor/DialogueRunnerTests.cs`
 
 **Interfaces:**
 - Consumes: `DayScript`, `Scene`, `Line`, `Choice`, `GameState.Apply`
@@ -181,8 +197,8 @@ unity/
 ### Task 5: 슬롯 시계
 
 **Files:**
-- Create: `Core/SlotClock.cs`
-- Test: `Tests/EditMode/SlotClockTests.cs`
+- Create: `packages/com.oddity.core/Runtime/SlotClock.cs`
+- Test: `packages/com.oddity.core/Tests/Editor/SlotClockTests.cs`
 
 **Interfaces:**
 - Consumes: `GameState.Slot`, `GameState.Day`, `GameState.NextOpenUtc`

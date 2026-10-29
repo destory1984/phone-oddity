@@ -1,0 +1,10 @@
+{
+  "name": "com.oddity.core",
+  "version": "0.1.0",
+  "displayName": "Oddity Core",
+  "description": "Engine-independent game rules: script loading, game state, dialogue runner, slot clock.",
+  "unity": "6000.3",
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  }
+}

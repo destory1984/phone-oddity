@@ -1,0 +1,9 @@
+{
+  "name": "Oddity.Core",
+  "rootNamespace": "Oddity.Core",
+  "references": [],
+  "overrideReferences": true,
+  "precompiledReferences": ["Newtonsoft.Json.dll"],
+  "autoReferenced": true,
+  "noEngineReferences": true
+}
