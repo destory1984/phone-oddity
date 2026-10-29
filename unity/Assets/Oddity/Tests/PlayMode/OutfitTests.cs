@@ -86,7 +86,12 @@ namespace Oddity.PlayTests
                 Assert.AreEqual(HarinPuppet.SkinBase.r, c.r, 1e-3f, m.name);
                 Assert.AreEqual(HarinPuppet.SkinBase.g, c.g, 1e-3f, m.name);
                 Assert.AreEqual(HarinPuppet.SkinBase.b, c.b, 1e-3f, m.name);
+                // one soft shading ramp on face and body, so the jaw does not cut sharply over the neck
+                Assert.AreEqual(HarinPuppet.RoomSkinToony, m.GetFloat("_ShadingToonyFactor"), 1e-4f, m.name);
+                Assert.AreEqual(HarinPuppet.RoomSkinShift, m.GetFloat("_ShadingShiftFactor"), 1e-4f, m.name);
             }
+            Assert.LessOrEqual(HarinPuppet.RoomSkinToony, 0.1f + 1e-5f, "ramp width 2 (1 - toony) at least 1.8");
+
             var glow = HarinPuppet.HairTeal * HarinPuppet.HairGlow;
             foreach (var m in hair)
             {
@@ -94,6 +99,9 @@ namespace Oddity.PlayTests
                 Assert.AreEqual(glow.g, e.g, 1e-3f, m.name);
                 Assert.AreEqual(glow.b, e.b, 1e-3f, m.name);
             }
+            harin.SetRoomLook(false);
+            yield return null;
+            foreach (var m in skin) Assert.Greater(m.GetFloat("_ShadingToonyFactor"), 0.5f, m.name + ": imported toony back");
         }
 
         // Cut 12, after the spring bones settle: every skirt joint stays outside the thigh colliders
@@ -129,6 +137,30 @@ namespace Oddity.PlayTests
             }
             Debug.Log($"OUTFIT skirt nearest thigh {worst:0.000} m at {worstName}");
             Assert.GreaterOrEqual(worst, ThighColliderRadius * 0.9f, "skirt joint inside the thigh: " + worstName);
+        }
+
+        // Cut 12, 120 frames after she sits: the tips of the front skirt chains (SkirtFront, SkirtFront2) hang
+        // lower than both wrists, so the front of the skirt does not fold up over her forearms.
+        [UnityTest]
+        public IEnumerator Seated_SkirtBelowHands()
+        {
+            Save(CoreInfo.EmergenceDay, Slot.Night);
+            yield return LoadScene();
+            var seq = Boot().Emergence;
+            seq.Speed = 0f;
+            seq.Play();
+            seq.Seek(9f);
+            var harin = Harin();
+            Assert.AreEqual(Oddity.Game.Pose.Seated, harin.CurrentPose);
+            var tips = SpringJoints(harin, "SkirtFront").Where(t => t.childCount == 0).ToList();
+            Assert.GreaterOrEqual(tips.Count, 4, "front skirt chain tips");
+            for (int i = 0; i < 120; i++) yield return null;
+
+            float s = harin.transform.lossyScale.y;
+            float wrist = Mathf.Min(harin.BonePosition(HumanBodyBones.LeftHand).y, harin.BonePosition(HumanBodyBones.RightHand).y);
+            var top = tips.OrderByDescending(t => t.position.y).First();
+            Debug.Log($"OUTFIT seated front skirt tip {top.name} {(wrist - top.position.y) / s:0.000} m under the lower wrist");
+            Assert.Less(top.position.y, wrist, $"{top.name} above the wrists by {(top.position.y - wrist) / s:0.000} m");
         }
 
         const float ThighColliderRadius = 0.077f; // VRoid default thigh sphere radius

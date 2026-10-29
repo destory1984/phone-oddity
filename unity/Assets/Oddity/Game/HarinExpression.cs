@@ -69,8 +69,27 @@ namespace Oddity.Game
         public const float SmileRelaxed = 0.55f, SmileHappy = 0f;
         // "flustered": a weaker smile; the head and eyes look away (beat), no blush yet.
         public const float FlusteredRelaxed = 0.4f, FlusteredHappy = 0f;
-        // "soft": the face between lines in the phone, the faintest closed-mouth smile.
-        public const float SoftRelaxed = 0.2f;
+        // "soft": the face between lines in the phone, a faint closed-mouth smile. On the summer-B / v58 face
+        // 0.2 read as no expression at all, 0.3 with the lips shut still read as blank.
+        public const float SoftRelaxed = 0.35f;
+
+        // The v58 face rests with the lips a little apart, which looks absent between lines. The closed-mouth
+        // faces add VRoid's Fcl_MTH_Close morph (not bound to any VRM expression, so the runtime leaves it alone);
+        // it fades out as the lip sync opens the mouth.
+        // "soft" also lifts the mouth corners with the mouth-only part of the smile (Fcl_MTH_Fun), so it reads
+        // as a smile without the eyes squinting the way more of the relaxed preset would.
+        public const string MouthCloseShape = "Fcl_MTH_Close", MouthSmileShape = "Fcl_MTH_Fun";
+        public const float SoftMouthClose = 0.3f, SmileMouthClose = 0.35f, SoftMouthSmile = 0.35f;
+        const float MouthCloseFadeAt = 0.15f; // lip-sync weight at which the extra morphs are gone
+
+        SkinnedMeshRenderer _mouthRenderer;
+        int _closeIndex = -2, _smileIndex = -1; // -2 not looked up yet, -1 the model has no such morph
+        float _mouthCloseTarget, _mouthSmileTarget;
+
+        /// <summary>Weight 0..1 of <see cref="MouthCloseShape"/> applied this frame.</summary>
+        public float MouthCloseWeight { get; private set; }
+        /// <summary>Weight 0..1 of <see cref="MouthSmileShape"/> added this frame.</summary>
+        public float MouthSmileWeight { get; private set; }
         public const string IdleFace = "soft";
 
         static readonly HashSet<string> LaughBeats = new HashSet<string> { "laughs", "teases", "soft_laugh" };
@@ -94,6 +113,8 @@ namespace Oddity.Game
             else if (key == "flustered") { relaxed = FlusteredRelaxed; happy = FlusteredHappy; }
             else if (key == IdleFace) { relaxed = SoftRelaxed; happy = 0f; }
             else return false;
+            _mouthCloseTarget = key == IdleFace ? SoftMouthClose : SmileMouthClose;
+            _mouthSmileTarget = key == IdleFace ? SoftMouthSmile : 0f;
             _currentFace = ExpressionKey.Relaxed;
             CurrentFace = key;
             _faceWeight = relaxed;
@@ -114,6 +135,8 @@ namespace Oddity.Game
         {
             _faceWeight = 1f;
             _hasMix = false;
+            _mouthCloseTarget = 0f;
+            _mouthSmileTarget = 0f;
         }
 
         float FaceWeight(ExpressionKey key)
@@ -129,6 +152,32 @@ namespace Oddity.Game
             expression.SetWeight(ExpressionKey.Aa, _mouthAa);
             expression.SetWeight(ExpressionKey.Ih, _mouthIh);
             expression.SetWeight(ExpressionKey.Ou, _mouthOu);
+            ApplyMouthClose();
+        }
+
+        void ApplyMouthClose()
+        {
+            if (_closeIndex == -2)
+            {
+                _closeIndex = -1;
+                foreach (var r in GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                {
+                    if (r.sharedMesh == null) continue;
+                    int i = r.sharedMesh.GetBlendShapeIndex(MouthCloseShape);
+                    if (i < 0) continue;
+                    _mouthRenderer = r;
+                    _closeIndex = i;
+                    _smileIndex = r.sharedMesh.GetBlendShapeIndex(MouthSmileShape);
+                    break;
+                }
+            }
+            float talk = Mathf.Max(_mouthAa, Mathf.Max(_mouthIh, _mouthOu));
+            float k = 1f - Mathf.Clamp01(talk / MouthCloseFadeAt);
+            MouthCloseWeight = _mouthCloseTarget * k;
+            MouthSmileWeight = _mouthSmileTarget * k;
+            if (_closeIndex >= 0) _mouthRenderer.SetBlendShapeWeight(_closeIndex, MouthCloseWeight * 100f);
+            // Fcl_MTH_Fun is not bound to an expression either; the relaxed preset drives Fcl_ALL_Fun, a separate morph
+            if (_smileIndex >= 0) _mouthRenderer.SetBlendShapeWeight(_smileIndex, MouthSmileWeight * 100f);
         }
 
         void CaptureLeanBones()

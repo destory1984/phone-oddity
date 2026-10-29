@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UniVRM10;
 using UnityEngine;
+using VRM10.MToon10;
 
 namespace Oddity.Game
 {
@@ -46,7 +47,7 @@ namespace Oddity.Game
             public const float SeatKnee0 = 85f, SeatKnee1 = 100f;   // knee flexion
             public const float SeatLean0 = 8f, SeatLean1 = 12f;     // upper body forward
             public const float SeatHeadDown0 = 5f, SeatHeadDown1 = 8f;
-            public const float HandOnThigh = 0.45f;                 // wrist at this fraction from hip to knee
+            public const float HandOnThigh = 0.55f;                 // wrist at this fraction from hip to knee (knee side, clear of the skirt front)
             public const float HandAboveThigh = 0.02f;              // wrist height above the thigh surface
             public const float HandTipDown = 0.25f;                 // fingers tip down onto the thigh
             public const float ElbowOut = 0.5f;                     // elbow pole: out ...
@@ -204,22 +205,31 @@ namespace Oddity.Game
             }
         }
 
-        // room look (prologue, cuts 10 to 12): a less pink skin shade, a skin base that stays a light neutral
-        // apricot under the 3,500 K room lamp (blue a little higher so the lamp does not turn it orange),
-        // and a faint teal glow on the hair so it reads close to the art's #1fb5b8 instead of dark and muddy.
-        static readonly Color SkinShade = new Color(0.78f, 0.66f, 0.64f, 1f);
-        public static readonly Color SkinBase = new Color(0.94f, 0.9f, 0.93f, 1f);
+        // room look (prologue, cuts 10 to 12, act 2). The summer-B SKIN texture is already pink and the room lights
+        // push red far past green (the close-up measured 255/160/152, salmon), so the base and shade take red down
+        // and keep green up until she reads as a light neutral apricot. The prologue's 3,500 K lamp needs more of
+        // that than the act 2 room, which has the 6,500 K face light. Tuned against the shots, not computed.
+        public static readonly Color SkinShade = new Color(0.84f, 0.86f, 0.80f, 1f);
+        public static readonly Color SkinBase = new Color(0.94f, 1f, 0.92f, 1f);
+        public static readonly Color PrologueSkinShade = new Color(0.70f, 0.78f, 0.74f, 1f);
+        public static readonly Color PrologueSkinBase = new Color(0.80f, 0.96f, 0.90f, 1f);
+        // MToon shading ramp: width = 2 (1 - toony). VRoid exported face 0.55 (width 0.9) and body 0.675 (0.65),
+        // so the jaw over the neck cut off sharply and the two meshes did not match. One value for both,
+        // width 1.8 (2x the face, 2.8x the body); the shift keeps the lit share near the face's old value.
+        public const float RoomSkinToony = 0.1f, RoomSkinShift = -0.2f;
         public static readonly Color HairTeal = new Color(0x1f / 255f, 0xb5 / 255f, 0xb8 / 255f, 1f);
         public const float HairGlow = 0.04f;
 
-        class LookState { public Material M; public Color Emission, Shade, Base, Matcap; public bool Skin, Hair; }
+        class LookState { public Material M; public Color Emission, Shade, Base, Matcap; public float Toony, Shift; public bool Skin, Hair; }
         List<LookState> _look;
 
         /// <summary>
-        /// On: MToon emission 0 (the hair glowed), skin shade colour from pink to a warm grey, skin base just under
-        /// white and no matcap on the skin, so the room lights do not wash her out. Off: the imported values.
+        /// On: MToon emission 0 (the hair glowed), skin shade colour from pink to a warm grey, a skin base that
+        /// cancels the lamp's red, a softer shading ramp on the skin and no matcap on it, so the room lights do
+        /// not wash her out. <paramref name="prologue"/> picks the skin colours for the prologue's warmer lamp.
+        /// Off: the imported values.
         /// </summary>
-        public void SetRoomLook(bool on)
+        public void SetRoomLook(bool on, bool prologue = false)
         {
             if (_mats == null) CaptureMaterials();
             if (_look == null)
@@ -236,6 +246,8 @@ namespace Oddity.Game
                         Shade = m.GetColor("_ShadeColor"),
                         Base = m.GetColor("_Color"),
                         Matcap = m.HasProperty("_MatcapColor") ? m.GetColor("_MatcapColor") : Color.black,
+                        Toony = m.GetFloat(MToon10Prop.ShadingToonyFactor),
+                        Shift = m.GetFloat(MToon10Prop.ShadingShiftFactor),
                         Skin = m.name.Contains("SKIN"),
                         Hair = m.name.Contains("HAIR"),
                     });
@@ -245,10 +257,12 @@ namespace Oddity.Game
             {
                 l.M.SetColor("_EmissionColor", !on ? l.Emission : l.Hair ? HairTeal * HairGlow : Color.black);
                 if (!l.Skin) continue;
-                l.M.SetColor("_ShadeColor", on ? SkinShade : l.Shade);
-                var c = on ? SkinBase : l.Base;
+                l.M.SetColor("_ShadeColor", !on ? l.Shade : prologue ? PrologueSkinShade : SkinShade);
+                var c = !on ? l.Base : prologue ? PrologueSkinBase : SkinBase;
                 c.a = l.M.GetColor("_Color").a; // keep the fade alpha
                 l.M.SetColor("_Color", c);
+                l.M.SetFloat(MToon10Prop.ShadingToonyFactor, on ? RoomSkinToony : l.Toony);
+                l.M.SetFloat(MToon10Prop.ShadingShiftFactor, on ? RoomSkinShift : l.Shift);
                 if (l.M.HasProperty("_MatcapColor")) l.M.SetColor("_MatcapColor", on ? Color.black : l.Matcap);
             }
         }

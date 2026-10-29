@@ -19,15 +19,16 @@ namespace Oddity.Game
         public enum Stage { Seated, Standing }
 
         // camera: vertical field of view and distances from her eyes. The beat table below still uses the
-        // older 45 degree distances; DistScale turns them into the 35 degree framing (Medium 0.77 m, Extreme 0.66 m).
+        // older 45 degree distances; DistScale turns them into the 35 degree framing (Medium 0.86 m, Extreme 0.74 m;
+        // at 0.85 the v58 bangs covered the top half of the close-up).
         public const float Fov = 35f;
         public const float Wide = 1.6f, Medium = 0.9f, Close = 0.78f, Extreme = 0.78f;
-        public const float DistScale = 0.85f;
+        public const float DistScale = 0.95f;
         /// <summary>Camera height below her eyes (m): at eye level or a little under, never looking down on her.</summary>
         public const float EyeDrop = 0.03f;
         /// <summary>Her eyes sit this far down from the top of the frame (0 = top, 1 = bottom).</summary>
         public const float EyeLine = 0.35f;
-        const float HappyWeight = 0.55f;
+        const float HappyWeight = 0.35f; // 0.55 opened the v58 mouth wide (tongue and mouth inside showed)
         const float CameraSmooth = 0.3f;     // SmoothDamp time; settles in about 1 s
         const float SeatedSideDeg = 12f, StandingSideDeg = -16f;
         static readonly Vector3 StandPosition = new Vector3(-0.45f, 0f, -0.6f);
@@ -167,7 +168,7 @@ namespace Oddity.Game
 
             _harin.SetGlitch(0f);
             _harin.SetFade(1f);
-            _harin.SetRoomLook(true);
+            _harin.SetRoomLook(true, prologue: true);
             _cam.fieldOfView = Fov;
         }
 

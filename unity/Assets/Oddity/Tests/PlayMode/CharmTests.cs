@@ -71,8 +71,10 @@ namespace Oddity.PlayTests
             for (int i = 0; i < 3; i++) yield return null;
             Assert.AreEqual(HarinPuppet.IdleFace, harin.CurrentFace, "before any line");
             Assert.Greater(harin.ExpressionWeight(ExpressionKey.Relaxed), 0f);
-            Assert.LessOrEqual(harin.ExpressionWeight(ExpressionKey.Relaxed), 0.3f, "only a faint smile");
+            Assert.LessOrEqual(harin.ExpressionWeight(ExpressionKey.Relaxed), 0.45f, "only a faint smile");
             foreach (var m in Mouth) Assert.AreEqual(0f, harin.ExpressionWeight(m), m.ToString());
+            Assert.AreEqual(HarinPuppet.SoftMouthClose, harin.MouthCloseWeight, 1e-4f, "lips held shut (the v58 face rests parted)");
+            Assert.AreEqual(HarinPuppet.SoftMouthSmile, harin.MouthSmileWeight, 1e-4f, "mouth corners lifted");
             Assert.IsTrue(harin.Idle, "breathing and glances on in the phone");
 
             chat.SubmitName("민수"); // the first morning line is a system line
@@ -171,7 +173,18 @@ namespace Oddity.PlayTests
                 Assert.Greater(harin.ExpressionWeight(ExpressionKey.Relaxed), 0.1f, face);
                 Assert.LessOrEqual(harin.ExpressionWeight(ExpressionKey.Happy), 0.03f, face + ": happy parts the lips");
                 foreach (var m in Mouth) Assert.AreEqual(0f, harin.ExpressionWeight(m), face + " " + m);
+                Assert.Greater(harin.MouthCloseWeight, 0f, face + ": lips held shut");
             }
+            // talking opens the mouth: the close morph fades out, and an open face does not use it
+            harin.SetFace(HarinPuppet.IdleFace);
+            harin.SetMouth(0.5f, 0f, 0f);
+            yield return null;
+            Assert.AreEqual(0f, harin.MouthCloseWeight, 1e-4f, "lip sync");
+            Assert.AreEqual(0f, harin.MouthSmileWeight, 1e-4f, "lip sync");
+            harin.SetMouth(0f, 0f, 0f);
+            harin.SetFace("happy");
+            yield return null;
+            Assert.AreEqual(0f, harin.MouthCloseWeight, 1e-4f, "happy");
         }
     }
 }

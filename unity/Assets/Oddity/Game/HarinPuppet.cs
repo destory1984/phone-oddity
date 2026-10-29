@@ -88,11 +88,26 @@ namespace Oddity.Game
         /// </summary>
         public const float SkirtDrag = 0.3f;
 
+        /// <summary>
+        /// Gravity on the front skirt chains. VRoid exported 0, so seated (thighs level) the thigh colliders pushed
+        /// the first segment forward and the stiffness kept the rest of the chain at its standing flare: the front
+        /// stood up over her forearms like a folded board. With gravity it drapes over the thighs.
+        /// </summary>
+        public const float SkirtFrontGravity = 1f;
+
         // Runs in Awake, before the VRM runtime builds its spring bones from these components.
         void DampSkirt()
         {
             foreach (var j in GetComponentsInChildren<VRM10SpringBoneJoint>(true))
-                if (j.name.Contains("Skirt") && j.m_dragForce < SkirtDrag) j.m_dragForce = SkirtDrag;
+            {
+                if (!j.name.Contains("Skirt")) continue;
+                if (j.m_dragForce < SkirtDrag) j.m_dragForce = SkirtDrag;
+                if (j.name.Contains("SkirtFront") && j.m_gravityPower < SkirtFrontGravity)
+                {
+                    j.m_gravityPower = SkirtFrontGravity;
+                    j.m_gravityDir = Vector3.down;
+                }
+            }
         }
 
         // The VRM is exported in a T-pose; swing both arms down so she stands naturally.
