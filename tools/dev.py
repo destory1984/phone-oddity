@@ -7,6 +7,7 @@
     python tools/dev.py scenes                 list shot scene names (unity/Assets/Oddity/Editor/ShotScenes.txt)
     python tools/dev.py baseline [SCENE ...]   copy current shots to shots/baseline/ for later diffs
     python tools/dev.py kill                   close the Unity editor that has this project open (not the Hub)
+    python tools/dev.py previs SCENE [--level 1,2,3]   low-quality mp4 with voice and sounds -> shots/previs/SCENE_L{level}.mp4 (needs ffmpeg on PATH)
     python tools/dev.py ship -m "msg" [--quick a,b]   check, test (only a,b with --quick), commit here. Never pushes.
     python tools/dev.py build --pc [--demo-voice]   Windows dev exe -> unity/Build/pc/oddity-proto.exe (Mono, 540x960 window)
     python tools/dev.py build [--demo-voice]   Android dev apk -> unity/Build/oddity-proto.apk, then active target back to Windows
@@ -32,6 +33,10 @@ UNITY_PROJECT = ROOT / "unity"
 LOGS = UNITY_PROJECT / "Logs"
 SHOTS = ROOT / "shots"
 BASE = SHOTS / "baseline"
+PREVIS_OUT = SHOTS / "previs"
+PREVIS_TMP = LOGS / "previs"
+PREVIS_SCENES = ["d3_night"]
+PREVIS_MAX_MB = 30
 SCENES_TXT = UNITY_PROJECT / "Assets" / "Oddity" / "Editor" / "ShotScenes.txt"
 DOTNET_TESTS = ROOT / "harness" / "Oddity.Core.Tests"
 UNITY_EXE = Path(os.environ.get("UNITY_EXE", "C:/Program Files/Unity/Hub/Editor/6000.3.27f1/Editor/Unity.exe"))
@@ -312,6 +317,114 @@ def shot(names):
     return 1 if failed else 0
 
 
+def ffprobe_info(ffprobe, path):
+    """(duration seconds, number of audio streams) of a media file."""
+    out = run([ffprobe, "-v", "error", "-show_entries", "format=duration:stream=codec_type", "-of", "default=nw=1", path]).stdout
+    dur = 0.0
+    audio = 0
+    for line in out.splitlines():
+        if line.startswith("duration="):
+            try:
+                dur = float(line.split("=", 1)[1])
+            except ValueError:
+                pass
+        elif line.strip() == "codec_type=audio":
+            audio += 1
+    return dur, audio
+
+
+def previs_mix(ffmpeg, silent, events_tsv, seconds, out):
+    """Put the sounds the game played (start ms, length ms, volume, wav) under the silent video at their start times."""
+    events = []
+    for line in Path(events_tsv).read_text(encoding="utf-8").splitlines():
+        parts = line.split(chr(9))
+        if len(parts) == 4:
+            events.append((int(parts[0]), int(parts[1]), float(parts[2]), parts[3]))
+    cmd = [ffmpeg, "-y", "-loglevel", "error", "-i", silent]
+    parts = []
+    for i, (start, dur, vol, wav) in enumerate(events):
+        cmd += ["-i", wav]
+        parts.append(f"[{i + 1}:a]atrim=0:{dur / 1000:.3f},asetpts=PTS-STARTPTS,aformat=sample_rates=44100:channel_layouts=stereo,"
+                     f"volume={vol:.3f},adelay={start}|{start}[a{i}]")
+    if events:
+        labels = "".join(f"[a{i}]" for i in range(len(events)))
+        parts.append(f"{labels}amix=inputs={len(events)}:normalize=0:duration=longest,apad=whole_dur={seconds:.3f}[aout]")
+        cmd += ["-filter_complex", ";".join(parts), "-map", "0:v", "-map", "[aout]"]
+    else:
+        cmd += ["-f", "lavfi", "-t", f"{seconds:.3f}", "-i", "anullsrc=r=44100:cl=stereo", "-map", "0:v", "-map", f"{1}:a"]
+    cmd += ["-c:v", "copy", "-c:a", "aac", "-b:a", "128k", "-t", f"{seconds:.3f}", "-movflags", "+faststart", out]
+    r = run(cmd, timeout=600)
+    if r.returncode:
+        print((r.stdout + r.stderr)[-1500:])
+        return False
+    return True
+
+
+def previs(names, levels):
+    ffmpeg, ffprobe = shutil.which("ffmpeg"), shutil.which("ffprobe")
+    if not ffmpeg or not ffprobe:
+        print("PREVIS FAILED: ffmpeg and ffprobe are not on PATH; install ffmpeg (winget install Gyan.FFmpeg) and open a new shell")
+        return 1
+    if len(names) != 1 or names[0] not in PREVIS_SCENES:
+        print(f"previs needs one scene name; known: {', '.join(PREVIS_SCENES)}")
+        return 1
+    scene = names[0]
+    try:
+        level_list = [int(x) for x in (levels or "1,2,3").split(",") if x.strip() != ""]
+    except ValueError:
+        level_list = []
+    if not level_list or any(l < 0 or l > 3 for l in level_list):
+        print("--level takes numbers 0 to 3, for example 2 or 1,2,3")
+        return 1
+    PREVIS_OUT.mkdir(parents=True, exist_ok=True)
+    PREVIS_TMP.mkdir(parents=True, exist_ok=True)
+    for f in PREVIS_TMP.glob(f"{scene}_L*"):
+        f.unlink()
+    t0 = time.time()
+    # no -nographics: the cameras have to draw
+    code, text = unity(["-executeMethod", "Oddity.EditorTools.Previs.Run", "-previsScene", scene,
+                        "-previsLevels", ",".join(str(l) for l in level_list), "-previsDir", PREVIS_TMP.resolve(),
+                        "-previsFfmpeg", ffmpeg], "previs.log", timeout=3600)
+    done = {}
+    for line in text.splitlines():
+        if line.startswith("PREVIS_DONE "):
+            kv = dict(p.split("=", 1) for p in line.split() if "=" in p)
+            done[int(kv["level"])] = kv
+            print(line.strip().replace(str(ROOT.as_posix()) + "/", ""))
+        elif "PREVIS FAIL" in line or line.startswith("PREVIS "):
+            print(line.strip())
+    failed = 0
+    for level in level_list:
+        kv = done.get(level)
+        if kv is None:
+            print(f"PREVIS level {level} FAILED; see unity/Logs/previs.log")
+            failed += 1
+            continue
+        out = PREVIS_OUT / f"{scene}_L{level}.mp4"
+        out.unlink(missing_ok=True)
+        seconds = float(kv["seconds"])
+        if not previs_mix(ffmpeg, kv["video"], kv["events"], seconds, str(out)):
+            failed += 1
+            continue
+        mb = out.stat().st_size / 1048576
+        dur, audio = ffprobe_info(ffprobe, str(out))
+        print(f"PREVIS {out.relative_to(ROOT).as_posix()} {mb:.1f} MB, {dur:.1f}s, audio tracks {audio}, game wall {kv['wall']}")
+        if mb > PREVIS_MAX_MB:
+            print(f"PREVIS {out.name} is over {PREVIS_MAX_MB} MB")
+            failed += 1
+        if audio != 1:
+            print(f"PREVIS {out.name} has no audio track")
+            failed += 1
+        Path(kv["video"]).unlink(missing_ok=True)
+        for w in PREVIS_TMP.glob(f"{scene}_L{level}.a*.wav"):
+            w.unlink()
+    if code is None:
+        print("previs timed out")
+        failed += 1
+    print(f"previs total {time.time() - t0:.0f}s")
+    return 1 if failed else 0
+
+
 def baseline(names):
     BASE.mkdir(parents=True, exist_ok=True)
     files = [SHOTS / f"{n}.png" for n in names] if names else SHOTS.glob("*.png")
@@ -372,11 +485,12 @@ def ship(message, quick=None):
 def main():
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", choices=["check", "test", "shot", "scenes", "baseline", "kill", "ship", "build"])
+    ap.add_argument("cmd", choices=["check", "test", "shot", "scenes", "baseline", "kill", "ship", "build", "previs"])
     ap.add_argument("names", nargs="*")
     ap.add_argument("-m", "--message")
     ap.add_argument("--quick", help="ship: run only these tests (comma list)")
     ap.add_argument("--demo-voice", action="store_true", help="build: allow karina voice files (private demo apk)")
+    ap.add_argument("--level", help="previs: conti strengths to film, 0 off, 1 weak, 2 mid, 3 strong (comma list, default 1,2,3)")
     ap.add_argument("--pc", action="store_true", help="build: Windows exe (unity/Build/pc) instead of Android apk")
     ap.add_argument("--dotnet-only", action="store_true", help="test: skip the Unity EditMode and PlayMode runs")
     a = ap.parse_args()
@@ -395,6 +509,8 @@ def main():
         return shot(names)
     if a.cmd == "baseline":
         return baseline(names)
+    if a.cmd == "previs":
+        return previs(names, a.level)
     if a.cmd == "build":
         return build_pc(a.demo_voice) if a.pc else build(a.demo_voice)
     if a.cmd == "ship":

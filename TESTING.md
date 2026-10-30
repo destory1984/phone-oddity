@@ -8,10 +8,12 @@
 |---|---|---|---|
 | dotnet 규칙 시험 | `test --dotnet-only` | 약 5초 | `harness/Oddity.Core.Tests` 70개. 대본, 선택, 효과, 저장 |
 | Unity EditMode | `test` | 약 1분 | `unity/Assets/Oddity/Tests/EditMode`. 대본 내용, 어셈블리 컴파일 |
-| Unity PlayMode | `test` | 수 분 | `unity/Assets/Oddity/Tests/PlayMode`. 장면을 돌려 메신저, 프롤로그, 출현, 옷을 본다. `test` 전체는 dotnet 시험까지 255개 |
+| Unity PlayMode | `test` | 수 분 | `unity/Assets/Oddity/Tests/PlayMode`. 장면을 돌려 메신저, 프롤로그, 출현, 옷을 본다. `test` 전체는 dotnet 시험까지 256개 |
 | shot | `shot 장면` | 약 30초 | 장면을 800px 폭 png 로 찍고 baseline 과 차이를 % 로 본다 |
+| previs | `previs 장면 --level 2` | 약 1분 (한 벌) | 장면을 자동으로 넘겨 소리 든 낮은 화질 mp4 로 찍는다. 카메라 움직임은 정지 그림으로 못 보니 폰에서 틀어 본다 |
 | check | `check` | 약 20초 | 컴파일만. 시험보다 먼저 돌린다 |
 
+- `previs` 는 게임 시간을 프레임에 묶지 않고 실시간으로 찍는다. `Time.captureDeltaTime` 은 `Time.unscaledTime` 을 못 묶는데, 입력중 표시와 카메라 이동이 unscaledTime 을 쓰기 때문이다. 결과는 `shots/previs/` 에 두고 커밋하지 않는다.
 - 규칙은 먼저 dotnet 시험으로 만들고, 화면이 필요한 것만 Unity 시험으로 한다.
 - 시험 이름은 `대상_기대` 꼴로 짓는다. 예: `Close_AdvancesSlotAndWaits60s`.
 
