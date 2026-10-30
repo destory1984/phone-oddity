@@ -11,7 +11,7 @@ namespace Oddity.Game
     /// </summary>
     public partial class HarinPuppet
     {
-        public const float HairSaturation = 0.85f;
+        public const float HairSaturation = 0.93f;
         public const float HairMatcapScale = 0.5f, HairEmissionScale = 0.5f;
 
         // desaturated copies, shared by every puppet that uses the same source texture

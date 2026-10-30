@@ -104,7 +104,7 @@ namespace Oddity.PlayTests
             foreach (var m in skin) Assert.Greater(m.GetFloat("_ShadingToonyFactor"), 0.5f, m.name + ": imported toony back");
         }
 
-        // Task 27: the hair textures lose 15% of their saturation (the hue stays teal) and the matcap
+        // Task 27: the hair textures lose 7% of their saturation (the hue stays teal) and the matcap
         // highlight on the hair is halved.
         [UnityTest]
         public IEnumerator Hair_LessSaturated()
@@ -112,7 +112,7 @@ namespace Oddity.PlayTests
             yield return LoadScene();
             var harin = Harin();
             Assert.GreaterOrEqual(harin.HairMaterials, 2, "front and back hair");
-            Assert.That(harin.HairSaturationRatio, Is.InRange(0.8f, 0.9f), "saturation after / before");
+            Assert.That(harin.HairSaturationRatio, Is.InRange(0.88f, 0.98f), "saturation after / before");
             var hair = harin.GetComponentsInChildren<Renderer>(true).SelectMany(r => r.sharedMaterials)
                 .Where(m => m != null && m.name.Contains("HAIR")).Distinct().ToList();
             Assert.GreaterOrEqual(hair.Count, 2);
@@ -132,7 +132,7 @@ namespace Oddity.PlayTests
             var d = new Color(max - k * (max - c.r), max - k * (max - c.g), max - k * (max - c.b));
             Color.RGBToHSV(d, out float h1, out float s1, out _);
             Assert.AreEqual(h0, h1, 0.01f, "hue");
-            Assert.AreEqual(s0 * 0.85f, s1, 0.01f, "saturation 15% lower");
+            Assert.AreEqual(s0 * 0.93f, s1, 0.01f, "saturation 7% lower");
         }
 
         // The prologue room tint on clothes is undone exactly when the room look goes off.

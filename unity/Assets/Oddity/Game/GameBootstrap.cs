@@ -52,9 +52,9 @@ namespace Oddity.Game
         public const int BigChoiceEffect = 2;
 
         // Phone stage framing: her eyes this far down Harin's window (0 = top), and the window this wide (m)
-        // at her face, so the face fills about a third of it and the window ends just under the collarbones.
-        public const float AppStageEyeLine = 0.33f; // Head + 7.5 cm; the drawn eyes land about 5% lower
-        public const float AppStageFrameWidth = 0.45f;
+        // at her face, so the face fills about 40% of it and the window ends just under the collarbones.
+        public const float AppStageEyeLine = 0.38f; // Head + 7.5 cm; the drawn eyes land about 5% lower
+        public const float AppStageFrameWidth = 0.36f;
 
         public static float CalmGlitch(float lineGlitch) => Mathf.Clamp01(lineGlitch) * GlitchCalmScale;
         public static float MomentGlitch(float lineGlitch) => Mathf.Max(Mathf.Clamp01(lineGlitch), GlitchMomentFloor);
