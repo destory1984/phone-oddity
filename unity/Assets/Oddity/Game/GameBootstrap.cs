@@ -94,6 +94,7 @@ namespace Oddity.Game
         bool _bigChoice;          // the next Harin line follows a big choice
         PokeController _poke;
         string _pokeJson;
+        AppStageDirector _stage;
 
         /// <summary>Fired after the Night slot is closed and saved, just before the emergence plays.</summary>
         public event Action NightFinished;
@@ -131,6 +132,8 @@ namespace Oddity.Game
         /// <summary>Harin's model in use now: the indoor outfit during the prologue, the summer one otherwise.</summary>
         public HarinPuppet Harin => wardrobe != null && wardrobe.Current != null ? wardrobe.Current : harin;
         public HarinWardrobe Wardrobe => wardrobe;
+        /// <summary>Camera director of Harin's phone window (null until the scene has the camera).</summary>
+        public AppStageDirector Stage => _stage;
 
         string PrologueSeenPath => string.IsNullOrEmpty(SavePathOverride)
             ? Path.Combine(Application.persistentDataPath, PrologueSeenFile)
@@ -157,16 +160,8 @@ namespace Oddity.Game
         /// <see cref="AppStageFrameWidth"/> wide at her eyes and her eyes sit <see cref="AppStageEyeLine"/>
         /// of the way down the part of the square picture the chat window shows.
         /// </summary>
-        public static UnityEngine.Pose AppStageCameraPose(Vector3 eyes, Vector3 facing, float fov)
-        {
-            facing.y = 0f;
-            facing = facing.sqrMagnitude < 1e-6f ? Vector3.forward : facing.normalized;
-            float w = AppStageFrameWidth;                                   // square picture: height = width
-            float d = w * 0.5f / Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad);
-            float below = w * (0.5f - AppStageEyeLine * ChatView.WindowShare); // camera this far under her eyes
-            var pos = eyes + facing * d - Vector3.up * below;
-            return new UnityEngine.Pose(pos, Quaternion.LookRotation(-facing, Vector3.up));
-        }
+        public static UnityEngine.Pose AppStageCameraPose(Vector3 eyes, Vector3 facing, float fov) =>
+            AppStageDirector.PoseFor(eyes, facing, fov, new CamShots.Preset { Name = "front", Width = AppStageFrameWidth, EyeLine = AppStageEyeLine });
 
         void FrameAppStage()
         {
@@ -178,6 +173,10 @@ namespace Oddity.Game
             var eyes = head + Vector3.up * 0.075f * Harin.transform.lossyScale.y;
             var pose = AppStageCameraPose(eyes, Harin.transform.forward, cam.fieldOfView);
             cam.transform.SetPositionAndRotation(pose.position, pose.rotation);
+            // from here the director moves it: the first shot is the morning default
+            if (_stage == null) _stage = gameObject.AddComponent<AppStageDirector>();
+            _stage.Init(cam, () => Harin, () => _voice != null && _voice.IsBusy);
+            _stage.BeginSlot(Slot.Morning, 1);
         }
 
         // Reads one StreamingAssets file: a plain file on desktop, UnityWebRequest on Android (inside the apk).
@@ -396,6 +395,7 @@ namespace Oddity.Game
                 return;
             }
             if (announce) chat.ShowLockNotice("하린: " + OpeningText(State.Slot));
+            if (_stage != null) _stage.BeginSlot(State.Slot, State.Day);
             _runner.StartSlot(State.Slot);
         }
 
@@ -465,6 +465,7 @@ namespace Oddity.Game
             else
             {
                 bool harinLine = line.Who == "harin";
+                if (_stage != null) _stage.OnLine(line);
                 bool moment = line.Glitch >= GlitchMomentAt
                     || (harinLine && (_bigChoice || (State.Day >= CoreInfo.EmergenceDay && State.Slot == Slot.Night)));
                 if (harinLine) _bigChoice = false;
@@ -529,7 +530,12 @@ namespace Oddity.Game
                 else Harin.SetFace(HarinPuppet.IdleFace);
             }
             if (_glitchMoment != null) { StopCoroutine(_glitchMoment); _glitchMoment = null; }
-            if (moment && isActiveAndEnabled) _glitchMoment = StartCoroutine(GlitchMoment(line.Glitch));
+            if (moment && isActiveAndEnabled)
+            {
+                _glitchMoment = StartCoroutine(GlitchMoment(line.Glitch));
+                // only the glitch moment cuts to G (a bigChoice or night flash is the same moment)
+                if (_stage != null) _stage.GlitchCut();
+            }
             else SetPhoneGlitch(CalmGlitch(line.Glitch));
         }
 
@@ -568,6 +574,7 @@ namespace Oddity.Game
         void LeavePhone()
         {
             _pendingFace = null;
+            if (_stage != null) _stage.Enabled = false;
             if (_glitchMoment != null) { StopCoroutine(_glitchMoment); _glitchMoment = null; }
             if (Harin != null) { Harin.SetIdle(false); Harin.StopPokeMotion(); }
             if (_poke != null) _poke.Cancel();
@@ -587,6 +594,7 @@ namespace Oddity.Game
         void OnChoicesShown(System.Collections.Generic.IReadOnlyList<Choice> choices)
         {
             _awaitingTap = false;
+            if (_stage != null) _stage.SetChoices(true);
             chat.ShowChoices(choices, _runner.Current != null && _runner.Current.Type == "feeling");
         }
 

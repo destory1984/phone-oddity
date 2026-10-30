@@ -16,3 +16,6 @@ prologue_closeup
 prologue_blush
 prologue_notice
 prologue_rewind
+chat_cam_M
+chat_cam_S
+chat_cam_E

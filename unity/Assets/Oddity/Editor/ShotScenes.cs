@@ -54,6 +54,16 @@ namespace Oddity.EditorTools
             for (int i = 0; i < taps; i++) chat.Tap();
         }
 
+        // The morning chat, second line, with the messenger window held on one shot (no drift).
+        static void CamShot(string shot)
+        {
+            FitPhoneCamera();
+            int taps = 0;
+            PlayMorning(c => taps++ >= 1);
+            var boot = UnityEngine.Object.FindFirstObjectByType<GameBootstrap>();
+            boot.Stage.Force(shot);
+        }
+
         static void FitPhoneCamera()
         {
             var cam = GameObject.Find("MainCamera").GetComponent<Camera>();
@@ -162,6 +172,9 @@ namespace Oddity.EditorTools
                     PlayMorning(c => taps++ >= 1); // second line of the morning
                 },
             },
+            new ShotScene { Name = "chat_cam_M", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 600, Setup = () => CamShot("M") },
+            new ShotScene { Name = "chat_cam_S", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 600, Setup = () => CamShot("S") },
+            new ShotScene { Name = "chat_cam_E", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 600, Setup = () => CamShot("E") },
             new ShotScene
             {
                 Name = "chat_poke_cheek", // the cheek touched twice: the stage 2 reaction

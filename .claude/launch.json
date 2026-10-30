@@ -4,8 +4,29 @@
     {
       "name": "harin-viewer",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8771", "--directory", "harin"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8771",
+        "--directory",
+        "harin"
+      ],
       "port": 8771,
+      "autoPort": false
+    },
+    {
+      "name": "voice-review",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8772",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "shots/voice_test"
+      ],
+      "port": 8772,
       "autoPort": false
     }
   ]

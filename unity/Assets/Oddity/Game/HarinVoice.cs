@@ -129,6 +129,8 @@ namespace Oddity.Game
         public bool SourcePlaying => _source != null && _source.isPlaying;
         /// <summary>True while a clip is (logically) playing; does not depend on an audio device.</summary>
         public bool IsPlaying => _clip != null && Time.time - _startedAt < _clip.length;
+        /// <summary>True while a clip plays or one waits to start (the camera does not cut then).</summary>
+        public bool IsBusy => _pending != null || IsPlaying;
         /// <summary>Name of the clip playing or waiting, or null.</summary>
         public string CurrentClip => _clip != null ? _clip.name : _pending != null ? _pending.name : null;
 

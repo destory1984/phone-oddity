@@ -27,6 +27,8 @@ namespace Oddity.Core
         public float Typing = -1f;
         /// <summary>Optional staging cue for the 3D scene (camera, gesture). Null when absent.</summary>
         public string Beat;
+        /// <summary>Optional messenger camera shot name for this line (M, C, Clow, E, S, H, G). Null = automatic rules.</summary>
+        public string Cam;
     }
 
     public class Choice

@@ -72,6 +72,18 @@ namespace Oddity.Core.Tests
         }
 
         [Test]
+        public void Parse_ReadsCam()
+        {
+            const string json = @"{ ""day"": 1, ""scenes"": [
+  { ""id"": ""a"", ""slot"": ""night"",
+    ""lines"": [ { ""who"": ""harin"", ""text"": ""hi"", ""cam"": ""E"" }, { ""who"": ""player"", ""text"": ""yo"" } ] } ] }";
+
+            Scene a = ScriptLoader.Parse(json).Get("a");
+            Assert.AreEqual("E", a.Lines[0].Cam);
+            Assert.IsNull(a.Lines[1].Cam);
+        }
+
+        [Test]
         public void Parse_SceneNext()
         {
             const string json = @"{ ""day"": 12, ""scenes"": [
