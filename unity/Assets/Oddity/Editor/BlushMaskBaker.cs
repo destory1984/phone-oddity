@@ -22,7 +22,7 @@ namespace Oddity.EditorTools
 
         public static void BakeBatch() => Bake(true);
 
-        /// <summary>Cheek mask of the indoor outfit (B2, the prologue); its face mesh UVs are its own.</summary>
+        /// <summary>Cheek mask of the indoor outfit (B2-v2, the prologue); its face mesh UVs are its own.</summary>
         public const string IndoorMaskPath = "Assets/Oddity/Art/harin_indoor_blush_mask.png";
 
         /// <summary>

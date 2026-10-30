@@ -74,8 +74,8 @@ namespace Oddity.EditorTools
 
         /// <summary>
         /// Replaces one of Harin's VRMs in Prototype.unity with another VRoid export. <paramref name="outfit"/> picks the
-        /// wardrobe slot: Summer (outfit B, the phone, the emergence and act 2) or Indoor (outfit B2, the prologue).
-        /// <paramref name="vrmPath"/> is a project asset path ("Assets/Models/harin-summer-B.vrm") or a file on
+        /// wardrobe slot: Summer (the outing outfit M1: cable knit and satin mini; the phone, the emergence and act 2) or Indoor (outfit B2-v2, the prologue).
+        /// <paramref name="vrmPath"/> is a project asset path ("Assets/Models/harin-outing-M1.vrm") or a file on
         /// disk, which is copied into Assets/Models first. The new model takes the old one's parent, transform,
         /// layer and rendering layers; HarinPuppet (with HarinPose, HarinExpression) and any other Oddity
         /// components are copied over, and scene references to the old puppet, object or transform are pointed

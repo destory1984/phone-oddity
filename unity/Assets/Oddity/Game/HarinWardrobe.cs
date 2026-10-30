@@ -4,7 +4,7 @@ using UnityEngine;
 namespace Oddity.Game
 {
     /// <summary>
-    /// Harin's two models in the scene: the summer outfit B (the phone, the emergence and act 2) and the indoor
+    /// Harin's two models in the scene: the summer slot, outing M1 (the phone, the emergence and act 2) and the indoor
     /// outfit B2 (only the day 12 prologue at home). Exactly one is active; <see cref="Current"/> is the one in
     /// use. Both carry the same HarinPuppet settings, layer and rendering layers; each has its own cheek mask.
     /// The game swaps only at the start of the prologue and while the rewind screen is black.

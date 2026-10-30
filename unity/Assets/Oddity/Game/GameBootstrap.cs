@@ -849,7 +849,7 @@ namespace Oddity.Game
             _awaitingTap = false;
             LeavePhone();
             chat.SetVisible(false);
-            // day 12 at home: the indoor outfit (B2); the phone, the emergence and act 2 keep the summer one (B)
+            // day 12 at home: the indoor outfit (B2); the phone, the emergence and act 2 keep the summer slot (M1)
             if (wardrobe != null) wardrobe.Wear(HarinWardrobe.Outfit.Indoor);
             _director = PrologueDirector.Create(gameObject, Harin, emergence, emergence.MainCamera, _subtitle, screenNoise, chat.Font);
             _director.Begin();

@@ -13,7 +13,7 @@ using UnityEngine.TestTools;
 namespace Oddity.PlayTests
 {
     /// <summary>
-    /// The swapped-in VRoid outfit (summer B: blouse, pleated skirt): skin and hair materials are still found,
+    /// The swapped-in VRoid outfit (summer slot, outing M1: cable knit, satin mini skirt): skin and hair materials are still found,
     /// the skirt stays outside the thighs when she sits, and the spring bones rest still on the phone stage.
     /// </summary>
     public class OutfitTests

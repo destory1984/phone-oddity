@@ -11,7 +11,7 @@ using UnityEngine.TestTools;
 namespace Oddity.PlayTests
 {
     /// <summary>
-    /// Harin's two outfits: indoor B2 for the day 12 prologue only, summer B for the phone, the emergence and act 2.
+    /// Harin's two outfits: indoor B2 for the day 12 prologue only, summer M1 for the phone, the emergence and act 2.
     /// The swap happens at the prologue start and while the rewind screen is black.
     /// </summary>
     public class WardrobeTests
