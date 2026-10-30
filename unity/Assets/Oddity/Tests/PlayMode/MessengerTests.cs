@@ -123,10 +123,9 @@ namespace Oddity.PlayTests
             var chat = Chat();
             var harin = HarinWardrobe.ActivePuppet();
 
-            // morning line 2 carries glitch 0.2
-            Line expected = _script.EntryFor(Slot.Morning).Lines[1];
+            // the morning notice (line 1) carries glitch 0.2
+            Line expected = _script.EntryFor(Slot.Morning).Lines[0];
             Assert.AreEqual(0.2f, expected.Glitch, 0.0001f);
-            chat.Tap();
             yield return null;
 
             Assert.AreEqual(expected.Text, chat.CurrentLineText);

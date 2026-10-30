@@ -89,7 +89,7 @@ namespace Oddity.PlayTests
         [UnityTest]
         public IEnumerator AppStage_GlitchCalmByDefault()
         {
-            Assert.LessOrEqual(GameBootstrap.GlitchCalmScale, 1f / 3f + 1e-5f);
+            Assert.LessOrEqual(GameBootstrap.GlitchCalmScale, 0.09f + 1e-5f);
             for (float g = 0f; g <= 1f; g += 0.1f)
                 Assert.LessOrEqual(GameBootstrap.CalmGlitch(g), GameBootstrap.MomentGlitch(g) / 3f + 1e-5f, "at " + g);
 
@@ -99,13 +99,12 @@ namespace Oddity.PlayTests
             var chat = UnityEngine.Object.FindFirstObjectByType<ChatView>();
             var harin = Harin();
 
-            chat.Tap(); // line 2, system, glitch 0.2
-            yield return null;
+            yield return null; // line 1, the install notice, glitch 0.2
             Assert.IsFalse(boot.GlitchMomentActive);
             Assert.AreEqual(GameBootstrap.CalmGlitch(0.2f), chat.GlitchAmount, 1e-4f);
             Assert.LessOrEqual(chat.GlitchAmount, 0.2f / 3f + 1e-4f);
 
-            chat.Tap(); // line 3, Harin, glitch 0.7: a moment
+            chat.Tap(); // line 2, Harin, glitch 0.7: a moment
             yield return null;
             Assert.IsTrue(boot.GlitchMomentActive, "a 0.7 line flashes");
             float moment = chat.GlitchAmount;

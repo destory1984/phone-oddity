@@ -42,7 +42,8 @@ namespace Oddity.Game
         // Phone glitch: the script's glitch value is shown at a third or less ("calm") so her hair and straps
         // do not smear on every line; emotional moments flash at full strength for a moment, then settle.
         /// <summary>Steady glitch in the phone = the line's glitch times this (at most a third of the moment).</summary>
-        public const float GlitchCalmScale = 0.3f;
+        // Task 35: 0.3 -> 0.09 (30% of the old steady strength), so grain and bands do not sit on her face.
+        public const float GlitchCalmScale = 0.09f;
         /// <summary>Lines with at least this glitch flash at full strength.</summary>
         public const float GlitchMomentAt = 0.5f;
         /// <summary>Flash strength after a big choice and on the emergence night, when the line itself has less.</summary>
@@ -55,6 +56,13 @@ namespace Oddity.Game
         // at her face, so the face fills about 40% of it and the window ends just under the collarbones.
         public const float AppStageEyeLine = 0.38f; // Head + 7.5 cm; the drawn eyes land about 5% lower
         public const float AppStageFrameWidth = 0.36f;
+
+        /// <summary>Seconds the install notice stays alone before the script moves on by itself to Harin's first line.</summary>
+        public const float NoticeAutoSeconds = 0.4f;
+        // Task 35: the two install lines became one, so her voice clips (numbered from the old script) shift by one.
+        static readonly System.Collections.Generic.Dictionary<string, int> VoiceLineOffset =
+            new System.Collections.Generic.Dictionary<string, int> { { "d1_morning", 1 } };
+        int _lineSerial;
 
         public static float CalmGlitch(float lineGlitch) => Mathf.Clamp01(lineGlitch) * GlitchCalmScale;
         public static float MomentGlitch(float lineGlitch) => Mathf.Max(Mathf.Clamp01(lineGlitch), GlitchMomentFloor);
@@ -425,7 +433,8 @@ namespace Oddity.Game
                 _lineScene = sceneId;
                 _lineNumber = 0;
             }
-            return ++_lineNumber;
+            int offset;
+            return ++_lineNumber + (VoiceLineOffset.TryGetValue(sceneId ?? "", out offset) ? offset : 0);
         }
 
         void OnLineShown(Line line)
@@ -472,6 +481,12 @@ namespace Oddity.Game
                     _pendingFace = null;
                     ApplyPhoneLine(line, moment);
                 }
+                // the install notice does not wait for a tap: her first line comes by itself
+                int serial = ++_lineSerial;
+                if (ChatView.TypingEnabled && line.Who == "system" && isActiveAndEnabled && _runner != null
+                    && _runner.Current != null && _runner.Current.Lines.Count > 1 && _lineNumber == 1
+                    && _runner.Current.Lines[1].Who == "harin")
+                    StartCoroutine(AutoAdvanceNotice(serial));
                 return;
             }
             if (Harin != null)
@@ -515,6 +530,14 @@ namespace Oddity.Game
             if (_glitchMoment != null) { StopCoroutine(_glitchMoment); _glitchMoment = null; }
             if (moment && isActiveAndEnabled) _glitchMoment = StartCoroutine(GlitchMoment(line.Glitch));
             else SetPhoneGlitch(CalmGlitch(line.Glitch));
+        }
+
+        System.Collections.IEnumerator AutoAdvanceNotice(int serial)
+        {
+            yield return new WaitForSeconds(NoticeAutoSeconds);
+            if (serial != _lineSerial || !_awaitingTap || _inPrologue || _act2) yield break;
+            _awaitingTap = false;
+            _runner.Advance();
         }
 
         System.Collections.IEnumerator GlitchMoment(float lineGlitch)

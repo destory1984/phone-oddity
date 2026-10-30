@@ -22,6 +22,8 @@ namespace Oddity.Game
         public const float WindowHeight = 960f;
         /// <summary>Share of the square Harin texture (from its top) that the window shows.</summary>
         public const float WindowShare = WindowHeight / CanvasWidth;
+        /// <summary>Task 35: the wallpaper's own grain and lines are shown at this share of their strength (a flat veil of its average colour over it).</summary>
+        public const float WallpaperNoiseScale = 0.4f;
         public const float ChoiceAreaHeight = 440f;
         public const float ChoiceButtonHeight = 110f;
         const float ChoiceSpacing = 20f;
@@ -91,6 +93,8 @@ namespace Oddity.Game
         public string LockNoticeText => _noticeText != null ? _noticeText.text : "";
         public int BubbleCount => _content != null ? _content.childCount : 0;
         public float GlitchAmount { get; private set; }
+        /// <summary>Share of the wallpaper's noise left after the veil (1 = untouched).</summary>
+        public float WallpaperNoiseLeft { get; private set; } = 1f;
         /// <summary>True while Harin's typing bubble is shown and her next line is held back.</summary>
         public bool IsTyping => _typingRoutine != null;
         /// <summary>True when the typing bubble row exists in the chat.</summary>
@@ -375,6 +379,16 @@ namespace Oddity.Game
             UiKit.Stretch(bg.rectTransform);
             bg.raycastTarget = true;
             bg.gameObject.AddComponent<TapCatcher>().Init(this);
+            if (wallpaper != null)
+            {
+                var veil = MakeImage("WallpaperVeil", _root, AverageColor(wallpaper.texture));
+                var vc = veil.color;
+                vc.a = 1f - WallpaperNoiseScale;
+                veil.color = vc;
+                veil.raycastTarget = false;
+                UiKit.Stretch(veil.rectTransform);
+                WallpaperNoiseLeft = WallpaperNoiseScale;
+            }
 
             // Harin's window (top)
             var window = new GameObject("HarinWindow", typeof(RectTransform), typeof(RawImage)).GetComponent<RawImage>();
@@ -490,6 +504,35 @@ namespace Oddity.Game
             BuildNotice();
             HideBottom();
             _choiceArea.gameObject.SetActive(false);
+        }
+
+        // Mean colour of a texture (no read/write needed): shrink it on the GPU, then read the small copy.
+        static Color AverageColor(Texture2D tex)
+        {
+            var fallback = new Color(0.89f, 0.86f, 0.96f, 1f);
+            if (tex == null) return fallback;
+            var rt = RenderTexture.GetTemporary(8, 8, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+            var prev = RenderTexture.active;
+            try
+            {
+                Graphics.Blit(tex, rt);
+                RenderTexture.active = rt;
+                var small = new Texture2D(8, 8, TextureFormat.RGBA32, false);
+                small.ReadPixels(new Rect(0, 0, 8, 8), 0, 0);
+                small.Apply();
+                Color sum = Color.black;
+                foreach (var c in small.GetPixels()) sum += c;
+                DestroyImmediate(small);
+                var mean = sum / 64f;
+                mean.a = 1f;
+                return mean;
+            }
+            catch (Exception) { return fallback; }
+            finally
+            {
+                RenderTexture.active = prev;
+                RenderTexture.ReleaseTemporary(rt);
+            }
         }
 
         void BuildNamePanel()
