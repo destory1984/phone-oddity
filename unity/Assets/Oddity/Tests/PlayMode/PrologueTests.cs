@@ -200,28 +200,81 @@ namespace Oddity.PlayTests
         [Test]
         public void Voice_DefaultIsNotKarina()
         {
-            Assert.AreEqual("harinA", HarinVoice.DefaultVoiceSet);
+            Assert.AreEqual("harinD", HarinVoice.DefaultVoiceSet);
             Assert.AreEqual("karina", HarinVoice.VoiceSets[HarinVoice.VoiceSets.Length - 1], "karina is last in the list");
             Assert.AreEqual(HarinVoice.DefaultVoiceSet, HarinVoice.VoiceSets[0]);
+        }
+
+        // Runs a voice-pref check with the new and old keys saved and restored around it.
+        static void WithPrefs(string v2, string old, Action body)
+        {
+            const string OldKey = "oddity.voiceSet";
+            bool hadV2 = PlayerPrefs.HasKey(HarinVoice.VoiceSetPref), hadOld = PlayerPrefs.HasKey(OldKey);
+            string savedV2 = PlayerPrefs.GetString(HarinVoice.VoiceSetPref, ""), savedOld = PlayerPrefs.GetString(OldKey, "");
+            try
+            {
+                PlayerPrefs.DeleteKey(HarinVoice.VoiceSetPref);
+                PlayerPrefs.DeleteKey(OldKey);
+                if (v2 != null) PlayerPrefs.SetString(HarinVoice.VoiceSetPref, v2);
+                if (old != null) PlayerPrefs.SetString(OldKey, old);
+                HarinVoice.ClearVoiceSetCache();
+                body();
+            }
+            finally
+            {
+                if (hadV2) PlayerPrefs.SetString(HarinVoice.VoiceSetPref, savedV2); else PlayerPrefs.DeleteKey(HarinVoice.VoiceSetPref);
+                if (hadOld) PlayerPrefs.SetString(OldKey, savedOld); else PlayerPrefs.DeleteKey(OldKey);
+                HarinVoice.ClearVoiceSetCache();
+            }
+        }
+
+        static string ExpectedStart(string preferred)
+        {
+            if (HarinVoice.HasVoiceSet(preferred)) return preferred;
+            foreach (var s in HarinVoice.VoiceSets) if (HarinVoice.HasVoiceSet(s)) return s;
+            return HarinVoice.DefaultVoiceSet;
+        }
+
+        [Test]
+        public void Voice_DefaultIsHarinD()
+        {
+            WithPrefs(null, null, () => Assert.AreEqual(ExpectedStart("harinD"), HarinVoice.VoiceSet));
+        }
+
+        [Test]
+        public void Voice_OldPrefMigratesToHarinD()
+        {
+            WithPrefs(null, "harinA", () => Assert.AreEqual(ExpectedStart("harinD"), HarinVoice.VoiceSet, "old key is ignored"));
+        }
+
+        [Test]
+        public void Voice_PanelChoiceKept()
+        {
+            WithPrefs(null, "harinA", () =>
+            {
+                HarinVoice.VoiceSet = "harinB";
+                HarinVoice.ClearVoiceSetCache();
+                Assert.AreEqual(ExpectedStart("harinB"), HarinVoice.VoiceSet);
+            });
         }
 
         [Test]
         public void Voice_SavedSetMissingFallsBack()
         {
-            bool had = PlayerPrefs.HasKey("oddity.voiceSet");
-            string saved = PlayerPrefs.GetString("oddity.voiceSet", "");
+            bool had = PlayerPrefs.HasKey(HarinVoice.VoiceSetPref);
+            string saved = PlayerPrefs.GetString(HarinVoice.VoiceSetPref, "");
             try
             {
-                PlayerPrefs.SetString("oddity.voiceSet", "noSuchSet");
+                PlayerPrefs.SetString(HarinVoice.VoiceSetPref, "noSuchSet");
                 HarinVoice.ClearVoiceSetCache();
                 string expected = HarinVoice.DefaultVoiceSet;
                 foreach (var s in HarinVoice.VoiceSets) if (HarinVoice.HasVoiceSet(s)) { expected = s; break; }
                 Assert.AreEqual(expected, HarinVoice.VoiceSet);
-                Assert.AreEqual(expected, PlayerPrefs.GetString("oddity.voiceSet"), "PlayerPrefs corrected");
+                Assert.AreEqual(expected, PlayerPrefs.GetString(HarinVoice.VoiceSetPref), "PlayerPrefs corrected");
             }
             finally
             {
-                if (had) PlayerPrefs.SetString("oddity.voiceSet", saved); else PlayerPrefs.DeleteKey("oddity.voiceSet");
+                if (had) PlayerPrefs.SetString(HarinVoice.VoiceSetPref, saved); else PlayerPrefs.DeleteKey(HarinVoice.VoiceSetPref);
                 HarinVoice.ClearVoiceSetCache();
             }
         }
@@ -234,18 +287,18 @@ namespace Oddity.PlayTests
             {
                 HarinVoice.VoiceSet = "karina";
                 Assert.AreEqual("harin_p_dinner_3_karina", HarinVoice.LineClipName("p_dinner", 3));
-                Assert.AreEqual("harinA", HarinVoice.NextVoiceSet());
+                Assert.AreEqual("harinD", HarinVoice.NextVoiceSet());
                 HarinVoice.VoiceSet = HarinVoice.NextVoiceSet();
-                Assert.AreEqual("harin_p_dinner_3_harinA", HarinVoice.LineClipName("p_dinner", 3));
-                Assert.AreEqual("harinA", PlayerPrefs.GetString("oddity.voiceSet"), "the choice is remembered");
+                Assert.AreEqual("harin_p_dinner_3_harinD", HarinVoice.LineClipName("p_dinner", 3));
+                Assert.AreEqual("harinD", PlayerPrefs.GetString(HarinVoice.VoiceSetPref), "the choice is remembered");
 
                 var go = new GameObject("VoiceTest");
                 var voice = go.AddComponent<HarinVoice>();
                 voice.Init(null);
                 voice.PlayLine("p_dinner", 3, "happy", "teases");
                 // with the placeholder audio present the line's own clip plays; without it, nothing or a short sound
-                if (Resources.Load<AudioClip>(HarinVoice.DefaultResourceDir + "harin_p_dinner_3_harinA") != null)
-                    Assert.AreEqual("harin_p_dinner_3_harinA", voice.CurrentClip);
+                if (Resources.Load<AudioClip>(HarinVoice.DefaultResourceDir + "harin_p_dinner_3_harinD") != null)
+                    Assert.AreEqual("harin_p_dinner_3_harinD", voice.CurrentClip);
                 else if (voice.CurrentClip != null)
                     StringAssert.StartsWith("harin_sfx_", voice.CurrentClip);
                 HarinVoice.VoiceSet = "karina";
@@ -475,7 +528,7 @@ namespace Oddity.PlayTests
                 bool all = true;
                 foreach (var set in HarinVoice.VoiceSets) all &= HarinVoice.HasVoiceSet(set);
                 if (all)
-                    CollectionAssert.AreEqual(new[] { "harinA", "harinB", "harinC", "harinD", "karina" }, seen);
+                    CollectionAssert.AreEqual(new[] { "harinD", "harinA", "harinB", "harinC", "karina" }, seen);
                 foreach (var set in seen)
                     CollectionAssert.Contains(HarinVoice.VoiceSets, set);
                 yield return null;

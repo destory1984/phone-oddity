@@ -148,14 +148,14 @@ namespace Oddity.PlayTests
             {
                 yield return LoadScene();
                 var voice = Boot().Voice;
-                HarinVoice.VoiceSet = "harinA";
+                HarinVoice.VoiceSet = "harinD";
                 bool present = Resources.Load<AudioClip>(HarinVoice.DefaultResourceDir + HarinVoice.PokeClipName(7)) != null;
                 if (present)
                 {
                     Touch(Viewport(0f, -0.04f), ref _pokeClock);
                     Assert.AreEqual(1, Boot().Poke.Reactions);
                     StringAssert.StartsWith("harin_poke_", voice.CurrentClip ?? "", "poke clip");
-                    StringAssert.EndsWith("_harinA", voice.CurrentClip);
+                    StringAssert.EndsWith("_harinD", voice.CurrentClip);
                     Assert.IsTrue(voice.IsPlaying);
                     var source = voice.GetComponent<AudioSource>();
                     Assert.IsNotNull(source);
@@ -168,7 +168,7 @@ namespace Oddity.PlayTests
                 Assert.IsNull(voice.CurrentClip, "karina has no poke lines");
                 Assert.IsFalse(voice.PlayPoke(0));
 
-                HarinVoice.VoiceSet = "harinA";
+                HarinVoice.VoiceSet = "harinD";
                 HarinVoice.ResourceDirOverride = "VoiceMissing/";
                 Assert.IsFalse(voice.PlayPoke(3), "no file");
                 Assert.IsNull(voice.CurrentClip);

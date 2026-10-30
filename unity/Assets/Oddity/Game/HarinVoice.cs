@@ -7,7 +7,7 @@ namespace Oddity.Game
     /// <summary>
     /// Placeholder voice for Harin's lines. Clips are loaded from Resources/Voice (the folder lives under
     /// Assets/Oddity/Audio/Placeholder, which is git-ignored): "harin_&lt;sceneId&gt;_&lt;lineNumber&gt;_&lt;set&gt;" for a whole
-    /// line, where the voice set (default "harinA") is picked in the dev panel and kept in PlayerPrefs;
+    /// line, where the voice set (default "harinD") is picked in the dev panel and kept in PlayerPrefs;
     /// otherwise a short sound picked by face or beat, half of the time. Missing files are silently skipped,
     /// so a clone without the placeholder audio plays without sound. While a clip plays, its loudness
     /// (RMS over 0.05 s) opens Harin's mouth ("aa" 0 to 0.8, with a little "ih" and "ou").
@@ -17,9 +17,10 @@ namespace Oddity.Game
         public const string DefaultResourceDir = "Voice/";
         public const float Volume = 0.9f;
         public const float SfxChance = 0.5f;
-        public const string DefaultVoiceSet = "harinA";
-        public static readonly string[] VoiceSets = { "harinA", "harinB", "harinC", "harinD", "karina" };
-        const string VoiceSetPref = "oddity.voiceSet";
+        public const string DefaultVoiceSet = "harinD";
+        public static readonly string[] VoiceSets = { "harinD", "harinA", "harinB", "harinC", "karina" };
+        /// <summary>v2: the default moved to harinD, so a value saved under the old key "oddity.voiceSet" is ignored.</summary>
+        public const string VoiceSetPref = "oddity.voiceSet.v2";
         static string _voiceSet;
         const float WindowSeconds = 0.05f;
         const float MouthGain = 4f;

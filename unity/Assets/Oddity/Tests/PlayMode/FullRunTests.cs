@@ -199,20 +199,20 @@ namespace Oddity.PlayTests
             File.WriteAllText(seen, "1");
             File.WriteAllText(_savePath + ".bad", "x");
             Assert.IsTrue(File.Exists(_savePath));
-            string before = PlayerPrefs.GetString("oddity.voiceSet", "");
-            PlayerPrefs.SetString("oddity.voiceSet", "harinB");
+            string before = PlayerPrefs.GetString(HarinVoice.VoiceSetPref, "");
+            PlayerPrefs.SetString(HarinVoice.VoiceSetPref, "harinB");
             try
             {
                 boot.ClearProgressFiles();
                 Assert.IsFalse(File.Exists(_savePath), "save deleted");
                 Assert.IsFalse(File.Exists(_savePath + ".bad"), ".bad deleted");
                 Assert.IsFalse(File.Exists(seen), "prologue-seen mark deleted");
-                Assert.AreEqual("harinB", PlayerPrefs.GetString("oddity.voiceSet", ""), "voice set kept");
+                Assert.AreEqual("harinB", PlayerPrefs.GetString(HarinVoice.VoiceSetPref, ""), "voice set kept");
                 boot.ClearProgressFiles(); // nothing left: no exception
             }
             finally
             {
-                PlayerPrefs.SetString("oddity.voiceSet", before);
+                PlayerPrefs.SetString(HarinVoice.VoiceSetPref, before);
             }
         }
 
