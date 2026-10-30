@@ -25,20 +25,13 @@ namespace Oddity.EditorTools
             try
             {
                 // Files of a real person's voice must not ship by accident: only ODDITY_DEMO_VOICE=1 lets them through.
-                bool demo = Environment.GetEnvironmentVariable(DemoVoiceEnv) == "1";
-                string voiceDir = Path.Combine(Application.dataPath, VoiceDir);
-                if (Directory.Exists(voiceDir) && !demo)
+                bool demo = IsDemo();
+                string karina = FindKarinaVoice();
+                if (karina != null && !demo)
                 {
-                    foreach (string f in Directory.GetFiles(voiceDir))
-                    {
-                        if (f.EndsWith(".meta", StringComparison.OrdinalIgnoreCase)) continue;
-                        if (Path.GetFileName(f).IndexOf("karina", StringComparison.OrdinalIgnoreCase) >= 0)
-                        {
-                            Fail("voice files of a real person are in Resources/Voice (" + Path.GetFileName(f)
-                                + "). Move them out, or set " + DemoVoiceEnv + "=1 for a private demo build (python tools/dev.py build --demo-voice).");
-                            return;
-                        }
-                    }
+                    Fail("voice files of a real person are in Resources/Voice (" + karina
+                        + "). Move them out, or set " + DemoVoiceEnv + "=1 for a private demo build (python tools/dev.py build --demo-voice).");
+                    return;
                 }
                 string output = Path.GetFullPath(Path.Combine(Application.dataPath, "..", demo ? DemoOutputRelative : OutputRelative));
                 Directory.CreateDirectory(Path.GetDirectoryName(output));
@@ -79,6 +72,25 @@ namespace Oddity.EditorTools
             {
                 Fail(e.ToString());
             }
+        }
+
+        internal static bool IsDemo()
+        {
+            return Environment.GetEnvironmentVariable(DemoVoiceEnv) == "1";
+        }
+
+        /// <summary>File name of the first karina voice file in Resources/Voice, or null.</summary>
+        internal static string FindKarinaVoice()
+        {
+            string voiceDir = Path.Combine(Application.dataPath, VoiceDir);
+            if (!Directory.Exists(voiceDir)) return null;
+            foreach (string f in Directory.GetFiles(voiceDir))
+            {
+                if (f.EndsWith(".meta", StringComparison.OrdinalIgnoreCase)) continue;
+                if (Path.GetFileName(f).IndexOf("karina", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return Path.GetFileName(f);
+            }
+            return null;
         }
 
         static void Fail(string message)

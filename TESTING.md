@@ -44,3 +44,10 @@
 - 사람이 할 일: 폰의 개발자 옵션과 USB 디버깅을 켜고, 케이블을 꽂은 뒤 폰 화면의 허용 창을 누른다.
 - karina 목소리 파일이 `Resources/Voice` 에 있으면 빌드가 멈춘다. 개인 시연용은 `python tools/dev.py build --demo-voice` (환경변수 `ODDITY_DEMO_VOICE=1`) 로 `oddity-proto-DEMO-private.apk` 를 만든다. 이 APK 는 남에게 주지 않는다.
 - 개발 빌드라 DEV 단추와 FPS 표시가 보인다. 30fps 이상인지 본다.
+
+## 6. PC에서 시험하기
+
+- `python tools/dev.py build --pc` 가 `unity/Build/pc/oddity-proto.exe` (개발 빌드, Mono) 를 만든다. 폴더 전체가 380MB 쯤이고 5분쯤 걸린다.
+- Unity 를 열지 않아도 exe 를 더블클릭하면 된다. 540x960 세로 창이고 크기를 바꿀 수 있다.
+- 로그를 보려면 `oddity-proto.exe -logFile 경로` 로 띄운다.
+- karina 음성 규칙은 폰 빌드와 같다. 개인 시연용은 `build --pc --demo-voice` 로 `unity/Build/pc-DEMO-private/` 에 짓고, 남에게 주지 않는다.

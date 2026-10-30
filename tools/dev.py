@@ -8,6 +8,7 @@
     python tools/dev.py baseline [SCENE ...]   copy current shots to shots/baseline/ for later diffs
     python tools/dev.py kill                   close the Unity editor that has this project open (not the Hub)
     python tools/dev.py ship -m "msg" [--quick a,b]   check, test (only a,b with --quick), commit here. Never pushes.
+    python tools/dev.py build --pc [--demo-voice]   Windows dev exe -> unity/Build/pc/oddity-proto.exe (Mono, 540x960 window)
     python tools/dev.py build [--demo-voice]   Android dev apk -> unity/Build/oddity-proto.apk, then active target back to Windows
                                                (--demo-voice: let karina voice files in; private apk oddity-proto-DEMO-private.apk)
 
@@ -150,6 +151,48 @@ def build(demo_voice=False):
     errors = cs_errors(text) or [l.strip() for l in text.splitlines() if "BUILD FAILED" in l or "rror" in l][:8]
     print(chr(10).join(errors[:8]))
     print(f"BUILD FAILED (exit {code}, {secs:.0f}s); see unity/Logs/build.log")
+    return 1
+
+
+PC_BUILD_TOUCHED = [
+    "unity/ProjectSettings/ProjectSettings.asset",
+    "unity/Assets/Settings/PC_RPAsset.asset",
+    "unity/Assets/Settings/UniversalRenderPipelineGlobalSettings.asset",
+]
+
+
+def build_pc(demo_voice=False):
+    """Run the PC build, then undo the side effects a build has on tracked settings files (only those clean before)."""
+    clean = []
+    for f in PC_BUILD_TOUCHED:
+        r = subprocess.run(["git", "status", "--porcelain", "--", f], cwd=ROOT, capture_output=True, text=True)
+        if r.returncode == 0 and not r.stdout.strip():
+            clean.append(f)
+    try:
+        return _build_pc(demo_voice)
+    finally:
+        for f in clean:
+            subprocess.run(["git", "checkout", "--", f], cwd=ROOT, capture_output=True)
+
+
+def _build_pc(demo_voice=False):
+    """Windows development exe (Mono, portrait window). Leaves the active target on Windows."""
+    outdir = UNITY_PROJECT / "Build" / ("pc-DEMO-private" if demo_voice else "pc")
+    exe = outdir / "oddity-proto.exe"
+    if demo_voice:
+        os.environ["ODDITY_DEMO_VOICE"] = "1"
+    else:
+        os.environ.pop("ODDITY_DEMO_VOICE", None)
+    t0 = time.time()
+    code, text = unity(["-quit", "-executeMethod", "Oddity.EditorTools.BuildWindows.Build"], "build-pc.log", timeout=3000)
+    secs = time.time() - t0
+    if code == 0 and exe.exists():
+        total = sum(f.stat().st_size for f in outdir.rglob("*") if f.is_file())
+        print(f"build ok {exe.relative_to(ROOT).as_posix()} folder {total / 1048576:.1f} MB, {secs:.0f}s")
+        return 0
+    errors = cs_errors(text) or [l.strip() for l in text.splitlines() if "BUILD FAILED" in l or "rror" in l][:8]
+    print(chr(10).join(errors[:8]))
+    print(f"BUILD FAILED (exit {code}, {secs:.0f}s); see unity/Logs/build-pc.log")
     return 1
 
 
@@ -334,6 +377,7 @@ def main():
     ap.add_argument("-m", "--message")
     ap.add_argument("--quick", help="ship: run only these tests (comma list)")
     ap.add_argument("--demo-voice", action="store_true", help="build: allow karina voice files (private demo apk)")
+    ap.add_argument("--pc", action="store_true", help="build: Windows exe (unity/Build/pc) instead of Android apk")
     ap.add_argument("--dotnet-only", action="store_true", help="test: skip the Unity EditMode and PlayMode runs")
     a = ap.parse_args()
     names = [n for arg in a.names for n in arg.split(",") if n]
@@ -352,7 +396,7 @@ def main():
     if a.cmd == "baseline":
         return baseline(names)
     if a.cmd == "build":
-        return build(a.demo_voice)
+        return build_pc(a.demo_voice) if a.pc else build(a.demo_voice)
     if a.cmd == "ship":
         if not a.message:
             ap.error("ship needs -m MESSAGE")
