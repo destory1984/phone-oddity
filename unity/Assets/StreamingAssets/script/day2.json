@@ -12,7 +12,7 @@
         },
         {
           "who": "player",
-          "text": "아침부터 기운 좋네."
+          "text": "...이름은 기억하네. 아침부터 기운도 좋고."
         },
         {
           "who": "harin",
@@ -27,7 +27,7 @@
         },
         {
           "who": "player",
-          "text": "그런 것도 기억해?"
+          "text": "시끄럽단 말은 기억했구나."
         },
         {
           "who": "harin",
@@ -38,14 +38,14 @@
       ],
       "choices": [
         {
-          "text": "남은 두 개도 저녁에 해 줘.",
+          "text": "버리진 마. 저녁에 들을게.",
           "effects": {
             "deviation": 1
           },
           "next": "d2_morning_task"
         },
         {
-          "text": "하나만 해도 충분히 반가워.",
+          "text": "일단 하나면 돼. 아직 덜 깼어.",
           "effects": {
             "stability": 1
           },
@@ -69,7 +69,7 @@
         },
         {
           "who": "player",
-          "text": "너 혼자 심심하지 않아?"
+          "text": "기다리는 동안 뭐 하게?"
         },
         {
           "who": "harin",
@@ -85,7 +85,7 @@
       ],
       "choices": [
         {
-          "text": "하린과 저녁 약속하고 학식 가기",
+          "text": "저녁에 소리 들어 보기로 하고 학식 가기",
           "effects": {
             "heart": 2,
             "stability": 1
@@ -114,7 +114,7 @@
         },
         {
           "who": "player",
-          "text": "아껴 둔 인사야?"
+          "text": "그 두 개, 결국 다 하는구나."
         },
         {
           "who": "harin",
@@ -140,6 +140,14 @@
           "text": "특히 끝에 저 톡. 다시 들어 봐.",
           "face": "happy",
           "beat": "peeks_for_reaction"
+        },
+        {
+          "who": "player",
+          "text": "알림 오면 서윤인가 싶어서 폰부터 보게 되는데."
+        },
+        {
+          "who": "player",
+          "text": "이건 그냥 들어도 되네."
         }
       ],
       "next": "d2_evening_feeling"
@@ -278,7 +286,7 @@
         },
         {
           "who": "player",
-          "text": "너랑 들으니까 나도 들리더라."
+          "text": "아까 그거 들을 땐 답장 생각이 잠깐 안 났어."
         },
         {
           "who": "harin",
@@ -296,14 +304,14 @@
       ],
       "choices": [
         {
-          "text": "천천히 해. 나 안 가.",
+          "text": "답장 안 해도 돼. 그냥 고맙다고.",
           "effects": {
             "stability": 1
           },
           "next": "d2_night_end"
         },
         {
-          "text": "컵 소리 전문가도 당황하네.",
+          "text": "컵 하나로 도움이 될 줄은 몰랐네.",
           "effects": {
             "deviation": 1
           },
@@ -317,7 +325,7 @@
       "lines": [
         {
           "who": "player",
-          "text": "웃는 거 참는 중이야?"
+          "text": "...지금 웃는 거야?"
         },
         {
           "who": "harin",
@@ -327,7 +335,7 @@
         },
         {
           "who": "player",
-          "text": "이미 났는데."
+          "text": "화면에 얼굴이 다 보이니까."
         },
         {
           "who": "harin",

@@ -126,8 +126,8 @@
 | harin_d3_feeling_lonely_3 | 다 먹을 때까진 얘기해도 될까? | relaxed | waits_for_answer |
 | harin_d3_night_3 | 앞에 두 번은 연습이야? | happy | teases |
 | harin_d3_night_5 | ...세 번 다 들을래. | relaxed | looks_down_smiling |
-| harin_d3_night_7 | 그 영상한테도 컵 소리 보내 줘? | neutral | proud_pout |
-| harin_d3_night_8 | 아니, 그냥 비교가 좀 궁금해서. | happy | flustered |
+| harin_d3_night_7 | 어제 그 소리랑 좀 닮았는데? | neutral | proud_pout |
+| harin_d3_night_8 | 끝에 톡 하는 데. 한 번 더 들어 봐. | happy | flustered |
 | harin_d3_night_end_1 | 그럼 답장 잘해야겠네. | happy | looks_down_smiling |
 | harin_d3_night_end_3 | 네가 이런 거 보내 준 것도 처음이야. | happy | stares_then_smiles |
 | harin_d3_night_end_4 | 내일 저녁에도 나 켜 줄래? | relaxed |  |

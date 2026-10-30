@@ -264,6 +264,24 @@ namespace Oddity.EditorTools
             },
             new ShotScene
             {
+                Name = "chat_choices_promise", // d1_evening_promise: the two long choice buttons
+                ScenePath = PrototypeScene,
+                CameraName = "MainCamera",
+                Setup = () =>
+                {
+                    PlayDay(1, Slot.Evening, 0);
+                    var chat = UnityEngine.Object.FindFirstObjectByType<ChatView>();
+                    var boot = UnityEngine.Object.FindFirstObjectByType<GameBootstrap>();
+                    for (int i = 0; i < 80 && !(boot.CurrentSceneId == "d1_evening_promise" && chat.VisibleButtonTexts.Count > 0); i++)
+                    {
+                        if (chat.VisibleButtonTexts.Count > 0) chat.PickChoice(0);
+                        else chat.Tap();
+                    }
+                    if (boot.CurrentSceneId != "d1_evening_promise") throw new Exception("d1_evening_promise not reached");
+                },
+            },
+            new ShotScene
+            {
                 Name = "dev_panel", // morning chat with the dev panel open
                 ScenePath = PrototypeScene,
                 CameraName = "MainCamera",

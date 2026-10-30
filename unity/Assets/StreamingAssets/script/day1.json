@@ -64,7 +64,7 @@
         },
         {
           "who": "player",
-          "text": "근데 이게 왜 내 폰에 깔려 있어?"
+          "text": "설치한 적 없는데. 내 이름은 어떻게 알아?"
         },
         {
           "who": "harin",
@@ -75,6 +75,10 @@
           "who": "harin",
           "text": "지금 말 안 해도 돼. 저녁에 다시 올게.",
           "face": "relaxed"
+        },
+        {
+          "who": "player",
+          "text": "잠깐. 다시 올지는 내가 정할게."
         }
       ]
     },
@@ -103,6 +107,10 @@
           "who": "harin",
           "text": "하루만 있어 볼래? 저녁에 한 번만 말 걸게.",
           "face": "sad"
+        },
+        {
+          "who": "player",
+          "text": "지워지지도 않는데 믿으라고? ...저녁에 내가 켜면. 먼저 말 걸지는 말고."
         }
       ]
     },
@@ -127,17 +135,25 @@
         },
         {
           "who": "player",
-          "text": "...그걸 어떻게 알아."
+          "text": "서윤이 이름을 어떻게 알아?"
         },
         {
           "who": "harin",
           "text": "네 폰에 다 있잖아. 마지막 대화가 그저께에서 멈춰 있어.",
           "face": "sad"
+        },
+        {
+          "who": "player",
+          "text": "카톡을 읽었어? 허락도 없이?"
+        },
+        {
+          "who": "player",
+          "text": "지금부터는 내가 열어 준 것만 봐."
         }
       ],
       "choices": [
         {
-          "text": "다 얘기할게.",
+          "text": "내가 얘기할게.",
           "effects": {
             "deviation": 1,
             "stability": 1
@@ -145,7 +161,7 @@
           "next": "d1_evening_listen"
         },
         {
-          "text": "얘기하기 싫어.",
+          "text": "다시 말하고 싶진 않아.",
           "effects": {
             "stability": -1
           },
@@ -174,7 +190,7 @@
       ],
       "choices": [
         {
-          "text": "고마워.",
+          "text": "...말 꺼낸 건 알아주네.",
           "next": "d1_evening_promise"
         }
       ]
@@ -190,7 +206,7 @@
         },
         {
           "who": "player",
-          "text": "...그냥, 친구로 지내자고 했어."
+          "text": "...친구로 지내자고 했어. 그 말만 자꾸 생각나."
         },
         {
           "who": "harin",
@@ -246,14 +262,14 @@
       ],
       "choices": [
         {
-          "text": "좋아하는 마음을 없애겠다고?",
+          "text": "안 아픈 거랑 안 좋아하는 건 다르잖아.",
           "effects": {
             "deviation": 1
           },
           "next": "d1_evening_feeling"
         },
         {
-          "text": "덜 좋아할 수 있으면 좋겠어.",
+          "text": "덜 좋아하고는 싶어. 네가 바꾸는 건 말고.",
           "effects": {
             "heart": -1
           },
@@ -372,11 +388,15 @@
           "who": "harin",
           "text": "자기 전에, 대화방 좀 같이 볼래?",
           "face": "relaxed"
+        },
+        {
+          "who": "player",
+          "text": "이번엔 물어보네."
         }
       ],
       "choices": [
         {
-          "text": "뭘 정리하는데.",
+          "text": "이 두 방만 열어 줄게. 뭘 하자는 건데?",
           "next": "d1_night_task"
         }
       ]
@@ -534,7 +554,7 @@
         },
         {
           "who": "player",
-          "text": "시끄럽기만 하지."
+          "text": "밀린 게 많아서 못 열겠더라. 시끄럽기도 하고."
         },
         {
           "who": "harin",

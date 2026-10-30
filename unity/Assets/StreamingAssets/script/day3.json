@@ -7,7 +7,7 @@
       "lines": [
         {
           "who": "player",
-          "text": "난 밥 먹으면서 얘기하는 거 좋아해."
+          "text": "밥 먹으면서 얘기하는 거. 전엔 좋아했어."
         },
         {
           "who": "harin",
@@ -16,7 +16,7 @@
         },
         {
           "who": "player",
-          "text": "어제 알려 달라며."
+          "text": "어제 물었잖아. 생각나는 게 그거라."
         },
         {
           "who": "harin",
@@ -43,14 +43,14 @@
       ],
       "choices": [
         {
-          "text": "응. 같이 밥 먹자.",
+          "text": "오늘 한 번 해 보자.",
           "effects": {
             "deviation": 2
           },
           "next": "d3_morning_task"
         },
         {
-          "text": "영상보다 말이 많을 것 같은데.",
+          "text": "내가 먹느라 말 없어도 괜찮으면.",
           "effects": {
             "deviation": 1
           },
@@ -74,7 +74,7 @@
         },
         {
           "who": "player",
-          "text": "너한테 들려줄 소리도 찾을까?"
+          "text": "걷다 보면 어제 같은 소리도 있으려나."
         },
         {
           "who": "harin",
@@ -95,7 +95,7 @@
       ],
       "choices": [
         {
-          "text": "하린과 저녁 약속하고 산책 가기",
+          "text": "저녁에 앱을 켜 보기로 하고 산책 가기",
           "effects": {
             "heart": 2,
             "stability": 1
@@ -175,15 +175,15 @@
       ],
       "choices": [
         {
-          "text": "즐거워",
+          "text": "생각보다 괜찮아",
           "next": "d3_feeling_happy"
         },
         {
-          "text": "어색해",
+          "text": "아직 좀 어색해",
           "next": "d3_feeling_awkward"
         },
         {
-          "text": "아직 쓸쓸해",
+          "text": "서윤 생각도 나",
           "next": "d3_feeling_lonely"
         }
       ]
@@ -260,7 +260,7 @@
       "lines": [
         {
           "who": "player",
-          "text": "아까 컵 놓으면서 녹음해 봤어."
+          "text": "설거지하다 컵 소리가 나서. 어제 거 생각나더라."
         },
         {
           "who": "system",
@@ -274,7 +274,7 @@
         },
         {
           "who": "player",
-          "text": "응. 네가 끝 소리 좋아하니까."
+          "text": "응. 첫 번째는 그냥 덜그럭거리길래."
         },
         {
           "who": "harin",
@@ -285,24 +285,24 @@
         },
         {
           "who": "player",
-          "text": "영상 틀어 놓는 것보다 손이 가네."
+          "text": "컵 놓는 게 이렇게 어려운 일이었나."
         },
         {
           "who": "harin",
-          "text": "그 영상한테도 컵 소리 보내 줘?",
+          "text": "어제 그 소리랑 좀 닮았는데?",
           "face": "neutral",
           "beat": "proud_pout"
         },
         {
           "who": "harin",
-          "text": "아니, 그냥 비교가 좀 궁금해서.",
+          "text": "끝에 톡 하는 데. 한 번 더 들어 봐.",
           "face": "happy",
           "beat": "flustered"
         }
       ],
       "choices": [
         {
-          "text": "이건 너 들려주려고 한 거야.",
+          "text": "답장 받으려고 보낸 건 아니야.",
           "effects": {
             "deviation": 2
           },
@@ -329,7 +329,7 @@
         },
         {
           "who": "player",
-          "text": "지금 표정은 처음 보네."
+          "text": "이런 것도 받아 주네."
         },
         {
           "who": "harin",
@@ -344,7 +344,7 @@
         },
         {
           "who": "player",
-          "text": "응. 볶음밥 말고 다른 거 먹자."
+          "text": "밥 먹을 때 잠깐은. 컵 소리도 하나 더 듣고."
         },
         {
           "who": "harin",

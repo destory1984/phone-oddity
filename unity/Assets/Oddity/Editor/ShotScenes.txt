@@ -5,6 +5,7 @@ chat_day2_morning
 chat_day3_night
 chat_typing
 chat_choices
+chat_choices_promise
 room_overview
 emergence_hand
 emergence_pullback
