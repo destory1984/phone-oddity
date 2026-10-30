@@ -17,7 +17,7 @@ namespace Oddity.Game
         /// <summary>Eyes narrow this much (blink weight) at the start of a cheek reaction.</summary>
         public const float PokeSquint = 0.3f;
         /// <summary>A surprised reaction opens the eyes wide (surprised at this weight) for this long.</summary>
-        public const float StartleWeight = 0.6f, StartleSeconds = 0.15f;
+        public const float StartleWeight = SurprisedWeight, StartleSeconds = 0.15f;
 
         struct PokeKey
         {

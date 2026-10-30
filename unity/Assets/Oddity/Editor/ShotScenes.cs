@@ -154,6 +154,7 @@ namespace Oddity.EditorTools
                 Name = "chat_morning",
                 ScenePath = PrototypeScene,
                 CameraName = "MainCamera",
+                SettleFrames = 600, // well past the 0.5 s glitch moment of the first Harin line (frames run faster than real time in batch)
                 Setup = () =>
                 {
                     FitPhoneCamera();

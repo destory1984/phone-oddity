@@ -85,6 +85,22 @@ namespace Oddity.PlayTests
             foreach (var m in Mouth) Assert.AreEqual(0f, harin.ExpressionWeight(m), m.ToString());
         }
 
+        // The first Harin line is a surprised "...보여?": eyes wide, but the mouth only a little open.
+        [UnityTest]
+        public IEnumerator Surprised_MouthSmall()
+        {
+            yield return LoadScene();
+            var harin = Harin();
+            harin.SetFace("surprised");
+            for (int i = 0; i < 3; i++) yield return null;
+            float eyes = harin.ExpressionWeight(ExpressionKey.Surprised);
+            float open = eyes;
+            foreach (var m in Mouth) open += harin.ExpressionWeight(m);
+            Assert.Greater(eyes, 0f, "eyes wide");
+            Assert.LessOrEqual(open, 0.5f, "mouth-opening morphs summed");
+            Assert.Greater(harin.MouthCloseWeight, 0f, "lips drawn together");
+        }
+
         // Day 1 morning: line 2 (glitch 0.2) stays calm; line 3 (glitch 0.7) flashes, then settles to a third or less.
         [UnityTest]
         public IEnumerator AppStage_GlitchCalmByDefault()
