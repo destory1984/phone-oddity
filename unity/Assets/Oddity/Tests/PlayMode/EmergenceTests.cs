@@ -244,6 +244,101 @@ namespace Oddity.PlayTests
             Assert.Greater(wrist.y, plane, "wrist out of the screen by 3.5 s");
         }
 
+        // Cut 10 at 2.5 s: drawn with and without Harin. A point of her arm or body under the desk whose screen ray
+        // meets the desk plane outside the portal circle shows the same pixel as the picture without her (the desk
+        // hides it); some forearm points under the plane inside the circle show her (the arm goes down into the portal).
+        [UnityTest]
+        public IEnumerator Cut10_ArmHiddenOutsidePortal()
+        {
+            yield return LoadAndHold();
+            var seq = Boot().Emergence;
+            var harin = HarinWardrobe.ActivePuppet();
+            var cam = seq.Cut10Camera;
+            cam.aspect = 9f / 16f;
+            seq.Seek(2.5f);
+            yield return null;
+
+            const int W = 360, H = 640;
+            var rt = new RenderTexture(W, H, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+            var renderers = harin.GetComponentsInChildren<Renderer>(true);
+            Texture2D Draw(bool withHarin)
+            {
+                foreach (var r in renderers) r.forceRenderingOff = !withHarin;
+                var prevTarget = cam.targetTexture;
+                var prevActive = RenderTexture.active;
+                cam.targetTexture = rt;
+                cam.Render();
+                RenderTexture.active = rt;
+                var tex = new Texture2D(W, H, TextureFormat.RGBA32, false);
+                tex.ReadPixels(new Rect(0, 0, W, H), 0, 0);
+                tex.Apply();
+                RenderTexture.active = prevActive;
+                cam.targetTexture = prevTarget;
+                foreach (var r in renderers) r.forceRenderingOff = false;
+                return tex;
+            }
+            var with = Draw(true);
+            var without = Draw(false);
+
+            float plane = seq.DeskPlaneY;
+            var centre = seq.PortalCentre;
+            var camPos = cam.transform.position;
+            float Diff(Vector3 world, out Vector2Int px)
+            {
+                var vp = cam.WorldToViewportPoint(world);
+                px = new Vector2Int(Mathf.Clamp((int)(vp.x * W), 0, W - 1), Mathf.Clamp((int)(vp.y * H), 0, H - 1));
+                Color a = with.GetPixel(px.x, px.y), b = without.GetPixel(px.x, px.y);
+                return Mathf.Max(Mathf.Abs(a.r - b.r), Mathf.Abs(a.g - b.g), Mathf.Abs(a.b - b.b));
+            }
+            float OnPlaneFromCentre(Vector3 world)
+            {
+                var d = world - camPos;
+                var p = camPos + d * ((plane - camPos.y) / d.y);
+                return Vector2.Distance(new Vector2(p.x, p.z), new Vector2(centre.x, centre.z));
+            }
+
+            var shoulder = harin.BonePosition(HumanBodyBones.RightUpperArm);
+            var elbow = harin.BonePosition(HumanBodyBones.RightLowerArm);
+            var wrist = harin.BonePosition(HumanBodyBones.RightHand);
+            var points = new System.Collections.Generic.List<Vector3>();
+            for (int i = 0; i <= 40; i++)
+            {
+                points.Add(Vector3.Lerp(shoulder, elbow, i / 40f));
+                points.Add(Vector3.Lerp(elbow, wrist, i / 40f));
+            }
+            foreach (var b in new[] { HumanBodyBones.Head, HumanBodyBones.Neck, HumanBodyBones.Chest, HumanBodyBones.Hips, HumanBodyBones.LeftHand, HumanBodyBones.LeftLowerArm })
+                points.Add(harin.BonePosition(b));
+
+            int outside = 0, outsideBad = 0, inside = 0, insideShown = 0;
+            string bad = "";
+            foreach (var p in points)
+            {
+                if (p.y > plane - 0.005f) continue;
+                float r = OnPlaneFromCentre(p);
+                float diff = Diff(p, out var px);
+                if (r > EmergenceSequence.PortalRadius + 0.01f)
+                {
+                    outside++;
+                    if (diff > 0.03f) { outsideBad++; if (bad.Length < 300) bad += $" {px} r {r:0.000} diff {diff:0.00} depth {plane - p.y:0.000};"; }
+                }
+                else if (r < EmergenceSequence.PortalRadius - 0.01f)
+                {
+                    inside++;
+                    if (diff > 0.05f) insideShown++;
+                }
+            }
+            float handDiff = Diff(wrist + (MiddleTip(harin) - wrist) * 0.5f, out _);
+            string info = $"outside {outside} bad {outsideBad} inside {inside} shown {insideShown} hand diff {handDiff:0.00}";
+            Debug.Log("CUT10PORTAL " + info + bad);
+            UnityEngine.Object.Destroy(with);
+            UnityEngine.Object.Destroy(without);
+            rt.Release();
+            Assert.Greater(handDiff, 0.05f, "the hand above the desk is drawn: " + info);
+            Assert.GreaterOrEqual(outside, 10, "enough points outside the portal: " + info);
+            Assert.AreEqual(0, outsideBad, "her body shows through the desk outside the portal:" + bad);
+            Assert.GreaterOrEqual(insideShown, 3, "the forearm shows going down into the portal: " + info);
+        }
+
         // Middle finger tip: the distal bone plus 2 cm along it (the bone sits at the last joint).
         static Vector3 MiddleTip(HarinPuppet h)
         {
