@@ -348,5 +348,39 @@ namespace Oddity.PlayTests
             Assert.That(hipFlex, Is.InRange(75f, 100f), "hip flexion: " + info);
             Assert.That(kneeFlex, Is.InRange(80f, 105f), "knee flexion: " + info);
         }
+
+        // Act 2: on a plain line the eyes follow the camera and the face points within 20 degrees of it.
+        [UnityTest]
+        public IEnumerator Act2_LooksAtCameraOnPlainLines()
+        {
+            yield return LoadAndPlay();
+            var boot = Boot();
+            yield return WaitFinished(boot.Emergence);
+            var harin = HarinWardrobe.ActivePuppet();
+            var cam = boot.Emergence.MainCamera.transform;
+            yield return new WaitForSeconds(1.0f); // the 0.4 s ease is done
+            Assert.AreSame(cam, harin.EyeTarget, "eyes follow the camera");
+            var head = harin.BonePosition(HumanBodyBones.Head);
+            float angle = Vector3.Angle(harin.HeadFacing, cam.position - head);
+            Debug.Log($"ACT2 head-to-camera angle {angle:F1}");
+            Assert.LessOrEqual(angle, 20f, $"face towards the camera: {angle:F1} deg");
+        }
+
+        // Every scene: the mouth inside is 15% darker than imported (both outfits).
+        [UnityTest]
+        public IEnumerator Mouth_DarkerEverywhere()
+        {
+            yield return LoadAndHold();
+            var wardrobe = UnityEngine.Object.FindFirstObjectByType<HarinWardrobe>();
+            foreach (var outfit in new[] { HarinWardrobe.Outfit.Summer, HarinWardrobe.Outfit.Indoor })
+            {
+                var puppet = wardrobe.Get(outfit);
+                if (puppet == null) continue;
+                Assert.AreEqual(0.85f, puppet.MouthInsideBrightness, 0.01f, outfit + " brightness");
+                if (!puppet.TryGetMouthInsideColors(out var imported, out var now)) continue;
+                Assert.AreEqual(imported.r * 0.85f, now.r, 0.01f, outfit + " FaceMouth red");
+                Assert.AreEqual(imported.g * 0.85f, now.g, 0.01f, outfit + " FaceMouth green");
+            }
+        }
     }
 }

@@ -210,8 +210,22 @@ namespace Oddity.Game
             }
         }
 
-        /// <summary>The last <see cref="SetMouthInsideBrightness"/> value (1 before any call).</summary>
-        public float MouthInsideBrightness { get; private set; } = 1f;
+        /// <summary>The last <see cref="SetMouthInsideBrightness"/> value (<see cref="MouthInsideDefault"/> before any call).</summary>
+        public float MouthInsideBrightness { get; private set; } = MouthInsideDefault;
+
+        /// <summary>Mouth inside, every scene: 15% darker than imported (the prologue goes to 20%).</summary>
+        public const float MouthInsideDefault = 0.85f;
+
+        /// <summary>First mouth-inside material: (as imported, now) lit colour; false when the model has none.</summary>
+        public bool TryGetMouthInsideColors(out Color imported, out Color now)
+        {
+            imported = now = Color.black;
+            if (!HasMouthInsideMaterial) return false;
+            var e = _mouthInside[0];
+            imported = e.color;
+            now = e.m.GetColor("_Color");
+            return true;
+        }
         /// <summary>True when the model has a separate mouth-inside material.</summary>
         public bool HasMouthInsideMaterial
         {

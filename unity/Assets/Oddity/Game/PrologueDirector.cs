@@ -234,7 +234,7 @@ namespace Oddity.Game
             Active = false;
             _rewinding = false;
             if (_harin != null) _harin.BlushSuppressed = false;
-            if (_harin != null) _harin.SetMouthInsideBrightness(1f);
+            if (_harin != null) _harin.SetMouthInsideBrightness(HarinPuppet.MouthInsideDefault);
             if (_subtitle != null) _subtitle.SetAlpha(1f);
             foreach (var (r, mask) in _masks) if (r != null) r.renderingLayerMask = mask;
             _masks.Clear();

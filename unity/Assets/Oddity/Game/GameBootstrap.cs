@@ -500,18 +500,25 @@ namespace Oddity.Game
                 Harin.SetFace(HarinPuppet.FaceForBeat(line.Face, line.Beat));
                 if (line.Who == "harin") Harin.BlushForLine(line.Face, line.Beat);
                 Harin.SetGlitch(line.Glitch);
-                FaceCameraInRoom(line.Who == "harin");
+                FaceCameraInRoom(line.Who == "harin" && !LooksDownBeats.Contains(line.Beat ?? ""));
             }
         }
 
-        // Act 2: on her own lines (her eyes are on the camera) the head turns a few degrees towards it and lifts.
+        // Beats where she looks down on purpose; every other line of hers meets the player's eyes.
+        static readonly System.Collections.Generic.HashSet<string> LooksDownBeats =
+            new System.Collections.Generic.HashSet<string> { "looks_down_smiling" };
+
+        // Act 2: on her own lines (her eyes are on the camera) the eyes and the head turn to it, the head lifts
+        // a few degrees, all in 0.4 s. Down-looking beats and the player's lines let the head and eyes go back.
         void FaceCameraInRoom(bool towards)
         {
             var cam = emergence != null ? emergence.MainCamera : null;
-            if (!towards || cam == null) { Harin.EaseHeadTurn(0f, 0f); return; }
+            if (!towards || cam == null) { Harin.EaseHeadTurn(0f, 0f, EmergenceSequence.Act2EaseSeconds); return; }
+            Harin.SetEyeTarget(cam.transform);
             var local = Harin.transform.InverseTransformPoint(cam.transform.position);
             float side = local.x >= 0f ? 1f : -1f; // model +x is her left; yaw > 0 turns to her left
-            Harin.EaseHeadTurn(side * EmergenceSequence.Act2HeadToCamera, -EmergenceSequence.Act2HeadToCamera);
+            Harin.EaseHeadTurn(side * EmergenceSequence.Act2HeadToCamera,
+                -(EmergenceSequence.Act2HeadToCamera + EmergenceSequence.Act2HeadLift), EmergenceSequence.Act2EaseSeconds);
         }
 
         // A phone line is on screen: Harin's lines show their face, other lines leave her at the idle smile.

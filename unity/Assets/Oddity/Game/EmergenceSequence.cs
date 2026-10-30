@@ -91,6 +91,9 @@ namespace Oddity.Game
         public const float Act2Closer = 0.9f;
         /// <summary>On her own act 2 lines her head turns this much towards the camera and lifts as much.</summary>
         public const float Act2HeadToCamera = 3f;
+        /// <summary>Extra degrees the seated head lifts on lines that look at the camera (on top of Act2HeadToCamera).</summary>
+        public const float Act2HeadLift = 6f;
+        public const float Act2EaseSeconds = 0.4f;
         public const float Act2BodyShare = 0.6f;
         public const float Act2HeadTopAboveEye = 0.11f; // model units
         const float Cut12Fov0 = 35f, Cut12Fov1 = 38f;
@@ -340,6 +343,8 @@ namespace Oddity.Game
             harin.SetHeadTurn(t < Cut10At ? 35f * Smooth(t / Cut10At) : 0f, 0f);
             harin.SetRightArmReach(null);
             harin.SetEyeTarget(t >= EyesAt ? mainCamera.transform : null);
+            // seated and past EyesAt she looks at the player: the head lifts a little more than the pose's own
+            harin.EaseHeadTurn(0f, t >= SeatAt && t >= EyesAt ? -(Act2HeadToCamera + Act2HeadLift) : 0f, Act2EaseSeconds);
 
             bool inPhone = t < Cut10At;
             bool cut10 = t >= Cut10At && t < RoomAt;

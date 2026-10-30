@@ -79,6 +79,7 @@ namespace Oddity.Game
             CaptureIdleBones();
             if (lowerArms) CaptureRestPose();
             ApplyHairLook();
+            SetMouthInsideBrightness(MouthInsideDefault); // both outfits, every scene
             ScheduleBlink();
         }
 
@@ -168,9 +169,31 @@ namespace Oddity.Game
         /// </summary>
         public void EaseHeadTurn(float yawDegrees, float pitchDegrees)
         {
+            EaseHeadTurn(yawDegrees, pitchDegrees, 0f);
+        }
+
+        /// <summary>As above, but arriving after <paramref name="seconds"/> (0 = at <see cref="HeadEaseSpeed"/>).</summary>
+        public void EaseHeadTurn(float yawDegrees, float pitchDegrees, float seconds)
+        {
+            if (yawDegrees == _addYawTarget && pitchDegrees == _addPitchTarget) return;
             _addYawTarget = yawDegrees;
             _addPitchTarget = pitchDegrees;
+            if (seconds > 0f)
+            {
+                _addYawSpeed = Mathf.Abs(yawDegrees - _addYaw) / seconds;
+                _addPitchSpeed = Mathf.Abs(pitchDegrees - _addPitch) / seconds;
+            }
+            else _addYawSpeed = _addPitchSpeed = HeadEaseSpeed;
         }
+
+        float _addYawSpeed = HeadEaseSpeed, _addPitchSpeed = HeadEaseSpeed;
+
+        /// <summary>The head's forward in world space (the way the face points), whatever the bone's own axes.</summary>
+        public Vector3 HeadFacing =>
+            _head == null ? transform.forward : _head.rotation * Quaternion.Inverse(_headRel) * Vector3.forward;
+
+        /// <summary>The transform the eyes follow (null when they look straight ahead).</summary>
+        public Transform EyeTarget => _vrm != null ? _vrm.LookAtTarget : null;
 
         public const float HeadEaseSpeed = 12f; // degrees per second
         float _addYaw, _addPitch, _addYawTarget, _addPitchTarget;
@@ -180,9 +203,8 @@ namespace Oddity.Game
         void UpdateHeadEase()
         {
             if (_addYaw == _addYawTarget && _addPitch == _addPitchTarget) return;
-            float step = HeadEaseSpeed * Time.deltaTime;
-            _addYaw = Mathf.MoveTowards(_addYaw, _addYawTarget, step);
-            _addPitch = Mathf.MoveTowards(_addPitch, _addPitchTarget, step);
+            _addYaw = Mathf.MoveTowards(_addYaw, _addYawTarget, _addYawSpeed * Time.deltaTime);
+            _addPitch = Mathf.MoveTowards(_addPitch, _addPitchTarget, _addPitchSpeed * Time.deltaTime);
             if (_addYaw == 0f && _addPitch == 0f) _pokeHeadDirty = true;
         }
 
