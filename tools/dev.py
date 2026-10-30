@@ -7,7 +7,8 @@
     python tools/dev.py scenes                 list shot scene names (unity/Assets/Oddity/Editor/ShotScenes.txt)
     python tools/dev.py baseline [SCENE ...]   copy current shots to shots/baseline/ for later diffs
     python tools/dev.py kill                   close the Unity editor that has this project open (not the Hub)
-    python tools/dev.py previs SCENE [--level 1,2,3]   low-quality mp4 with voice and sounds -> shots/previs/SCENE_L{level}.mp4 (needs ffmpeg on PATH)
+    python tools/dev.py previs SCENE [--level 1,2,3,4] [--day]   low-quality mp4 with voice and sounds -> shots/previs/SCENE_L{level}.mp4 (needs ffmpeg on PATH)
+                                               (--day: night look off, file SCENE_L{level}_day.mp4)
     python tools/dev.py ship -m "msg" [--quick a,b]   check, test (only a,b with --quick), commit here. Never pushes.
     python tools/dev.py build --pc [--demo-voice]   Windows dev exe -> unity/Build/pc/oddity-proto.exe (Mono, 540x960 window)
     python tools/dev.py build [--demo-voice]   Android dev apk -> unity/Build/oddity-proto.apk, then active target back to Windows
@@ -360,7 +361,7 @@ def previs_mix(ffmpeg, silent, events_tsv, seconds, out):
     return True
 
 
-def previs(names, levels):
+def previs(names, levels, day=False):
     ffmpeg, ffprobe = shutil.which("ffmpeg"), shutil.which("ffprobe")
     if not ffmpeg or not ffprobe:
         print("PREVIS FAILED: ffmpeg and ffprobe are not on PATH; install ffmpeg (winget install Gyan.FFmpeg) and open a new shell")
@@ -373,18 +374,19 @@ def previs(names, levels):
         level_list = [int(x) for x in (levels or "1,2,3").split(",") if x.strip() != ""]
     except ValueError:
         level_list = []
-    if not level_list or any(l < 0 or l > 3 for l in level_list):
-        print("--level takes numbers 0 to 3, for example 2 or 1,2,3")
+    if not level_list or any(l < 0 or l > 4 for l in level_list):
+        print("--level takes numbers 0 to 4, for example 2 or 1,2,3,4")
         return 1
     PREVIS_OUT.mkdir(parents=True, exist_ok=True)
     PREVIS_TMP.mkdir(parents=True, exist_ok=True)
+    suffix = "_day" if day else ""
     for f in PREVIS_TMP.glob(f"{scene}_L*"):
         f.unlink()
     t0 = time.time()
     # no -nographics: the cameras have to draw
     code, text = unity(["-executeMethod", "Oddity.EditorTools.Previs.Run", "-previsScene", scene,
                         "-previsLevels", ",".join(str(l) for l in level_list), "-previsDir", PREVIS_TMP.resolve(),
-                        "-previsFfmpeg", ffmpeg], "previs.log", timeout=3600)
+                        "-previsFfmpeg", ffmpeg] + (["-previsDay"] if day else []), "previs.log", timeout=3600)
     done = {}
     for line in text.splitlines():
         if line.startswith("PREVIS_DONE "):
@@ -400,7 +402,7 @@ def previs(names, levels):
             print(f"PREVIS level {level} FAILED; see unity/Logs/previs.log")
             failed += 1
             continue
-        out = PREVIS_OUT / f"{scene}_L{level}.mp4"
+        out = PREVIS_OUT / f"{scene}_L{level}{suffix}.mp4"
         out.unlink(missing_ok=True)
         seconds = float(kv["seconds"])
         if not previs_mix(ffmpeg, kv["video"], kv["events"], seconds, str(out)):
@@ -416,7 +418,7 @@ def previs(names, levels):
             print(f"PREVIS {out.name} has no audio track")
             failed += 1
         Path(kv["video"]).unlink(missing_ok=True)
-        for w in PREVIS_TMP.glob(f"{scene}_L{level}.a*.wav"):
+        for w in PREVIS_TMP.glob(f"{scene}_L{level}{suffix}.a*.wav"):
             w.unlink()
     if code is None:
         print("previs timed out")
@@ -490,7 +492,8 @@ def main():
     ap.add_argument("-m", "--message")
     ap.add_argument("--quick", help="ship: run only these tests (comma list)")
     ap.add_argument("--demo-voice", action="store_true", help="build: allow karina voice files (private demo apk)")
-    ap.add_argument("--level", help="previs: conti strengths to film, 0 off, 1 weak, 2 mid, 3 strong (comma list, default 1,2,3)")
+    ap.add_argument("--level", help="previs: conti strengths to film, 0 off, 1 weak, 2 mid, 3 strong, 4 close (comma list, default 1,2,3)")
+    ap.add_argument("--day", action="store_true", help="previs: film with the night look off (file names get _day)")
     ap.add_argument("--pc", action="store_true", help="build: Windows exe (unity/Build/pc) instead of Android apk")
     ap.add_argument("--dotnet-only", action="store_true", help="test: skip the Unity EditMode and PlayMode runs")
     a = ap.parse_args()
@@ -510,7 +513,7 @@ def main():
     if a.cmd == "baseline":
         return baseline(names)
     if a.cmd == "previs":
-        return previs(names, a.level)
+        return previs(names, a.level, a.day)
     if a.cmd == "build":
         return build_pc(a.demo_voice) if a.pc else build(a.demo_voice)
     if a.cmd == "ship":

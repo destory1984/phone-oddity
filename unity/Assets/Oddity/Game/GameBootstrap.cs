@@ -121,6 +121,7 @@ namespace Oddity.Game
         ContiFace _typingFace;
         AudioSource _sfx;
         string _lastSfx;
+        NightLook _night;
 
         /// <summary>Fired after the Night slot is closed and saved, just before the emergence plays.</summary>
         public event Action NightFinished;
@@ -148,6 +149,8 @@ namespace Oddity.Game
         public string PrologueSceneId => _inPrologue && _prologueRunner != null && _prologueRunner.Current != null ? _prologueRunner.Current.Id : null;
         public PrologueDirector Prologue => _director;
         public HarinVoice Voice => _voice;
+        /// <summary>The night look of the conti scenes (null until the game is set up).</summary>
+        public NightLook Night => _night;
         /// <summary>The player's chatter sounds (see <see cref="PlayerBabble"/>).</summary>
         public PlayerBabble Babble => _babble;
         /// <summary>True while a prologue line waits for a tap.</summary>
@@ -294,6 +297,8 @@ namespace Oddity.Game
             _voice.Follow = () => Harin; // lip sync goes to whichever model is worn
             _babble = gameObject.AddComponent<PlayerBabble>();
             _babble.HarinBusy = () => _voice != null && _voice.IsBusy; // the chatter waits for her voice
+            _night = gameObject.AddComponent<NightLook>();
+            _night.Init(this, chat);
             SetPhoneIdle();
             InitPoke();
 
@@ -775,6 +780,7 @@ namespace Oddity.Game
             _cueLive = false;
             _typingFaceAt = 0f;
             if (_stage != null) _stage.Enabled = false;
+            if (_night != null) _night.Refresh(); // the dark room goes back before the emergence draws
             if (_glitchMoment != null) { StopCoroutine(_glitchMoment); _glitchMoment = null; }
             if (Harin != null) { Harin.SetIdle(false); Harin.StopPokeMotion(); }
             ClearGaze();

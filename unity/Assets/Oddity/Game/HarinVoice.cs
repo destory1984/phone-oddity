@@ -166,7 +166,8 @@ namespace Oddity.Game
             if (clip == null) return;
             _pending = clip;
             _ready = ready;
-            TryStart();
+            // with a gate the start waits for Update: the caller shows the bubble (and so raises the typing flag) after this call
+            if (ready == null) TryStart();
         }
 
         /// <summary>Resource name of the clip for poke.json line <paramref name="number"/> (1 to 18) in the current set.</summary>

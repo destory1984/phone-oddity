@@ -55,9 +55,11 @@ namespace Oddity.EditorTools
         }
 
         // Day 3 night at the given strength, tapped on to one line of a conti scene. `finish` lets the line's move run to its end.
-        static void ContiShot(string scene, int line, int level, bool finish = false)
+        // `night` turns the night look on (task 50); the older conti shots keep the day look so their framing stays comparable.
+        static void ContiShot(string scene, int line, int level, bool finish = false, bool night = false)
         {
             FitPhoneCamera();
+            SceneConti.SetNightForRun(night);
             var chat = UnityEngine.Object.FindFirstObjectByType<ChatView>();
             var boot = UnityEngine.Object.FindFirstObjectByType<GameBootstrap>();
             if (chat == null || boot == null) throw new Exception("no ChatView or GameBootstrap in the scene");
@@ -225,6 +227,15 @@ namespace Oddity.EditorTools
             new ShotScene { Name = "chat_conti_H2", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 60, Setup = () => ContiShot(SceneConti.Night, 5, 2) },
             new ShotScene { Name = "chat_conti_C2", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 60, Setup = () => ContiShot(SceneConti.NightEnd, 4, 2, true) },
             new ShotScene { Name = "chat_conti_end", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 60, Setup = () => ContiShot(SceneConti.NightEnd, 7, 3, true) },
+            new ShotScene { Name = "chat_conti_night_side", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 60, Setup = () => ContiShot(SceneConti.Night, 2, 2, false, true) },
+            new ShotScene { Name = "chat_conti_night_C2", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 60, Setup = () => ContiShot(SceneConti.NightEnd, 4, 2, true, true) },
+            new ShotScene { Name = "chat_conti_night_end", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 60, Setup = () => ContiShot(SceneConti.NightEnd, 7, 3, true, true) },
+            new ShotScene { Name = "chat_conti_near_L", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 60, Setup = () => ContiShot(SceneConti.Night, 1, 4, false, true) },
+            new ShotScene { Name = "chat_conti_near_side", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 60, Setup = () => ContiShot(SceneConti.Night, 2, 4, false, true) },
+            new ShotScene { Name = "chat_conti_near_H2", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 60, Setup = () => ContiShot(SceneConti.Night, 5, 4, false, true) },
+            new ShotScene { Name = "chat_conti_near_M", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 60, Setup = () => ContiShot(SceneConti.Night, 7, 4, false, true) },
+            new ShotScene { Name = "chat_conti_near_C", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 60, Setup = () => ContiShot(SceneConti.NightEnd, 4, 4, true, true) },
+            new ShotScene { Name = "chat_conti_near_end", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 60, Setup = () => ContiShot(SceneConti.NightEnd, 7, 4, true, true) },
             new ShotScene { Name = "chat_cam_M", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 600, Setup = () => CamShot("M") },
             new ShotScene { Name = "chat_cam_S", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 600, Setup = () => CamShot("S") },
             new ShotScene { Name = "chat_cam_E", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 600, Setup = () => CamShot("E") },

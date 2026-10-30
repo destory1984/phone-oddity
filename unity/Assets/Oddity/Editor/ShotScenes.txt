@@ -30,3 +30,12 @@ chat_conti_side_high
 chat_conti_H2
 chat_conti_C2
 chat_conti_end
+chat_conti_night_side
+chat_conti_night_C2
+chat_conti_night_end
+chat_conti_near_L
+chat_conti_near_side
+chat_conti_near_H2
+chat_conti_near_M
+chat_conti_near_C
+chat_conti_near_end

@@ -10,7 +10,7 @@
 | `harness/Oddity.Core` | 위 규칙을 dotnet으로 짓는 프로젝트 |
 | `harness/Oddity.Core.Tests/` | 규칙 시험 70개. Unity 없이 몇 초에 돈다 |
 | `unity/` | Unity 6000.3.27f1 프로젝트 (URP, 세로 1080x1920) |
-| `unity/Assets/Oddity/Game/` | 화면 쪽 코드. `HarinPuppet` (표정, 눈 깜빡임, 깨짐, 투명도) |
+| `unity/Assets/Oddity/Game/` | 화면 쪽 코드. `HarinPuppet` (표정, 눈 깜빡임, 깨짐, 투명도), `SceneConti` (3일차 밤 콘티와 강도 끔·약·중·강·근), `NightLook` (콘티 장면에서만 켜는 밤 조명) |
 | `unity/Assets/Oddity/Editor/` | 에디터 도구. `Shots.cs` (화면 찍기), `ShotScenes.cs` 와 `ShotScenes.txt` (장면 표) |
 | `unity/Assets/Oddity/Tests/EditMode/` | Unity 안에서 도는 시험 (대본 내용 등) |
 | `unity/Assets/Scenes/Prototype.unity` | 시제품 장면. `AppStageCamera` 가 하린을 1024x1024 로 그린다 |
@@ -26,7 +26,7 @@
 | `test --dotnet-only` | Unity 없이 규칙 시험만 |
 | `shot [장면 ...]` | `shots/장면.png` (폭 800). baseline 이 있으면 `SHOT 장면 diff n.n%` |
 | `scenes`, `baseline`, `kill` | 장면 목록, 기준 그림 저장, 이 프로젝트의 Unity 닫기 |
-| `previs 장면 [--level 1,2,3]` | 장면을 사람처럼 자동으로 넘겨 음성과 효과음이 든 540x960 24fps mp4 로 뽑는다 → `shots/previs/장면_L2.mp4`. 지금은 `d3_night` 만 된다. 실시간으로 찍어서 한 벌에 약 50초, 셋이면 약 3분 걸린다. ffmpeg 가 PATH 에 있어야 한다 |
+| `previs 장면 [--level 1,2,3,4] [--day]` | 장면을 사람처럼 자동으로 넘겨 음성과 효과음이 든 540x960 24fps mp4 로 뽑는다 → `shots/previs/장면_L2.mp4` (`--day` 는 밤 조명을 끄고 `장면_L2_day.mp4`). 지금은 `d3_night` 만 된다. 실시간으로 찍어서 한 벌에 약 50초, 셋이면 약 3분 걸린다. ffmpeg 가 PATH 에 있어야 한다 |
 | `ship -m "메시지" [--quick a,b]` | check, test 통과 뒤 커밋. push 는 절대 안 한다 |
 | `build [--pc] [--demo-voice]` | 안드로이드 개발 APK → `unity/Build/oddity-proto.apk` (IL2CPP 라 길다), `--pc` 이면 Windows 개발 exe → `unity/Build/pc/oddity-proto.exe` (Mono, 540x960 창, 약 5분). 크기와 시간을 찍고 활성 대상을 Windows 로 되돌린다. karina 음성 파일이 있으면 멈추고, `--demo-voice` 일 때만 개인용으로 짓는다 (`oddity-proto-DEMO-private.apk`, `pc-DEMO-private/`) |
 

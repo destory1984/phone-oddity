@@ -78,6 +78,14 @@ namespace Oddity.Game
         Coroutine _typingRoutine;
         Line _pendingLine;
 
+        // night look (NightLook): the day colours are the ones built below, the night ones come from NightLook
+        Image _wallpaperImage, _veilImage, _areaImage, _vignette;
+        Color _wallpaperDay, _veilDay, _areaDay, _waitingDay;
+        Sprite _vignetteSprite;
+
+        /// <summary>True while the chat wears the night colours (<see cref="SetNight"/>).</summary>
+        public bool NightStyle { get; private set; }
+
         /// <summary>Text of the line most recently passed to <see cref="ShowLine"/>, or "".</summary>
         public string CurrentLineText { get; private set; } = "";
         /// <summary>Who spoke the current line ("harin", "player", "system"), or "".</summary>
@@ -202,8 +210,9 @@ namespace Oddity.Game
             rlg.childForceExpandHeight = false;
             rlg.childAlignment = TextAnchor.UpperLeft;
 
-            var bubble = MakeImage("Bubble", _typingRow, Color.white);
+            var bubble = MakeImage("Bubble", _typingRow, BubbleFill("harin"));
             bubble.raycastTarget = false;
+            bubble.gameObject.AddComponent<BubbleKind>().Who = "typing";
             var le = bubble.gameObject.AddComponent<LayoutElement>();
             le.preferredWidth = 150f;
             le.preferredHeight = 76f;
@@ -211,7 +220,7 @@ namespace Oddity.Game
             _dots = new RectTransform[3];
             for (int i = 0; i < 3; i++)
             {
-                var dot = MakeImage("Dot" + i, bubble.rectTransform, new Color(0.55f, 0.5f, 0.7f, 1f));
+                var dot = MakeImage("Dot" + i, bubble.rectTransform, DotColor());
                 dot.sprite = DotSprite();
                 dot.raycastTarget = false;
                 var drt = dot.rectTransform;
@@ -269,7 +278,7 @@ namespace Oddity.Game
             {
                 int index = i;
                 string text = choices[i].Text ?? "";
-                var button = MakeButton(_choiceList, text, feeling ? new Color(0.62f, 0.52f, 0.86f, 1f) : new Color(0.38f, 0.33f, 0.62f, 1f), ChoiceButtonHeight);
+                var button = MakeButton(_choiceList, text, ChoiceFill(feeling), ChoiceButtonHeight);
                 button.onClick.AddListener(() => PickChoice(index));
                 _buttons.Add(button);
                 _buttonTexts.Add(text);
@@ -389,6 +398,8 @@ namespace Oddity.Game
             bg.sprite = wallpaper;
             UiKit.Stretch(bg.rectTransform);
             bg.raycastTarget = true;
+            _wallpaperImage = bg;
+            _wallpaperDay = bg.color;
             bg.gameObject.AddComponent<TapCatcher>().Init(this);
             if (wallpaper != null)
             {
@@ -397,6 +408,8 @@ namespace Oddity.Game
                 vc.a = 1f - WallpaperNoiseScale;
                 veil.color = vc;
                 veil.raycastTarget = false;
+                _veilImage = veil;
+                _veilDay = veil.color;
                 UiKit.Stretch(veil.rectTransform);
                 WallpaperNoiseLeft = WallpaperNoiseScale;
             }
@@ -493,6 +506,8 @@ namespace Oddity.Game
             _choiceArea.sizeDelta = new Vector2(0f, ChoiceAreaHeight);
             _choiceArea.anchoredPosition = Vector2.zero;
             area.raycastTarget = true;
+            _areaImage = area;
+            _areaDay = area.color;
 
             var list = new GameObject("Choices", typeof(RectTransform), typeof(VerticalLayoutGroup));
             list.transform.SetParent(_choiceArea, false);
@@ -510,6 +525,7 @@ namespace Oddity.Game
             _waitingText = MakeText("Waiting", _choiceArea, "", 56, TextAnchor.MiddleCenter, new Color(0.3f, 0.26f, 0.45f, 1f));
             UiKit.Stretch(_waitingText.rectTransform);
             _waitingText.raycastTarget = false;
+            _waitingDay = _waitingText.color;
 
             BuildNamePanel();
             BuildNotice();
@@ -654,11 +670,10 @@ namespace Oddity.Game
             bool player = who == "player";
             rlg.childAlignment = system ? TextAnchor.UpperCenter : (player ? TextAnchor.UpperRight : TextAnchor.UpperLeft);
 
-            Color fill = system ? SystemFill
-                : player ? new Color(0.99f, 0.9f, 0.45f, 1f)
-                : Color.white;
+            Color fill = BubbleFill(who);
             var bubble = MakeImage("Bubble", (RectTransform)row.transform, fill);
             bubble.raycastTarget = false;
+            bubble.gameObject.AddComponent<BubbleKind>().Who = who;
             var blg = bubble.gameObject.AddComponent<HorizontalLayoutGroup>();
             int padX = system ? 22 : 28;
             int padY = system ? 8 : 18;
@@ -669,8 +684,7 @@ namespace Oddity.Game
             blg.childForceExpandHeight = false;
 
             int size = system ? SystemFontSize : BodyFontSize;
-            var label = MakeText("Text", bubble.rectTransform, text, size, TextAnchor.MiddleLeft,
-                system ? new Color(0.25f, 0.24f, 0.3f, 1f) : new Color(0.12f, 0.1f, 0.2f, 1f));
+            var label = MakeText("Text", bubble.rectTransform, text, size, TextAnchor.MiddleLeft, BubbleText(who));
             label.raycastTarget = false;
             label.horizontalOverflow = HorizontalWrapMode.Wrap;
             label.verticalOverflow = VerticalWrapMode.Overflow;
@@ -703,6 +717,85 @@ namespace Oddity.Game
             }
             _notice.gameObject.SetActive(false);
             _noticeRoutine = null;
+        }
+
+        // ---------------------------------------------------------------- night look
+
+        /// <summary>Tags a bubble with who speaks, so <see cref="SetNight"/> can colour the bubbles already in the chat.</summary>
+        class BubbleKind : MonoBehaviour { public string Who; }
+
+        Color BubbleFill(string who)
+        {
+            bool system = who == "system", player = who == "player";
+            if (NightStyle) return system ? NightLook.SystemBubble : player ? NightLook.PlayerBubble : NightLook.HarinBubble;
+            return system ? SystemFill : player ? new Color(0.99f, 0.9f, 0.45f, 1f) : Color.white;
+        }
+
+        Color BubbleText(string who)
+        {
+            bool system = who == "system", player = who == "player";
+            if (NightStyle) return system ? NightLook.SystemText : player ? NightLook.PlayerText : NightLook.HarinText;
+            return system ? new Color(0.25f, 0.24f, 0.3f, 1f) : new Color(0.12f, 0.1f, 0.2f, 1f);
+        }
+
+        Color DotColor() => NightStyle ? NightLook.TypingDots : new Color(0.55f, 0.5f, 0.7f, 1f);
+
+        Color ChoiceFill(bool feeling) => NightStyle
+            ? (feeling ? NightLook.FeelingButton : NightLook.ChoiceButton)
+            : (feeling ? new Color(0.62f, 0.52f, 0.86f, 1f) : new Color(0.38f, 0.33f, 0.62f, 1f));
+
+        /// <summary>
+        /// Dark wallpaper, bottom area and bubbles, and a vignette over Harin's window (<see cref="NightLook"/>); false puts the day colours back.
+        /// The bubbles already in the chat change too.
+        /// </summary>
+        public void SetNight(bool on)
+        {
+            if (NightStyle == on) return;
+            NightStyle = on;
+            if (_wallpaperImage != null) _wallpaperImage.color = on ? NightLook.ChatBack : _wallpaperDay;
+            if (_veilImage != null)
+            {
+                var v = on ? NightLook.ChatBack : _veilDay;
+                v.a = _veilDay.a;
+                _veilImage.color = v;
+            }
+            if (_areaImage != null) _areaImage.color = on ? NightLook.ChatBottom : _areaDay;
+            if (_waitingText != null) _waitingText.color = on ? NightLook.WaitingText : _waitingDay;
+            if (on) EnsureVignette();
+            if (_vignette != null) _vignette.gameObject.SetActive(on);
+            if (_content != null)
+            {
+                foreach (var kind in _content.GetComponentsInChildren<BubbleKind>(true))
+                {
+                    var img = kind.GetComponent<Image>();
+                    if (kind.Who == "typing")
+                    {
+                        img.color = BubbleFill("harin");
+                        foreach (Transform dot in kind.transform) { var di = dot.GetComponent<Image>(); if (di != null) di.color = DotColor(); }
+                        continue;
+                    }
+                    img.color = BubbleFill(kind.Who);
+                    var label = kind.GetComponentInChildren<Text>(true);
+                    if (label != null) label.color = BubbleText(kind.Who);
+                }
+            }
+        }
+
+        void EnsureVignette()
+        {
+            if (_vignette != null || _windowRect == null) return;
+            _vignetteSprite = Sprite.Create(NightLook.MakeVignetteTexture(), new Rect(0, 0, NightLook.VignetteTexture, NightLook.VignetteTexture),
+                new Vector2(0.5f, 0.5f), 100f);
+            _vignette = MakeImage("NightVignette", _root, Color.white);
+            _vignette.sprite = _vignetteSprite;
+            _vignette.raycastTarget = false;
+            var rt = _vignette.rectTransform;
+            rt.anchorMin = _windowRect.anchorMin;
+            rt.anchorMax = _windowRect.anchorMax;
+            rt.pivot = _windowRect.pivot;
+            rt.sizeDelta = _windowRect.sizeDelta;
+            rt.anchoredPosition = _windowRect.anchoredPosition;
+            _vignette.transform.SetSiblingIndex(_windowRect.GetSiblingIndex() + 1); // over the window, under the name tag
         }
 
         // ---------------------------------------------------------------- helpers

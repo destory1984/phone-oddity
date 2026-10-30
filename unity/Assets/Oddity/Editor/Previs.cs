@@ -17,7 +17,8 @@ namespace Oddity.EditorTools
 {
     /// <summary>
     /// Previs video (task 49): Unity.exe -executeMethod Oddity.EditorTools.Previs.Run
-    ///   -previsScene d3_night -previsLevels 1,2,3 -previsDir ABS_DIR -previsFfmpeg ABS_FFMPEG
+    ///   -previsScene d3_night -previsLevels 1,2,3,4 [-previsDay] -previsDir ABS_DIR -previsFfmpeg ABS_FFMPEG
+    /// (-previsDay films with the night look off and puts "_day" in the file names)
     /// Per conti strength: a save at day 3 night, play mode, then <see cref="PrevisAutoPlay"/> reads the scene like a
     /// person while the phone camera (540x960) is filmed in real time: ffmpeg gets one frame per 1/24 s of the wall
     /// clock (a slow engine frame repeats the picture), and every sound is stamped with the same clock.
@@ -57,6 +58,7 @@ namespace Oddity.EditorTools
         static Target _target;
         static string _dir, _ffmpeg;
         static int _level;
+        static bool _day;
         static int _failures;
         static bool _recording;
         static bool _optionsSaved, _oldEnabled;
@@ -83,6 +85,8 @@ namespace Oddity.EditorTools
         static AudioEvent _openVoice, _openBabble;
         static int _voiceId, _babbleId;
         static string _lastSfx, _lastKey;
+        static int _lastCue = -1;
+        static bool _lastTyping;
         static readonly Dictionary<int, string> _wavs = new Dictionary<int, string>();
         static string _videoPath;
 
@@ -96,6 +100,7 @@ namespace Oddity.EditorTools
             string levels = ArgValue(args, "-previsLevels");
             _dir = ArgValue(args, "-previsDir");
             _ffmpeg = ArgValue(args, "-previsFfmpeg");
+            _day = Array.IndexOf(args, "-previsDay") >= 0;
             _target = Targets.FirstOrDefault(t => t.Name == scene);
             if (_target == null)
             {
@@ -112,7 +117,7 @@ namespace Oddity.EditorTools
             Directory.CreateDirectory(_dir);
             _levels = new Queue<int>();
             foreach (var s in levels.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
-                _levels.Enqueue(Mathf.Clamp(int.Parse(s, CultureInfo.InvariantCulture), 0, 3));
+                _levels.Enqueue(Mathf.Clamp(int.Parse(s, CultureInfo.InvariantCulture), 0, SceneConti.MaxLevel));
 
             _oldEnabled = EditorSettings.enterPlayModeOptionsEnabled;
             _oldOptions = EditorSettings.enterPlayModeOptions;
@@ -149,6 +154,7 @@ namespace Oddity.EditorTools
                 ChatView.TypingEnabled = true;
                 HarinVoice.ResourceDirOverride = null;
                 SceneConti.SetLevelForRun(_level);
+                SceneConti.SetNightForRun(!_day);
                 EditorSceneManager.OpenScene(PrototypeScene, OpenSceneMode.Single);
                 EditorApplication.EnterPlaymode();
             }
@@ -184,7 +190,7 @@ namespace Oddity.EditorTools
             if (_boot == null || _chat == null || main == null) throw new Exception("no GameBootstrap, ChatView or MainCamera in the scene");
             _cam = main.GetComponent<Camera>();
 
-            _videoPath = Path.Combine(_dir, _target.Name + "_L" + _level + ".silent.mp4");
+            _videoPath = Path.Combine(_dir, Stem() + ".silent.mp4");
             File.Delete(_videoPath);
             StartFfmpeg(_videoPath);
 
@@ -202,6 +208,8 @@ namespace Oddity.EditorTools
             _voiceId = _babbleId = 0;
             _lastSfx = null;
             _lastKey = null;
+            _lastCue = -1;
+            _lastTyping = false;
             _written = _engineFrames = _slowFrames = 0;
             _maxClockSkew = 0.0;
             _t0 = Time.realtimeSinceStartupAsDouble;
@@ -213,8 +221,11 @@ namespace Oddity.EditorTools
             _auto.Log = msg => _timeline.AppendLine(Stamp() + " " + msg);
             _lastEngineFrame = Time.frameCount - 1;
             _recording = true;
-            Debug.Log("PREVIS start " + _target.Name + " level " + _level + " voiceSet " + HarinVoice.VoiceSet + " babble " + PlayerBabble.Setting);
+            Debug.Log("PREVIS start " + _target.Name + " level " + _level + (_day ? " day" : " night") + " voiceSet " + HarinVoice.VoiceSet + " babble " + PlayerBabble.Setting);
         }
+
+        // file name stem: d3_night_L2 or d3_night_L2_day
+        static string Stem() => _target.Name + "_L" + _level + (_day ? "_day" : "");
 
         static string Stamp() => "f" + Math.Max(0, _written - 1).ToString("D5") + " t=" + _now.ToString("0.000", CultureInfo.InvariantCulture) + "s";
 
@@ -283,6 +294,19 @@ namespace Oddity.EditorTools
             string key = _boot.CurrentSceneId + ":" + _boot.LineNumber;
             if (key != _lastKey) { _lastKey = key; _timeline.AppendLine(Stamp() + " (poll) line now " + key + " cam " + _boot.Stage.ContiPreset.Width.ToString("0.000", CultureInfo.InvariantCulture) + " inConti " + _boot.Stage.InConti); }
 
+            // the moments the voice has to line up with: the conti cue starting, the typing indicator going on and off
+            int cueSerial = _boot.Stage.CueSerial;
+            if (cueSerial != _lastCue)
+            {
+                _lastCue = cueSerial;
+                _timeline.AppendLine(Stamp() + " (poll) cue start " + key + " serial " + cueSerial);
+            }
+            if (_chat.IsTyping != _lastTyping)
+            {
+                _lastTyping = _chat.IsTyping;
+                _timeline.AppendLine(Stamp() + " (poll) typing " + (_lastTyping ? "on" : "off"));
+            }
+
             var voice = _boot.Voice;
             if (voice != null)
             {
@@ -323,7 +347,7 @@ namespace Oddity.EditorTools
             string wav;
             if (!_wavs.TryGetValue(clip.GetInstanceID(), out wav))
             {
-                wav = Path.Combine(_dir, _target.Name + "_L" + _level + ".a" + _wavs.Count.ToString("D2") + ".wav");
+                wav = Path.Combine(_dir, Stem() + ".a" + _wavs.Count.ToString("D2") + ".wav");
                 WriteWav(clip, wav);
                 _wavs[clip.GetInstanceID()] = wav;
             }
@@ -361,8 +385,8 @@ namespace Oddity.EditorTools
 
         static void FinishLevel()
         {
-            string events = Path.Combine(_dir, _target.Name + "_L" + _level + ".events.tsv");
-            string timeline = Path.Combine(_dir, _target.Name + "_L" + _level + ".timeline.txt");
+            string events = Path.Combine(_dir, Stem() + ".events.tsv");
+            string timeline = Path.Combine(_dir, Stem() + ".timeline.txt");
             try
             {
                 _proc.StandardInput.BaseStream.Flush();
@@ -385,7 +409,7 @@ namespace Oddity.EditorTools
 
                 float seconds = _written / (float)Fps;
                 string wall = _now.ToString("0", CultureInfo.InvariantCulture);
-                Debug.Log("PREVIS_DONE " + _target.Name + " level=" + _level + " frames=" + _written + " seconds=" + seconds.ToString("0.00", CultureInfo.InvariantCulture) +
+                Debug.Log("PREVIS_DONE " + _target.Name + " level=" + _level + " day=" + (_day ? 1 : 0) + " frames=" + _written + " seconds=" + seconds.ToString("0.00", CultureInfo.InvariantCulture) +
                           " sounds=" + _events.Count + " engineFrames=" + _engineFrames + " maxClockSkew=" + _maxClockSkew.ToString("0.0000", CultureInfo.InvariantCulture) +
                           " slowFrames=" + _slowFrames + " wall=" + wall + "s video=" + _videoPath.Replace('\\', '/') + " events=" + events.Replace('\\', '/'));
                 Debug.Log("PREVIS lines " + string.Join(",", _auto.Visited));

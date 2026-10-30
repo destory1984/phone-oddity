@@ -148,21 +148,43 @@ namespace Oddity.PlayTests
         [UnityTest]
         public IEnumerator Conti_LastLineEndsOnLevelWidth()
         {
-            for (int level = 1; level <= 3; level++)
+            for (int level = 1; level <= SceneConti.MaxLevel; level++)
             {
                 SceneConti.SetLevelForRun(level);
                 yield return Start(3, Slot.Night);
                 var boot = Boot();
                 Assert.IsTrue(StepTo(SceneConti.NightEnd, 7), "end line 7 at strength " + level);
-                yield return WaitSeconds(SceneConti.FinalPushSeconds + 0.4f);
+                yield return WaitSeconds(SceneConti.FinalPush(level) + 0.4f);
                 var p = boot.Stage.ContiPreset;
                 Assert.AreEqual(SceneConti.FinalWidth[level - 1], p.Width, 0.0005f, "final width at strength " + level);
-                Assert.AreEqual(0.39f, p.EyeLine, 0.0005f);
+                Assert.AreEqual(SceneConti.FinalShot(level).EyeLine, p.EyeLine, 0.0005f);
                 AssertCameraAt(boot, p, "final");
             }
             Assert.AreEqual(0.38f, SceneConti.FinalWidth[0], 0.0001f);
             Assert.AreEqual(0.35f, SceneConti.FinalWidth[1], 0.0001f);
             Assert.AreEqual(0.32f, SceneConti.FinalWidth[2], 0.0001f);
+            Assert.AreEqual(0.26f, SceneConti.FinalWidth[3], 0.0001f);
+        }
+
+        [UnityTest]
+        public IEnumerator Conti_CloseClimaxIsSlowAndNeverPastItsEnd()
+        {
+            SceneConti.SetLevelForRun(4);
+            yield return Start(3, Slot.Night);
+            var boot = Boot();
+            Assert.IsTrue(StepTo(SceneConti.NightEnd, 3), "end line 3");
+            yield return null;
+            Assert.AreEqual(0.40f, boot.Stage.ContiPreset.Width, 0.001f, "the push starts from the close M");
+            float min = 1f;
+            float t0 = Time.unscaledTime;
+            while (Time.unscaledTime - t0 < SceneConti.ClimaxDelay + SceneConti.ClimaxSecondsClose + 0.5f)
+            {
+                yield return null;
+                min = Mathf.Min(min, boot.Stage.ContiPreset.Width);
+            }
+            Assert.AreEqual(0.30f, boot.Stage.ContiPreset.Width, 0.0005f);
+            Assert.GreaterOrEqual(min, 0.30f - 0.0005f, "it never goes past 0.30");
+            AssertCameraAt(boot, boot.Stage.ContiPreset, "close climax end");
         }
 
         [UnityTest]

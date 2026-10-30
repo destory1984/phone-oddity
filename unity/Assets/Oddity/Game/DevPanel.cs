@@ -29,6 +29,7 @@ namespace Oddity.Game
         Text _voiceLabel;
         Text _babbleLabel;
         Text _contiLabel;
+        Text _nightLabel;
         Text[] _valueTexts;
         float _nextRefresh;
         float _fpsStart;
@@ -105,6 +106,16 @@ namespace Oddity.Game
         {
             SceneConti.Level = SceneConti.NextLevel();
             if (_contiLabel != null) _contiLabel.text = ContiLabel();
+        }
+
+        static string NightLabel() => "밤 조명: " + (SceneConti.NightOn ? "켬" : "끔");
+
+        /// <summary>Turns the night look of the conti scenes on or off; it takes hold at once.</summary>
+        public void SwitchNight()
+        {
+            SceneConti.NightOn = !SceneConti.NightOn;
+            if (_nightLabel != null) _nightLabel.text = NightLabel();
+            if (_boot.Night != null) _boot.Night.Refresh();
         }
 
         /// <summary>The day 3 night conti scene from its first line; the panel closes.</summary>
@@ -249,6 +260,9 @@ namespace Oddity.Game
             var conti = MakeButton(prt, ContiLabel(), new Color(0.38f, 0.33f, 0.62f, 1f), 0f, RowHeight);
             _contiLabel = conti.GetComponentInChildren<Text>();
             conti.onClick.AddListener(SwitchConti);
+            var night = MakeButton(prt, NightLabel(), new Color(0.38f, 0.33f, 0.62f, 1f), 0f, RowHeight);
+            _nightLabel = night.GetComponentInChildren<Text>();
+            night.onClick.AddListener(SwitchNight);
             MakeButton(prt, "콘티 장면 바로", new Color(0.38f, 0.33f, 0.62f, 1f), 0f, RowHeight).onClick.AddListener(ContiScene);
 
             _panel.SetActive(false);

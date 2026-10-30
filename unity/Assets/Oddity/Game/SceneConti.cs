@@ -66,16 +66,31 @@ namespace Oddity.Game
         public static readonly ContiShot ShotC2 = new ContiShot(0.40f, 0.37f, 0f, 0f);
         public const float SideWidth = 0.30f, SideEyeLine = 0.42f;
         public const float EndEyeLine = 0.39f;
-        /// <summary>Strength 1 (weak), 2 (mid), 3 (strong): side-face yaw, width at the end of the side push, overshoot of the last-line-but-three push, final width.</summary>
-        public static readonly float[] SideYaw = { 25f, 32f, 40f };
-        public static readonly float[] SidePushEnd = { 0.29f, 0.28f, 0.27f };
-        public static readonly float[] ClimaxOvershoot = { 0f, 0.03f, 0.05f };
-        public static readonly float[] FinalWidth = { 0.38f, 0.35f, 0.32f };
+        /// <summary>
+        /// Strength 1 (weak), 2 (mid), 3 (strong), 4 (close): side-face yaw, width at the start and at the end of the side push,
+        /// overshoot of the last-line-but-three push, final width. Strength 4 shoots close and moves little (no side push, no overshoot).
+        /// </summary>
+        public static readonly float[] SideYaw = { 25f, 32f, 40f, 32f };
+        public static readonly float[] SideStartWidth = { SideWidth, SideWidth, SideWidth, 0.26f };
+        public static readonly float[] SidePushEnd = { 0.29f, 0.28f, 0.27f, 0.26f };
+        public static readonly float[] ClimaxOvershoot = { 0f, 0.03f, 0.05f, 0f };
+        public static readonly float[] FinalWidth = { 0.38f, 0.35f, 0.32f, 0.26f };
+        // Strength 4 (close): the same cuts framed closer; the eye line is set per shot so the face stays in the window.
+        public const int CloseLevel = 4;
+        public static readonly ContiShot ShotLClose = new ContiShot(0.42f, 0.36f, 8f, 0f);
+        public const float SideEyeLineClose = 0.42f;
+        public static readonly ContiShot ShotH2Close = new ContiShot(0.34f, 0.40f, 8f, 6f);
+        public static readonly ContiShot ShotMClose = new ContiShot(0.40f, 0.36f, 0f, 0f);
+        /// <summary>Where the push of end line 3 ends at strength 4 (the plan's C2 is 0.40 wide), and the eye line of the last pushes.</summary>
+        public static readonly ContiShot ShotClimaxClose = new ContiShot(0.30f, 0.38f, 0f, 0f);
+        public const float EndEyeLineClose = 0.38f;
         public const float CupSeconds = 2.7f;            // length of the cup sound, the side push lasts as long
         public const string CupSfx = "cup_voice_message";
         public const float H2PushSeconds = 2.0f, H2EndWidth = 0.40f;
         public const float ClimaxDelay = 0.35f, ClimaxSeconds = 1.5f, ClimaxVoiceSeconds = 2.0f;
+        public const float ClimaxSecondsClose = 3.0f;    // strength 4: a very slow push with no overshoot
         public const float FinalPushSeconds = 2.7f;
+        public const float FinalPushSecondsClose = 4.0f;
         public const float OvershootBackSeconds = 0.3f;
         public const float HeadSeconds = 0.6f;           // default time of a head move
         public const float TapBlockExtraSeconds = 0.5f;  // the tap that skips the cup sound waits this long after it
@@ -85,9 +100,11 @@ namespace Oddity.Game
 
         public const string LevelPref = "oddity.conti.v1";
         public const int DefaultLevel = 2;
+        public const int MaxLevel = 4;
+        public const string NightPref = "oddity.contiNight.v1";
         static int _level = -1;
 
-        /// <summary>0 off, 1 weak, 2 mid (default), 3 strong; remembered in PlayerPrefs (development).</summary>
+        /// <summary>0 off, 1 weak, 2 mid (default), 3 strong, 4 close; remembered in PlayerPrefs (development).</summary>
         public static int Level
         {
             get
@@ -96,13 +113,13 @@ namespace Oddity.Game
                 {
                     try { _level = PlayerPrefs.GetInt(LevelPref, DefaultLevel); }
                     catch (Exception) { _level = DefaultLevel; }
-                    if (_level < 0 || _level > 3) _level = DefaultLevel;
+                    if (_level < 0 || _level > MaxLevel) _level = DefaultLevel;
                 }
                 return _level;
             }
             set
             {
-                _level = Mathf.Clamp(value, 0, 3);
+                _level = Mathf.Clamp(value, 0, MaxLevel);
                 try { PlayerPrefs.SetInt(LevelPref, _level); PlayerPrefs.Save(); }
                 catch (Exception) { }
             }
@@ -112,11 +129,42 @@ namespace Oddity.Game
         public static void ClearLevelCache() { _level = -1; }
 
         /// <summary>Sets the strength for this run only, without writing PlayerPrefs (shots).</summary>
-        public static void SetLevelForRun(int level) { _level = Mathf.Clamp(level, 0, 3); }
+        public static void SetLevelForRun(int level) { _level = Mathf.Clamp(level, 0, MaxLevel); }
 
-        public static int NextLevel() => (Level + 1) % 4;
+        public static int NextLevel() => (Level + 1) % (MaxLevel + 1);
 
-        public static string LevelName(int level) => level == 0 ? "끔" : level == 1 ? "약" : level == 3 ? "강" : "중";
+        public static string LevelName(int level) => level == 0 ? "끔" : level == 1 ? "약" : level == 3 ? "강" : level == CloseLevel ? "근" : "중";
+
+        static int _night = -1;
+
+        /// <summary>The night look (<see cref="NightLook"/>) on the conti scenes; default on, remembered in PlayerPrefs (development).</summary>
+        public static bool NightOn
+        {
+            get
+            {
+                if (_night < 0)
+                {
+                    try { _night = PlayerPrefs.GetInt(NightPref, 1) != 0 ? 1 : 0; }
+                    catch (Exception) { _night = 1; }
+                }
+                return _night == 1;
+            }
+            set
+            {
+                _night = value ? 1 : 0;
+                try { PlayerPrefs.SetInt(NightPref, _night); PlayerPrefs.Save(); }
+                catch (Exception) { }
+            }
+        }
+
+        /// <summary>Sets the night look for this run only, without writing PlayerPrefs (shots, previs, tests).</summary>
+        public static void SetNightForRun(bool on) { _night = on ? 1 : 0; }
+
+        /// <summary>Forget the cached night setting so the next read goes to PlayerPrefs again (tests).</summary>
+        public static void ClearNightCache() { _night = -1; }
+
+        /// <summary>True for the two scenes the conti table is written for.</summary>
+        public static bool IsContiScene(string sceneId) => sceneId == Night || sceneId == NightEnd;
 
         public static string Key(string sceneId, int line) => sceneId + ":" + line;
 
@@ -124,7 +172,7 @@ namespace Oddity.Game
         public static bool TryGet(string sceneId, int line, int level, out ContiCue cue)
         {
             cue = default;
-            if (level < 1 || level > 3 || sceneId == null) return false;
+            if (level < 1 || level > MaxLevel || sceneId == null) return false;
             if (sceneId != Night && sceneId != NightEnd) return false;
             return Table(level).TryGetValue(Key(sceneId, line), out cue);
         }
@@ -140,14 +188,22 @@ namespace Oddity.Game
             { "d3_night_end:5", 'p' }, { "d3_night_end:6", 'h' }, { "d3_night_end:7", 'h' },
         };
 
-        static readonly Dictionary<string, ContiCue>[] Tables = new Dictionary<string, ContiCue>[3];
+        static readonly Dictionary<string, ContiCue>[] Tables = new Dictionary<string, ContiCue>[MaxLevel];
 
         static Dictionary<string, ContiCue> Table(int level) => Tables[level - 1] ?? (Tables[level - 1] = Build(level));
 
         // The side face: yaw by strength; it pushes from SideWidth to SidePushEnd while the cup sound plays.
-        public static ContiShot SideShot(int level) => new ContiShot(SideWidth, SideEyeLine, SideYaw[level - 1], 0f);
+        public static ContiShot SideShot(int level) => new ContiShot(SideStartWidth[level - 1], level == CloseLevel ? SideEyeLineClose : SideEyeLine, SideYaw[level - 1], 0f);
 
-        public static ContiShot FinalShot(int level) => new ContiShot(FinalWidth[level - 1], EndEyeLine, 0f, 0f);
+        public static ContiShot FinalShot(int level) => new ContiShot(FinalWidth[level - 1], level == CloseLevel ? EndEyeLineClose : EndEyeLine, 0f, 0f);
+
+        public static ContiShot LShot(int level) => level == CloseLevel ? ShotLClose : ShotL;
+        public static ContiShot MShot(int level) => level == CloseLevel ? ShotMClose : ShotM;
+        public static ContiShot H2Shot(int level) => level == CloseLevel ? ShotH2Close : ShotH2;
+        /// <summary>Where the push of end line 3 ends: the plan's C2, or the closer framing of strength 4.</summary>
+        public static ContiShot ClimaxEnd(int level) => level == CloseLevel ? ShotClimaxClose : ShotC2;
+        public static float ClimaxPushSeconds(int level) => level == CloseLevel ? ClimaxSecondsClose : ClimaxSeconds;
+        public static float FinalPush(int level) => level == CloseLevel ? FinalPushSecondsClose : FinalPushSeconds;
 
         static Dictionary<string, ContiCue> Build(int level)
         {
@@ -155,22 +211,25 @@ namespace Oddity.Game
             var side = SideShot(level);
             var sideEnd = side;
             sideEnd.Width = SidePushEnd[i];
-            var h2End = ShotH2;
-            h2End.Width = H2EndWidth;
+            var h2 = H2Shot(level);
+            var h2End = h2;
+            if (level != CloseLevel) h2End.Width = H2EndWidth; // strength 4 does not push
+            var shotL = LShot(level);
+            var shotM = MShot(level);
             var t = new Dictionary<string, ContiCue>();
 
             // ---- d3_night ----
-            t[Key(Night, 1)] = new ContiCue { Start = ShotL, Head1 = new ContiHead(0.4f, 0f, 4f), Gaze = ContiGaze.Free, Face1 = new ContiFace(0f, "relaxed") };
+            t[Key(Night, 1)] = new ContiCue { Start = shotL, Head1 = new ContiHead(0.4f, 0f, 4f), Gaze = ContiGaze.Free, Face1 = new ContiFace(0f, "relaxed") };
             t[Key(Night, 2)] = new ContiCue
             {
                 Start = side, End = sideEnd, MoveSeconds = CupSeconds, Sfx = CupSfx, Gaze = ContiGaze.Free,
                 Head1 = new ContiHead(1.10f, 3f, 0f), Face1 = new ContiFace(2.10f, "smile"),
             };
-            t[Key(Night, 3)] = new ContiCue { Start = ShotL, Head1 = new ContiHead(0f, 6f, 0f), Gaze = ContiGaze.Lens };
+            t[Key(Night, 3)] = new ContiCue { Start = shotL, Head1 = new ContiHead(0f, 6f, 0f), Gaze = ContiGaze.Lens };
             t[Key(Night, 4)] = new ContiCue { Head1 = new ContiHead(0f, 0f, 3f), Gaze = ContiGaze.Free, Face1 = new ContiFace(0f, "smile") };
-            t[Key(Night, 5)] = new ContiCue { Start = ShotH2, End = h2End, MoveSeconds = H2PushSeconds, Head1 = new ContiHead(0f, 0f, 8f), Gaze = ContiGaze.Free };
+            t[Key(Night, 5)] = new ContiCue { Start = h2, End = h2End, MoveSeconds = H2PushSeconds, Head1 = new ContiHead(0f, 0f, 8f), Gaze = ContiGaze.Free };
             t[Key(Night, 6)] = new ContiCue { Head1 = new ContiHead(1.0f, 0f, 0f) };
-            t[Key(Night, 7)] = new ContiCue { Start = ShotM, Head1 = new ContiHead(0f, 0f, -2f), Gaze = ContiGaze.Lens };
+            t[Key(Night, 7)] = new ContiCue { Start = shotM, Head1 = new ContiHead(0f, 0f, -2f), Gaze = ContiGaze.Lens };
             t[Key(Night, 8)] = new ContiCue { Head1 = new ContiHead(0.5f, 0f, 0f) };
 
             // ---- d3_night_end ----
@@ -178,7 +237,7 @@ namespace Oddity.Game
             t[Key(NightEnd, 2)] = new ContiCue { Head1 = new ContiHead(0f, 0f, 3f), Face1 = new ContiFace(0f, "soft") };
             t[Key(NightEnd, 3)] = new ContiCue
             {
-                End = ShotC2, MoveDelay = ClimaxDelay, MoveSeconds = ClimaxSeconds, Overshoot = ClimaxOvershoot[i],
+                End = ClimaxEnd(level), MoveDelay = ClimaxDelay, MoveSeconds = ClimaxPushSeconds(level), Overshoot = ClimaxOvershoot[i],
                 Head1 = new ContiHead(0f, 0f, 0f, 0.35f), Gaze = ContiGaze.Lens,
                 Face1 = new ContiFace(0f, "relaxed"), Face2 = new ContiFace(ClimaxVoiceSeconds, "smile"),
             };
@@ -188,7 +247,7 @@ namespace Oddity.Game
             // the head has no tilt, so the 4 degree tilt is a 3 degree yaw
             t[Key(NightEnd, 7)] = new ContiCue
             {
-                End = FinalShot(level), MoveSeconds = FinalPushSeconds, Head1 = new ContiHead(0f, 3f, 0f, 0.8f), Gaze = ContiGaze.Lens,
+                End = FinalShot(level), MoveSeconds = FinalPush(level), Head1 = new ContiHead(0f, 3f, 0f, 0.8f), Gaze = ContiGaze.Lens,
                 TypingFace = new ContiFace(1.4f, "soft"), Glitch = true,
             };
             return t;
