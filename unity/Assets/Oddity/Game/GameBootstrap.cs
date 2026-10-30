@@ -96,6 +96,19 @@ namespace Oddity.Game
         PokeController _poke;
         string _pokeJson;
         AppStageDirector _stage;
+        Line _gazeLine;           // the phone line on screen (null between slots and while waiting)
+        Transform _gazeGoal;      // the camera the eyes are heading for (null = free eyes)
+        float _gazeWeight;        // 0 = straight ahead, 1 = on the camera
+        Transform _gazeProxy;
+
+        /// <summary>Phone: the eyes reach the camera in this many seconds when a line of hers shows.</summary>
+        public const float PhoneGazeSeconds = 0.4f;
+        /// <summary>Phone: the head takes this share of the shot's yaw and pitch. All of it: this model's eyes barely turn (90 degrees in, 10 out).</summary>
+        public const float PhoneHeadShare = 1f;
+        /// <summary>Phone: the head never turns more than this sideways or up and down (degrees).</summary>
+        public const float PhoneHeadYawMax = 10f, PhoneHeadPitchMax = 6f;
+        /// <summary>Phone: on the player's lines the head goes back this slowly.</summary>
+        public const float PhonePlayerHeadSeconds = 1.2f;
 
         /// <summary>Fired after the Night slot is closed and saved, just before the emergence plays.</summary>
         public event Action NightFinished;
@@ -137,6 +150,12 @@ namespace Oddity.Game
         public HarinWardrobe Wardrobe => wardrobe;
         /// <summary>Camera director of Harin's phone window (null until the scene has the camera).</summary>
         public AppStageDirector Stage => _stage;
+        /// <summary>The camera her eyes are on in the phone (the window's AppStageCamera), or null when they are free.</summary>
+        public Transform PhoneGazeTarget => _gazeGoal;
+        /// <summary>The phone line her gaze follows now (null between slots).</summary>
+        public Line PhoneGazeLine => _gazeLine;
+        /// <summary>0 = eyes straight ahead, 1 = on the camera (eases over <see cref="PhoneGazeSeconds"/>).</summary>
+        public float PhoneGazeWeight => _gazeWeight;
 
         string PrologueSeenPath => string.IsNullOrEmpty(SavePathOverride)
             ? Path.Combine(Application.persistentDataPath, PrologueSeenFile)
@@ -155,6 +174,7 @@ namespace Oddity.Game
             emergence.SetArt(cut10DeskPhone, screenNoise, portalRing, wristSwirl);
             emergence.Finished += OnEmergenceFinished;
             FrameAppStage();
+            if (_stage != null) _stage.ShotStarted += ApplyGaze;
             StartCoroutine(LoadAllThenInit());
         }
 
@@ -348,6 +368,7 @@ namespace Oddity.Game
                 chat.NameEntered -= OnNameEntered;
             }
             if (emergence != null) emergence.Finished -= OnEmergenceFinished;
+            if (_stage != null) _stage.ShotStarted -= ApplyGaze;
             if (_subtitle != null)
             {
                 _subtitle.Tapped -= OnTapped;
@@ -365,6 +386,7 @@ namespace Oddity.Game
 
         void Update()
         {
+            UpdateGazeEase();
             if (_pendingFace != null && !chat.IsTyping)
             {
                 Line line = _pendingFace;
@@ -400,7 +422,9 @@ namespace Oddity.Game
                 return;
             }
             if (announce) chat.ShowLockNotice("하린: " + OpeningText(State.Slot));
+            _gazeLine = null; // between slots her eyes are free again until her first line
             if (_stage != null) _stage.BeginSlot(State.Slot, State.Day);
+            ApplyGaze();
             _runner.StartSlot(State.Slot);
         }
 
@@ -413,6 +437,8 @@ namespace Oddity.Game
             chat.ShowLine(line);
             SetPhoneGlitch(0f);
             if (Harin != null) Harin.SetFace(HarinPuppet.FaceForBeat(line.Face, line.Beat));
+            _gazeLine = line;
+            ApplyGaze();
         }
 
         string OpeningText(Slot slot)
@@ -518,15 +544,91 @@ namespace Oddity.Game
             var cam = emergence != null ? emergence.MainCamera : null;
             if (!towards || cam == null) { Harin.EaseHeadTurn(0f, 0f, EmergenceSequence.Act2EaseSeconds); return; }
             Harin.SetEyeTarget(cam.transform);
-            var local = Harin.transform.InverseTransformPoint(cam.transform.position);
+            TurnHeadToCamera(cam.transform.position, EmergenceSequence.Act2HeadToCamera,
+                EmergenceSequence.Act2HeadToCamera + EmergenceSequence.Act2HeadLift, EmergenceSequence.Act2EaseSeconds);
+        }
+
+        // The head turns `turn` degrees towards the side the camera stands on and lifts `lift` degrees (negative = down).
+        // Shared by act 2 (the room) and the phone.
+        void TurnHeadToCamera(Vector3 cameraPosition, float turn, float lift, float seconds)
+        {
+            var local = Harin.transform.InverseTransformPoint(cameraPosition);
             float side = local.x >= 0f ? 1f : -1f; // model +x is her left; yaw > 0 turns to her left
-            Harin.EaseHeadTurn(side * EmergenceSequence.Act2HeadToCamera,
-                -(EmergenceSequence.Act2HeadToCamera + EmergenceSequence.Act2HeadLift), EmergenceSequence.Act2EaseSeconds);
+            Harin.EaseHeadTurn(side * turn, -lift, seconds);
+        }
+
+        /// <summary>The head's share of a shot in the phone: x = degrees to turn towards the camera, y = degrees to lift (negative = down).</summary>
+        public static Vector2 PhoneHeadFor(CamShots.Preset shot) => new Vector2(
+            Mathf.Min(PhoneHeadYawMax, Mathf.Abs(shot.Yaw) * PhoneHeadShare),
+            Mathf.Clamp(shot.Pitch * PhoneHeadShare, -PhoneHeadPitchMax, PhoneHeadPitchMax));
+
+        // Phone: where her eyes and head go for the line on screen and the shot now showing.
+        // Every line of hers and of the player's keeps her eyes on the window's camera; the head turns only on hers.
+        // Down-looking beats and the glitch shot G leave her free; no line at all frees her eyes too.
+        void ApplyGaze()
+        {
+            if (Harin == null || _stage == null || _act2 || _inPrologue || _stage.Camera == null) return;
+            var line = _gazeLine;
+            bool conversation = _stage.Enabled && line != null && (line.Who == "harin" || line.Who == "player");
+            bool herLine = conversation && line.Who == "harin";
+            bool looksDown = herLine && LooksDownBeats.Contains(line.Beat ?? "");
+            bool glitchShot = _stage.Shot == CamShots.G;
+            bool onCamera = conversation && !looksDown && !glitchShot;
+            _gazeGoal = onCamera ? _stage.Camera.transform : null;
+            if (onCamera && herLine)
+            {
+                var head = PhoneHeadFor(CamShots.Get(_stage.Shot));
+                TurnHeadToCamera(_stage.TargetPose.position, head.x, head.y, PhoneGazeSeconds);
+            }
+            else Harin.EaseHeadTurn(0f, 0f, onCamera ? PhonePlayerHeadSeconds : PhoneGazeSeconds);
+        }
+
+        // Moves the eyes' look-at point from straight ahead to the camera (and back) over PhoneGazeSeconds.
+        void UpdateGazeEase()
+        {
+            if (Harin == null || _stage == null || _stage.Camera == null) return;
+            float goal = _gazeGoal != null ? 1f : 0f;
+            if (_gazeWeight == goal && _gazeWeight == 0f) return;
+            _gazeWeight = Mathf.MoveTowards(_gazeWeight, goal, Time.deltaTime / PhoneGazeSeconds);
+            var cam = _stage.Camera.transform;
+            if (_gazeWeight >= 1f && _gazeGoal != null)
+            {
+                if (Harin.EyeTarget != _gazeGoal) Harin.SetEyeTarget(_gazeGoal);
+                return;
+            }
+            if (_gazeWeight <= 0f)
+            {
+                Harin.SetEyeTarget(null);
+                return;
+            }
+            if (_gazeProxy == null)
+            {
+                _gazeProxy = new GameObject("PhoneGazeProxy").transform;
+                _gazeProxy.SetParent(transform, false);
+            }
+            var eyes = Harin.BonePosition(HumanBodyBones.Head) + Vector3.up * 0.075f * Harin.transform.lossyScale.y;
+            var ahead = eyes + Harin.transform.forward * Vector3.Distance(eyes, cam.position);
+            float k = _gazeWeight * _gazeWeight * (3f - 2f * _gazeWeight);
+            _gazeProxy.position = Vector3.Lerp(ahead, cam.position, k);
+            if (Harin.EyeTarget != _gazeProxy) Harin.SetEyeTarget(_gazeProxy);
+        }
+
+        // Eyes and head back to their free state (leaving the phone, a new puppet).
+        void ClearGaze()
+        {
+            _gazeLine = null;
+            _gazeGoal = null;
+            _gazeWeight = 0f;
+            if (Harin == null) return;
+            Harin.SetEyeTarget(null);
+            Harin.EaseHeadTurn(0f, 0f, PhoneGazeSeconds);
         }
 
         // A phone line is on screen: Harin's lines show their face, other lines leave her at the idle smile.
         void ApplyPhoneLine(Line line, bool moment)
         {
+            _gazeLine = line;
+            ApplyGaze();
             if (Harin != null)
             {
                 if (line.Who == "harin")
@@ -585,6 +687,7 @@ namespace Oddity.Game
             if (_stage != null) _stage.Enabled = false;
             if (_glitchMoment != null) { StopCoroutine(_glitchMoment); _glitchMoment = null; }
             if (Harin != null) { Harin.SetIdle(false); Harin.StopPokeMotion(); }
+            ClearGaze();
             if (_poke != null) _poke.Cancel();
             if (_voice != null) _voice.Stop();
         }
@@ -619,6 +722,8 @@ namespace Oddity.Game
             }
             Clock.CloseCurrent();
             SaveState();
+            _gazeLine = null;
+            ApplyGaze();
             // CloseCurrent has moved the day on, so the day that just ended is State.Day - 1
             if (slot == Slot.Night && State.Day - 1 >= CoreInfo.EmergenceDay)
             {
@@ -826,6 +931,7 @@ namespace Oddity.Game
             if (_director != null) { _director.RewindCovered -= WearSummer; _director.End(); }
             _director = null;
             WearSummer(); // also when the script had no rewind line
+            ClearGaze(); // the eyes start free in the messenger
             _subtitle.SetVisible(false);
             chat.SetVisible(true);
             _lineScene = null;

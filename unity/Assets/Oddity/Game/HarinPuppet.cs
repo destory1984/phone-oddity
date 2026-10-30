@@ -195,6 +195,35 @@ namespace Oddity.Game
         /// <summary>The transform the eyes follow (null when they look straight ahead).</summary>
         public Transform EyeTarget => _vrm != null ? _vrm.LookAtTarget : null;
 
+        /// <summary>Eye look-at input right now: yaw and pitch in degrees from the head's forward (zero before the VRM runs).</summary>
+        public Vector2 EyeInput => _vrm != null && _vrm.Runtime != null ? new Vector2(_vrm.Runtime.LookAt.Yaw, _vrm.Runtime.LookAt.Pitch) : Vector2.zero;
+
+        /// <summary>The eye rotation EyeInput produces after the model's range maps (absolute degrees; x sideways, y up or down).</summary>
+        public Vector2 EyeRotation
+        {
+            get
+            {
+                if (_vrm == null || _vrm.Runtime == null) return Vector2.zero;
+                var look = _vrm.Vrm.LookAt;
+                var input = EyeInput;
+                float yaw = Mathf.Abs(input.x);
+                float pitch = Mathf.Abs(input.y);
+                return new Vector2(look.HorizontalOuter.Map(yaw), (input.y >= 0f ? look.VerticalUp : look.VerticalDown).Map(pitch));
+            }
+        }
+
+        /// <summary>The largest eye rotation the model allows (sideways, up/down), where the whites would start to show.</summary>
+        public Vector2 EyeRotationLimit
+        {
+            get
+            {
+                if (_vrm == null) return Vector2.zero;
+                var look = _vrm.Vrm.LookAt;
+                return new Vector2(Mathf.Min(look.HorizontalOuter.CurveYRangeDegree, look.HorizontalInner.CurveYRangeDegree),
+                    Mathf.Min(look.VerticalUp.CurveYRangeDegree, look.VerticalDown.CurveYRangeDegree));
+            }
+        }
+
         public const float HeadEaseSpeed = 12f; // degrees per second
         float _addYaw, _addPitch, _addYawTarget, _addPitchTarget;
         /// <summary>The eased turn on top of the pose right now (yaw, pitch).</summary>

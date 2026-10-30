@@ -287,6 +287,12 @@ namespace Oddity.Game
         bool _hasAnchor;
 
         public string Shot => Planner.Shot;
+        /// <summary>The window's camera (null before Init).</summary>
+        public Camera Camera => _cam;
+        /// <summary>Where the camera stands (or is moving to) in the shot now showing; set when a shot starts.</summary>
+        public UnityEngine.Pose TargetPose { get; private set; }
+        /// <summary>Fires whenever a new shot starts (slot start, change, glitch cut and its return), after TargetPose is set.</summary>
+        public event Action ShotStarted;
 
         static float Now => Time.unscaledTime;
 
@@ -344,6 +350,7 @@ namespace Oddity.Game
             if (_cam == null) return;
             var harin = _harin != null ? _harin() : null;
             if (harin == null) return;
+            bool newShot = false;
             if (Planner.Serial != _serial || !_hasAnchor)
             {
                 var head = harin.BonePosition(HumanBodyBones.Head);
@@ -356,14 +363,17 @@ namespace Oddity.Game
                 _from = new UnityEngine.Pose(_cam.transform.position, _cam.transform.rotation);
                 _hasAnchor = true;
                 _serial = Planner.Serial;
+                newShot = true;
             }
             var preset = CamShots.Get(Planner.Shot);
             var target = PoseFor(_eyes, _facing, _cam.fieldOfView, preset, Planner.DriftWidthScale, Planner.DriftSlideMeters);
+            if (newShot) TargetPose = target;
             float p = snap ? 1f : Planner.MoveProgress(Now);
             var pose = p >= 1f
                 ? target
                 : new UnityEngine.Pose(Vector3.Lerp(_from.position, target.position, p), Quaternion.Slerp(_from.rotation, target.rotation, p));
             _cam.transform.SetPositionAndRotation(pose.position, pose.rotation);
+            if (newShot) ShotStarted?.Invoke();
         }
 
         /// <summary>
