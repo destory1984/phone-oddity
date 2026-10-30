@@ -64,6 +64,16 @@ namespace Oddity.Game
             _mixWeight = Mathf.Clamp01(secondWeight);
         }
 
+        /// <summary>
+        /// Holds the lips together by <paramref name="weight"/> (Fcl_MTH_Close 0..1) and lifts the mouth corners by
+        /// <paramref name="smile"/> (Fcl_MTH_Fun) on the face set now; both fade as she talks.
+        /// </summary>
+        public void SetMouthClose(float weight, float smile = 0f)
+        {
+            _mouthCloseTarget = Mathf.Clamp01(weight);
+            _mouthSmileTarget = Mathf.Clamp01(smile);
+        }
+
         // "smile": a closed-mouth smile. Even 0.05 of the happy preset parts the lips enough to show the
         // teeth, so the smile is relaxed alone (happy kept in the mix at 0 so it can be tuned back up).
         public const float SmileRelaxed = 0.55f, SmileHappy = 0f;

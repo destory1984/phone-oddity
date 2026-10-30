@@ -180,6 +180,7 @@ namespace Oddity.EditorTools
                     var cheek = PokeZones.ViewportOf(cam, harin, 0f, -0.04f);
                     chat.PokeWindow(cheek);
                     clock = 103;
+                    boot.Voice.Stop(); // the first reaction's voice would make her ignore the second touch
                     chat.PokeWindow(cheek);
                 },
             },

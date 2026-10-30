@@ -75,10 +75,11 @@ namespace Oddity.PlayTests
             Assert.IsNotNull(poke, "poke.json loaded");
             var chat = Chat();
 
-            // the window shows the top 760 of 1080 px of the square picture
-            var rect = new Rect(-540f, -760f, 1080f, 760f);
+            // the window shows the top WindowHeight of 1080 px of the square picture
+            float wh = ChatView.WindowHeight;
+            var rect = new Rect(-540f, -wh, 1080f, wh);
             Assert.AreEqual(new Vector2(0.5f, 1f), ChatView.WindowToViewport(new Vector2(0f, 0f), rect));
-            Assert.AreEqual(1f - 760f / 1080f, ChatView.WindowToViewport(new Vector2(-540f, -760f), rect).y, 1e-4f);
+            Assert.AreEqual(1f - wh / 1080f, ChatView.WindowToViewport(new Vector2(-540f, -wh), rect).y, 1e-4f);
 
             Touch(Viewport(0f, 0.06f), ref _pokeClock);
             Assert.AreEqual(PokeHit.Head, poke.LastHit);
@@ -102,6 +103,82 @@ namespace Oddity.PlayTests
             Assert.AreEqual(3, poke.Reactions);
             Assert.AreEqual("window", poke.LastLine.Zone);
             Assert.AreEqual(bubbles + 1, chat.BubbleCount);
+        }
+
+        // Head bone yaw in her model space (degrees).
+        static float HeadYaw(HarinPuppet harin)
+        {
+            var head = harin.GetComponent<Animator>().GetBoneTransform(HumanBodyBones.Head);
+            var f = Quaternion.Inverse(harin.transform.rotation) * head.forward;
+            return Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg;
+        }
+
+        // Task 27: a cheek touch turns the head away (at least 6 degrees within 0.5 s) and back (within 2 by 1.5 s).
+        [UnityTest]
+        public IEnumerator Poke_ReactionTurnsHead()
+        {
+            yield return LoadScene();
+            var harin = Harin();
+            for (int i = 0; i < 3; i++) yield return null;
+            float rest = HeadYaw(harin);
+            Touch(Viewport(0.03f, -0.04f), ref _pokeClock);
+            Assert.AreEqual(PokeHit.Cheek, Boot().Poke.LastHit);
+            Assert.AreEqual(1, Boot().Poke.Reactions);
+            float start = Time.time, peak = 0f;
+            while (Time.time - start < 0.5f)
+            {
+                yield return null;
+                peak = Mathf.Max(peak, Mathf.Abs(Mathf.DeltaAngle(rest, HeadYaw(harin))));
+            }
+            Assert.GreaterOrEqual(peak, 6f, "head turned away");
+            Assert.That(harin.PokeSeconds, Is.InRange(HarinPuppet.PokeMinSeconds, HarinPuppet.PokeMaxSeconds));
+            while (Time.time - start < 1.5f) yield return null;
+            yield return null;
+            Assert.LessOrEqual(Mathf.Abs(Mathf.DeltaAngle(rest, HeadYaw(harin))), 2f, "head back to the camera");
+            Assert.IsFalse(harin.PokeActive);
+        }
+
+        // Task 27: a reaction plays its own voice clip of the current set when the file is there, and stays
+        // silent without error when it is not (no files, or the karina set which has no poke lines).
+        [UnityTest]
+        public IEnumerator Poke_PlaysVoiceWhenPresent()
+        {
+            string set = HarinVoice.VoiceSet;
+            try
+            {
+                yield return LoadScene();
+                var voice = Boot().Voice;
+                HarinVoice.VoiceSet = "harinA";
+                bool present = Resources.Load<AudioClip>(HarinVoice.DefaultResourceDir + HarinVoice.PokeClipName(7)) != null;
+                if (present)
+                {
+                    Touch(Viewport(0f, -0.04f), ref _pokeClock);
+                    Assert.AreEqual(1, Boot().Poke.Reactions);
+                    StringAssert.StartsWith("harin_poke_", voice.CurrentClip ?? "", "poke clip");
+                    StringAssert.EndsWith("_harinA", voice.CurrentClip);
+                    Assert.IsTrue(voice.IsPlaying);
+                    var source = voice.GetComponent<AudioSource>();
+                    Assert.IsNotNull(source);
+                    Assert.AreEqual(voice.CurrentClip, source.clip.name, "the AudioSource got the clip");
+                }
+                else Debug.Log("Poke_PlaysVoiceWhenPresent: no poke voice files here, only the silent path is checked");
+
+                HarinVoice.VoiceSet = "karina";
+                Touch(Viewport(0f, 0.06f), ref _pokeClock);
+                Assert.IsNull(voice.CurrentClip, "karina has no poke lines");
+                Assert.IsFalse(voice.PlayPoke(0));
+
+                HarinVoice.VoiceSet = "harinA";
+                HarinVoice.ResourceDirOverride = "VoiceMissing/";
+                Assert.IsFalse(voice.PlayPoke(3), "no file");
+                Assert.IsNull(voice.CurrentClip);
+                LogAssert.NoUnexpectedReceived();
+            }
+            finally
+            {
+                HarinVoice.ResourceDirOverride = null;
+                HarinVoice.VoiceSet = set;
+            }
         }
 
         [UnityTest]

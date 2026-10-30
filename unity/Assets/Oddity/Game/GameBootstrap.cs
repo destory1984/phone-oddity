@@ -500,7 +500,18 @@ namespace Oddity.Game
                 Harin.SetFace(HarinPuppet.FaceForBeat(line.Face, line.Beat));
                 if (line.Who == "harin") Harin.BlushForLine(line.Face, line.Beat);
                 Harin.SetGlitch(line.Glitch);
+                FaceCameraInRoom(line.Who == "harin");
             }
+        }
+
+        // Act 2: on her own lines (her eyes are on the camera) the head turns a few degrees towards it and lifts.
+        void FaceCameraInRoom(bool towards)
+        {
+            var cam = emergence != null ? emergence.MainCamera : null;
+            if (!towards || cam == null) { Harin.EaseHeadTurn(0f, 0f); return; }
+            var local = Harin.transform.InverseTransformPoint(cam.transform.position);
+            float side = local.x >= 0f ? 1f : -1f; // model +x is her left; yaw > 0 turns to her left
+            Harin.EaseHeadTurn(side * EmergenceSequence.Act2HeadToCamera, -EmergenceSequence.Act2HeadToCamera);
         }
 
         // A phone line is on screen: Harin's lines show their face, other lines leave her at the idle smile.

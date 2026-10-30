@@ -71,7 +71,9 @@ namespace Oddity.Game
         HarinPuppet _harin => _boot != null && _boot.Harin != null ? _boot.Harin : _harinFromInit;
         Camera _camera;
         PokeRules _rules;
+        PokeTable _table;
         Coroutine _face;
+        Vector2 _lastViewport;
 
         public PokeHit LastHit { get; private set; } = PokeHit.None;
         /// <summary>Reactions with a line shown since the scene started.</summary>
@@ -89,6 +91,7 @@ namespace Oddity.Game
             _boot = boot;
             _chat = chat;
             _harinFromInit = harin;
+            _table = table;
             _rules = new PokeRules(state, table, Environment.TickCount);
             var go = GameObject.Find("AppStageCamera");
             if (go != null) _camera = go.GetComponent<Camera>();
@@ -112,6 +115,7 @@ namespace Oddity.Game
         void OnPoked(Vector2 viewport)
         {
             LastHit = PokeZones.Classify(_camera, _harin, viewport);
+            _lastViewport = viewport;
             if (!Enabled || LastHit == PokeHit.None) return;
             if (_chat.IsTyping || (_boot.Voice != null && _boot.Voice.IsPlaying)) return;
             if (_chat.VisibleButtonTexts.Count > 0)
@@ -136,11 +140,32 @@ namespace Oddity.Game
             Reactions++;
             LastLine = line;
             _chat.ShowHarinNote(line.Text);
-            _harin.SetFace(HarinPuppet.FaceForBeat(line.Face, null));
+            string face = HarinPuppet.FaceForBeat(line.Face, null);
+            if (face == "surprised")
+            {
+                // a startle: wide eyes for a moment, then a plain face (not the long surprised look)
+                _harin.SetFace("neutral");
+                _harin.Startle();
+            }
+            else _harin.SetFace(face);
             _harin.BlushForLine(line.Face, null);
-            _harin.PlayPokeMotion(line.Motion);
+            PlayAct(line);
+            if (_boot.Voice != null && _table != null)
+                _boot.Voice.PlayPoke(_table.Lines.IndexOf(line) + 1);
             Cancel();
             if (isActiveAndEnabled) _face = StartCoroutine(FaceBack());
+        }
+
+        // The acting for the zone that was touched: which side, and where the eyes go for a window touch.
+        void PlayAct(PokeLine line)
+        {
+            var hit = LastHit == PokeHit.Head ? PokeHit.Head : LastHit == PokeHit.Cheek ? PokeHit.Cheek : PokeHit.Window;
+            Vector2 eyes = _camera != null ? PokeZones.ViewportOf(_camera, _harin, 0f, 0f) : new Vector2(0.5f, 0.6f);
+            float dx = _lastViewport.x - eyes.x, dy = _lastViewport.y - eyes.y;
+            float side = dx >= 0f ? 1f : -1f; // screen right is her left
+            float eyeYaw = Mathf.Sign(dx) * Mathf.Clamp(Mathf.Abs(dx) * 60f, 10f, 18f);
+            float eyePitch = Mathf.Clamp(-dy * 40f, -10f, 10f);
+            _harin.PlayPokeReaction(hit, line.Motion, side, eyeYaw, eyePitch);
         }
 
         IEnumerator FaceBack()

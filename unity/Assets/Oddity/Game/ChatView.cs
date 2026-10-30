@@ -17,10 +17,18 @@ namespace Oddity.Game
     {
         public const float CanvasWidth = 1080f;
         public const float CanvasHeight = 1920f;
-        public const float WindowHeight = 760f;
+        // Task 27: 760 -> 960 so Harin is not a small strip over an empty chat; the chat and choice areas
+        // give up the height (choices: 3 buttons of ChoiceButtonHeight still fit).
+        public const float WindowHeight = 960f;
         /// <summary>Share of the square Harin texture (from its top) that the window shows.</summary>
         public const float WindowShare = WindowHeight / CanvasWidth;
-        const float ChoiceAreaHeight = 470f;
+        public const float ChoiceAreaHeight = 440f;
+        public const float ChoiceButtonHeight = 110f;
+        const float ChoiceSpacing = 20f;
+        const int ChoicePadY = 26;
+        // system lines (install notices): 80% of the old 30 px text, on a fainter box
+        public const int SystemFontSize = 24;
+        static readonly Color SystemFill = new Color(0.78f, 0.77f, 0.82f, 0.45f);
         const float NoticeHeight = 190f;
         const float NoticeSeconds = 3f;
         const float BubbleMaxTextWidth = 640f;
@@ -257,7 +265,7 @@ namespace Oddity.Game
             {
                 int index = i;
                 string text = choices[i].Text ?? "";
-                var button = MakeButton(_choiceList, text, feeling ? new Color(0.62f, 0.52f, 0.86f, 1f) : new Color(0.38f, 0.33f, 0.62f, 1f), 120f);
+                var button = MakeButton(_choiceList, text, feeling ? new Color(0.62f, 0.52f, 0.86f, 1f) : new Color(0.38f, 0.33f, 0.62f, 1f), ChoiceButtonHeight);
                 button.onClick.AddListener(() => PickChoice(index));
                 _buttons.Add(button);
                 _buttonTexts.Add(text);
@@ -466,8 +474,8 @@ namespace Oddity.Game
             _choiceList = (RectTransform)list.transform;
             Stretch(_choiceList);
             var clg = list.GetComponent<VerticalLayoutGroup>();
-            clg.padding = new RectOffset(60, 60, 30, 30);
-            clg.spacing = 24f;
+            clg.padding = new RectOffset(60, 60, ChoicePadY, ChoicePadY);
+            clg.spacing = ChoiceSpacing;
             clg.childControlWidth = true;
             clg.childControlHeight = true;
             clg.childForceExpandWidth = true;
@@ -592,21 +600,21 @@ namespace Oddity.Game
             bool player = who == "player";
             rlg.childAlignment = system ? TextAnchor.UpperCenter : (player ? TextAnchor.UpperRight : TextAnchor.UpperLeft);
 
-            Color fill = system ? new Color(0.78f, 0.77f, 0.82f, 1f)
+            Color fill = system ? SystemFill
                 : player ? new Color(0.99f, 0.9f, 0.45f, 1f)
                 : Color.white;
             var bubble = MakeImage("Bubble", (RectTransform)row.transform, fill);
             bubble.raycastTarget = false;
             var blg = bubble.gameObject.AddComponent<HorizontalLayoutGroup>();
             int padX = system ? 22 : 28;
-            int padY = system ? 10 : 18;
+            int padY = system ? 8 : 18;
             blg.padding = new RectOffset(padX, padX, padY, padY);
             blg.childControlWidth = true;
             blg.childControlHeight = true;
             blg.childForceExpandWidth = false;
             blg.childForceExpandHeight = false;
 
-            int size = system ? 30 : BodyFontSize;
+            int size = system ? SystemFontSize : BodyFontSize;
             var label = MakeText("Text", bubble.rectTransform, text, size, TextAnchor.MiddleLeft,
                 system ? new Color(0.25f, 0.24f, 0.3f, 1f) : new Color(0.12f, 0.1f, 0.2f, 1f));
             label.raycastTarget = false;

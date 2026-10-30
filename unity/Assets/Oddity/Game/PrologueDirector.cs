@@ -31,7 +31,13 @@ namespace Oddity.Game
         /// the top of her head over nearly the top half of the close-up; 0.28 trades some hair for neck and collar.
         /// </summary>
         public const float EyeLine = 0.28f;
-        const float HappyWeight = 0.35f; // 0.55 opened the v58 mouth wide (tongue and mouth inside showed)
+        // 0.55 opened the v58 mouth wide (tongue and mouth inside showed). Task 27: happy 0.35 + relaxed 0.65
+        // half shut the eyes over an open mouth and read as sleepy; a little surprised instead keeps the eyes open.
+        public const float HappyWeight = 0.3f;
+        public const string HappyEyeOpener = "surprised";
+        public const float HappyEyeOpenerWeight = 0.05f;
+        // the lips half together and the corners up, so the laugh reads as a grin instead of a gaping mouth
+        public const float HappyMouthClose = 0.5f, HappyMouthSmile = 0.5f;
         const float CameraSmooth = 0.3f;     // SmoothDamp time; settles in about 1 s
         const float SeatedSideDeg = 12f, StandingSideDeg = -16f;
         static readonly Vector3 StandPosition = new Vector3(-0.45f, 0f, -0.6f);
@@ -473,7 +479,11 @@ namespace Oddity.Game
         {
             string face = HarinPuppet.FaceForBeat(f.Face ?? _baseFace, _beat);
             // the full "happy" preset opens the mouth wide and shuts the eyes; up close a softer mix reads better
-            if (face == "happy") _harin.SetFaceMix("happy", HappyWeight, "relaxed", 1f - HappyWeight);
+            if (face == "happy")
+            {
+                _harin.SetFaceMix("happy", HappyWeight, HappyEyeOpener, HappyEyeOpenerWeight);
+                _harin.SetMouthClose(HappyMouthClose, HappyMouthSmile);
+            }
             else _harin.SetFace(face);
             _harin.SetHeadTurn(f.HeadYaw, f.HeadPitch);
             _harin.SetLean(f.Lean);

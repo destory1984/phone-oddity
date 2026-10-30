@@ -113,6 +113,8 @@ namespace Oddity.Game
 
         static string Dir => string.IsNullOrEmpty(ResourceDirOverride) ? DefaultResourceDir : ResourceDirOverride;
 
+        /// <summary>True while the AudioSource itself is playing (false without an audio device).</summary>
+        public bool SourcePlaying => _source != null && _source.isPlaying;
         /// <summary>True while a clip is (logically) playing; does not depend on an audio device.</summary>
         public bool IsPlaying => _clip != null && Time.time - _startedAt < _clip.length;
         /// <summary>Name of the clip playing or waiting, or null.</summary>
@@ -150,6 +152,25 @@ namespace Oddity.Game
             _pending = clip;
             _ready = ready;
             TryStart();
+        }
+
+        /// <summary>Resource name of the clip for poke.json line <paramref name="number"/> (1 to 18) in the current set.</summary>
+        public static string PokeClipName(int number) => "harin_poke_" + number.ToString("00") + "_" + VoiceSet;
+
+        /// <summary>
+        /// Plays the touch reaction's own clip (no short sound in its place). Sets without poke clips
+        /// (karina) and missing files stay silent. Returns true when a clip started.
+        /// </summary>
+        public bool PlayPoke(int number)
+        {
+            Stop();
+            if (number <= 0) return false;
+            var clip = Load(PokeClipName(number));
+            if (clip == null) return false;
+            _pending = clip;
+            _ready = null;
+            TryStart();
+            return _clip != null;
         }
 
         /// <summary>Plays the last line again (after switching the voice set).</summary>

@@ -66,7 +66,12 @@ namespace Oddity.Game
         // Act2EyeLine down the frame (above the subtitle band), and waist to head top fills Act2BodyShare of the
         // frame height at the end. The camera still pulls back during cut 12, from Cut12PullFrom of that distance.
         public const float Act2EyeLine = 0.32f; // Head + 7.5 cm; the drawn eyes land about 2% lower
-        public const float Act2EyeDrop = 0.07f;
+        // Task 27: 2 cm lower (7 -> 9 cm under her eyes) and 0.9 of the distance, so the shot looks at her
+        // from her eye level instead of down at a small face.
+        public const float Act2EyeDrop = 0.09f;
+        public const float Act2Closer = 0.9f;
+        /// <summary>On her own act 2 lines her head turns this much towards the camera and lifts as much.</summary>
+        public const float Act2HeadToCamera = 3f;
         public const float Act2BodyShare = 0.6f;
         public const float Act2HeadTopAboveEye = 0.11f; // model units
         const float Cut12Fov0 = 35f, Cut12Fov1 = 38f;
@@ -707,7 +712,7 @@ namespace Oddity.Game
             float fov = Mathf.Lerp(Cut12Fov0, Cut12Fov1, Smooth(u));
             float waist = float.IsNaN(_waistY) ? _eyes.y - 0.5f * _homeScale.y : _waistY;
             float end = SeatedDistance(_eyes.y, waist, Act2HeadTopAboveEye * _homeScale.y, Cut12Fov1);
-            float d = end * Mathf.Lerp(Cut12PullFrom, 1f, Smooth(u));
+            float d = end * Act2Closer * Mathf.Lerp(Cut12PullFrom, 1f, Smooth(u));
             var pose = SeatedCameraPose(_eyes, dir, d, fov);
             mainCamera.transform.SetPositionAndRotation(pose.position, pose.rotation);
             mainCamera.fieldOfView = fov;

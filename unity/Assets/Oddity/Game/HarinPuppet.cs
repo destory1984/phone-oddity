@@ -78,6 +78,7 @@ namespace Oddity.Game
             CaptureLeanBones();
             CaptureIdleBones();
             if (lowerArms) CaptureRestPose();
+            ApplyHairLook();
             ScheduleBlink();
         }
 
@@ -161,6 +162,30 @@ namespace Oddity.Game
             _headPitch = pitchDegrees;
         }
 
+        /// <summary>
+        /// A turn on top of the pose's own head (yaw &gt; 0 to her left, pitch &gt; 0 down) that the head moves to at
+        /// <see cref="HeadEaseSpeed"/>; act 2 uses it to face the camera on her lines.
+        /// </summary>
+        public void EaseHeadTurn(float yawDegrees, float pitchDegrees)
+        {
+            _addYawTarget = yawDegrees;
+            _addPitchTarget = pitchDegrees;
+        }
+
+        public const float HeadEaseSpeed = 12f; // degrees per second
+        float _addYaw, _addPitch, _addYawTarget, _addPitchTarget;
+        /// <summary>The eased turn on top of the pose right now (yaw, pitch).</summary>
+        public Vector2 HeadTurnOnPose => new Vector2(_addYaw, _addPitch);
+
+        void UpdateHeadEase()
+        {
+            if (_addYaw == _addYawTarget && _addPitch == _addPitchTarget) return;
+            float step = HeadEaseSpeed * Time.deltaTime;
+            _addYaw = Mathf.MoveTowards(_addYaw, _addYawTarget, step);
+            _addPitch = Mathf.MoveTowards(_addPitch, _addPitchTarget, step);
+            if (_addYaw == 0f && _addPitch == 0f) _pokeHeadDirty = true;
+        }
+
         void AddArm(Animator animator, HumanBodyBones upperBone, HumanBodyBones lowerBone)
         {
             var upper = animator.GetBoneTransform(upperBone);
@@ -194,8 +219,13 @@ namespace Oddity.Game
                 _rightUpper.rotation = root * (to * Quaternion.Inverse(from)) * _rightUpperRel;
             }
             var poke = PokeHeadOffset;
-            if (_head != null && (_headYaw != 0f || _headPitch != 0f || poke != Vector3.zero))
-                _head.rotation = root * Quaternion.Euler(_headPitch + poke.y, _headYaw + poke.x, poke.z) * _headRel;
+            bool posed = _pose != Pose.None; // the pose resets the head every frame, so a turn can go on top of it
+            float addYaw = posed ? 0f : _addYaw, addPitch = posed ? 0f : _addPitch;
+            if (_head != null && (_headYaw != 0f || _headPitch != 0f || addYaw != 0f || addPitch != 0f || poke != Vector3.zero || _pokeHeadDirty))
+                _head.rotation = root * Quaternion.Euler(_headPitch + addPitch + poke.y, _headYaw + addYaw + poke.x, poke.z) * _headRel;
+            if (_head != null && posed && (_addYaw != 0f || _addPitch != 0f))
+                _head.rotation = root * Quaternion.Euler(_addPitch, _addYaw, 0f) * Quaternion.Inverse(root) * _head.rotation;
+            _pokeHeadDirty = false;
         }
 
         void Update()
@@ -204,12 +234,19 @@ namespace Oddity.Game
             var expression = _vrm.Runtime.Expression;
 
             // face: one preset (plus an optional second one for mixes), the rest at 0
-            foreach (var kv in Faces)
-                expression.SetWeight(kv.Value, FaceWeight(kv.Value));
-
             UpdatePoke();
+            UpdateHeadEase();
+            // a startle shows wide eyes over the face for a moment
+            bool startled = Startled;
+            foreach (var kv in Faces)
+            {
+                float w = FaceWeight(kv.Value);
+                if (startled) w = kv.Value.Equals(ExpressionKey.Surprised) ? Mathf.Max(w, StartleWeight) : w * (1f - StartleWeight);
+                expression.SetWeight(kv.Value, w);
+            }
+
             UpdateBlush();
-            expression.SetWeight(ExpressionKey.Blink, BlinkWeight());
+            expression.SetWeight(ExpressionKey.Blink, Mathf.Max(BlinkWeight(), PokeSquintNow));
             ApplyMouth();
             UpdateIdleGaze();
 

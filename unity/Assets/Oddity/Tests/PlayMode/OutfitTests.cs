@@ -104,6 +104,37 @@ namespace Oddity.PlayTests
             foreach (var m in skin) Assert.Greater(m.GetFloat("_ShadingToonyFactor"), 0.5f, m.name + ": imported toony back");
         }
 
+        // Task 27: the hair textures lose 15% of their saturation (the hue stays teal) and the matcap
+        // highlight on the hair is halved.
+        [UnityTest]
+        public IEnumerator Hair_LessSaturated()
+        {
+            yield return LoadScene();
+            var harin = Harin();
+            Assert.GreaterOrEqual(harin.HairMaterials, 2, "front and back hair");
+            Assert.That(harin.HairSaturationRatio, Is.InRange(0.8f, 0.9f), "saturation after / before");
+            var hair = harin.GetComponentsInChildren<Renderer>(true).SelectMany(r => r.sharedMaterials)
+                .Where(m => m != null && m.name.Contains("HAIR")).Distinct().ToList();
+            Assert.GreaterOrEqual(hair.Count, 2);
+            foreach (var m in hair)
+            {
+                var tex = m.GetTexture("_MainTex");
+                Assert.IsNotNull(tex, m.name);
+                StringAssert.EndsWith("_desat", tex.name, m.name);
+                var mc = m.GetColor("_MatcapColor");
+                Assert.LessOrEqual(Mathf.Max(mc.r, Mathf.Max(mc.g, mc.b)), HarinPuppet.HairMatcapScale + 1e-3f, m.name + " matcap");
+            }
+            // the teal of the art keeps its hue
+            Color.RGBToHSV(HarinPuppet.HairTeal, out float h0, out float s0, out _);
+            var c = HarinPuppet.HairTeal;
+            float max = Mathf.Max(c.r, Mathf.Max(c.g, c.b));
+            float k = HarinPuppet.HairSaturation;
+            var d = new Color(max - k * (max - c.r), max - k * (max - c.g), max - k * (max - c.b));
+            Color.RGBToHSV(d, out float h1, out float s1, out _);
+            Assert.AreEqual(h0, h1, 0.01f, "hue");
+            Assert.AreEqual(s0 * 0.85f, s1, 0.01f, "saturation 15% lower");
+        }
+
         // The prologue room tint on clothes is undone exactly when the room look goes off.
         [UnityTest]
         public IEnumerator RoomLook_ClothesRestored()
