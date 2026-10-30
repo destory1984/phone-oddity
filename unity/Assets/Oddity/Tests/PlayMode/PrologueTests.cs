@@ -273,11 +273,11 @@ namespace Oddity.PlayTests
             }
             Assert.AreEqual("quiet_confession", boot.Prologue.CurrentBeat, "reached the close-up line");
             boot.Voice.Stop();
+            boot.Prologue.Camera.aspect = 9f / 16f; // before the frames: the shots frame by width, so they need the phone's aspect
             boot.Prologue.SeekBeat(1f);
             for (int i = 0; i < 5; i++) yield return null;
 
             var cam = boot.Prologue.Camera;
-            cam.aspect = 9f / 16f;
             var harin = HarinWardrobe.ActivePuppet();
             // the VRoid model has no eye bones mapped; the director uses Head + 7.5 cm for her eyes, and so does this test.
             // The Head bone itself sits at the top of the neck, about 0.19 of the frame under the eyes.

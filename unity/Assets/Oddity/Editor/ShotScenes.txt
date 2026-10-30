@@ -12,6 +12,9 @@ emergence_seated
 room_after
 dev_panel
 prologue_dinner
+prologue_room
+prologue_sink_room
+prologue_side_by_side
 prologue_closeup
 prologue_blush
 prologue_notice

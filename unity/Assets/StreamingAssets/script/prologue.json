@@ -9,7 +9,8 @@
           "who": "harin",
           "text": "책 좀 치워. 네 밥 들고 있잖아.",
           "face": "relaxed",
-          "beat": "sets_table"
+          "beat": "sets_table",
+          "cam": "R"
         },
         {
           "who": "player",
@@ -19,7 +20,8 @@
           "who": "harin",
           "text": "네 배가 나한테 계속 부탁하던데.",
           "face": "happy",
-          "beat": "teases"
+          "beat": "teases",
+          "cam": "B"
         },
         {
           "who": "player",
@@ -35,13 +37,15 @@
           "who": "harin",
           "text": "잠깐. 계란 밑은 보지 마.",
           "face": "neutral",
-          "beat": "covers_plate"
+          "beat": "covers_plate",
+          "cam": "B"
         },
         {
           "who": "harin",
           "text": "왜 웃어. 아직 먹지도 않았잖아.",
           "face": "neutral",
-          "beat": "proud_pout"
+          "beat": "proud_pout",
+          "cam": "P"
         }
       ],
       "choices": [
@@ -63,7 +67,8 @@
           "who": "harin",
           "text": "그런 말을 그렇게 바로 해?",
           "face": "neutral",
-          "beat": "flustered"
+          "beat": "flustered",
+          "cam": "P"
         },
         {
           "who": "player",
@@ -73,13 +78,15 @@
           "who": "harin",
           "text": "몰라. 일단 나 말고 밥 좀 봐.",
           "face": "happy",
-          "beat": "looks_down_smiling"
+          "beat": "looks_down_smiling",
+          "cam": "B"
         },
         {
           "who": "harin",
           "text": "맛있으면 그것도 바로 말해 줘.",
           "face": "happy",
-          "beat": "peeks_for_reaction"
+          "beat": "peeks_for_reaction",
+          "cam": "P"
         }
       ],
       "next": "p_washing_up"
@@ -92,7 +99,8 @@
           "who": "harin",
           "text": "그래? 그럼 어디 한번 잘 봐.",
           "face": "neutral",
-          "beat": "leans_close_then_back"
+          "beat": "leans_close_then_back",
+          "cam": "B"
         },
         {
           "who": "player",
@@ -102,13 +110,15 @@
           "who": "harin",
           "text": "네가 진짜 볼 줄은 몰랐지.",
           "face": "happy",
-          "beat": "flustered"
+          "beat": "flustered",
+          "cam": "P"
         },
         {
           "who": "harin",
           "text": "계란 식겠다. 나중에 마저 놀려.",
           "face": "happy",
-          "beat": "soft_laugh"
+          "beat": "soft_laugh",
+          "cam": "B"
         }
       ],
       "next": "p_washing_up"
@@ -120,13 +130,15 @@
         {
           "who": "player",
           "text": "잘 먹었어. 그릇은 내가 씻을게.",
-          "beat": "dinner_finished"
+          "beat": "dinner_finished",
+          "cam": "R"
         },
         {
           "who": "harin",
           "text": "그 말 기다렸어. 수세기 여기.",
           "face": "happy",
-          "beat": "offers_sponge"
+          "beat": "offers_sponge",
+          "cam": "B"
         },
         {
           "who": "player",
@@ -158,7 +170,8 @@
           "who": "harin",
           "text": "구경은 잘해. 방금도 해 봤고.",
           "face": "happy",
-          "beat": "stares_then_smiles"
+          "beat": "stares_then_smiles",
+          "cam": "P"
         }
       ],
       "choices": [
@@ -180,13 +193,15 @@
           "who": "harin",
           "text": "어느 쪽이든 둘 다 하라는 거네.",
           "face": "happy",
-          "beat": "mock_indignation"
+          "beat": "mock_indignation",
+          "cam": "T"
         },
         {
           "who": "harin",
           "text": "그 컵 줘. 손잡이 쪽으로.",
           "face": "relaxed",
-          "beat": "fingertips_brush"
+          "beat": "fingertips_brush",
+          "cam": "B"
         },
         {
           "who": "player",
@@ -196,7 +211,8 @@
           "who": "harin",
           "text": "아까 웃던 얼굴이랑 좀 달라서.",
           "face": "relaxed",
-          "beat": "stares_then_smiles"
+          "beat": "stares_then_smiles",
+          "cam": "P"
         },
         {
           "who": "player",

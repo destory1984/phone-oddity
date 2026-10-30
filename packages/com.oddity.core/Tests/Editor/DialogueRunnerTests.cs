@@ -43,6 +43,24 @@ namespace Oddity.Core.Tests
         }
 
         [Test]
+        public void Runner_KeepsCam()
+        {
+            var script = new DayScript
+            {
+                Day = 12,
+                Scenes = new List<Scene>
+                {
+                    new Scene { Id = "a", Slot = Slot.Night,
+                        Lines = new List<Line> { new Line { Who = "harin", Text = "a1", Beat = "teases", Cam = "R" } } }
+                }
+            };
+            var r = new DialogueRunner(script, new GameState());
+            var lines = Capture(r);
+            r.StartSlot(Slot.Night);
+            Assert.AreEqual("R", lines[0].Cam, "the shown line keeps its cam field");
+        }
+
+        [Test]
         public void Runner_SceneNext_AutoAdvances()
         {
             var script = new DayScript

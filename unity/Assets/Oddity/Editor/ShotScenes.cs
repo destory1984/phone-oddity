@@ -102,6 +102,30 @@ namespace Oddity.EditorTools
             },
             new ShotScene
             {
+                Name = "prologue_room", // p_dinner line 1 ("sets_table"), shot R: the whole room master
+                ScenePath = PrototypeScene,
+                CameraName = "MainCamera",
+                Prologue = true,
+                Setup = () => PlayPrologue(b => AtLine(b, "p_dinner", "sets_table")).Prologue.SeekBeat(1.2f),
+            },
+            new ShotScene
+            {
+                Name = "prologue_sink_room", // p_washing_up line 1, shot R at the sink
+                ScenePath = PrototypeScene,
+                CameraName = "MainCamera",
+                Prologue = true,
+                Setup = () => PlayPrologue(b => AtLine(b, "p_washing_up", "dinner_finished")).Prologue.SeekBeat(1.2f),
+            },
+            new ShotScene
+            {
+                Name = "prologue_side_by_side", // p_side_by_side line 1 ("mock_indignation"), shot T
+                ScenePath = PrototypeScene,
+                CameraName = "MainCamera",
+                Prologue = true,
+                Setup = () => PlayPrologue(b => AtLine(b, "p_side_by_side", "mock_indignation")).Prologue.SeekBeat(1.2f),
+            },
+            new ShotScene
+            {
                 Name = "prologue_closeup", // p_side_by_side line 6 ("quiet_confession"), the closest shot
                 ScenePath = PrototypeScene,
                 CameraName = "MainCamera",

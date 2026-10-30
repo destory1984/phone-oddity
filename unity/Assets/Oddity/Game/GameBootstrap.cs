@@ -738,6 +738,7 @@ namespace Oddity.Game
             if (wardrobe != null) wardrobe.Wear(HarinWardrobe.Outfit.Indoor);
             _director = PrologueDirector.Create(gameObject, Harin, emergence, emergence.MainCamera, _subtitle, screenNoise, chat.Font);
             _director.Begin();
+            _director.VoiceBusy = () => _voice != null && _voice.IsBusy;
             _director.RewindCovered += WearSummer;
             // a throwaway state: the prologue never touches the hidden values, the day or the slot clock
             _prologueRunner = new DialogueRunner(_prologue, new GameState());
@@ -787,6 +788,7 @@ namespace Oddity.Game
         void OnPrologueChoices(System.Collections.Generic.IReadOnlyList<Choice> choices)
         {
             _awaitingTap = false;
+            if (_director != null) _director.SetChoices(true);
             _subtitle.ShowChoices(choices);
         }
 

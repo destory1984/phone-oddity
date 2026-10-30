@@ -152,7 +152,8 @@ namespace Oddity.Core
                 Face = line.Face,
                 Glitch = line.Glitch,
                 Typing = line.Typing,
-                Beat = line.Beat
+                Beat = line.Beat,
+                Cam = line.Cam
             };
         }
     }

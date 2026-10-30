@@ -125,6 +125,16 @@ namespace Oddity.Game
         RectTransform[] _tears;
         Text _osd;
 
+        // shots (task 40): the planner picks R/B/P/T and the inserts; the old distance framing stays for the notice and the rewind
+        readonly PrologueCamPlanner _plan = new PrologueCamPlanner();
+        bool _choicesUp;
+        int _planSerial = -1;
+        bool _wasShot;
+        UnityEngine.Pose _shotFrom;
+        Transform _bowlA, _sponge;
+        readonly List<GameObject> _tableProps = new List<GameObject>();
+        readonly List<GameObject> _sinkProps = new List<GameObject>();
+
         Stage _stage;
         bool _staged;
         string _baseFace = "relaxed";
@@ -175,6 +185,11 @@ namespace Oddity.Game
         /// <summary>Camera distance from her eyes the current beat asks for.</summary>
         public float TargetDistance { get; private set; } = Medium;
         public Camera Camera => _cam;
+        public PrologueCamPlanner CamPlan => _plan;
+        /// <summary>True while her voice plays or waits to start (the host sets it); shots do not cut or insert then.</summary>
+        public Func<bool> VoiceBusy;
+        /// <summary>Choices are up: the camera holds still.</summary>
+        public void SetChoices(bool up) { _choicesUp = up; }
 
         public static PrologueDirector Create(GameObject host, HarinPuppet harin, EmergenceSequence emergence,
             Camera camera, SubtitleBar subtitle, Texture2D noise, Font font)
@@ -304,15 +319,47 @@ namespace Oddity.Game
                 var basePos = seat.position; basePos.y = 0f;
                 var top = basePos + fwd * 0.62f + Vector3.up * 0.34f;
                 var rot = Quaternion.LookRotation(fwd);
+                int tableFrom = _made.Count;
                 MakeProp(PrimitiveType.Cube, "PrologueTable", top - Vector3.up * 0.015f, rot, new Vector3(0.8f, 0.03f, 0.5f), wood, room);
                 MakeProp(PrimitiveType.Cube, "PrologueTableLegs", top - Vector3.up * 0.17f, rot, new Vector3(0.7f, 0.31f, 0.4f), wood, room);
                 MakeProp(PrimitiveType.Cylinder, "PrologueBowlA", top + rot * new Vector3(-0.14f, 0.025f, -0.08f), rot, new Vector3(0.13f, 0.025f, 0.13f), light, room);
                 MakeProp(PrimitiveType.Cylinder, "PrologueBowlB", top + rot * new Vector3(0.16f, 0.025f, 0.06f), rot, new Vector3(0.15f, 0.025f, 0.15f), light, room);
+                for (int i = tableFrom; i < _made.Count; i++) _tableProps.Add(_made[i]);
+                _bowlA = _made[tableFrom + 3].transform; // bowl B: the one on her right, the plate she covers
             }
             var stand = new GameObject("PrologueStandAnchor");
             _made.Add(stand);
             stand.transform.SetPositionAndRotation(StandPosition, Quaternion.Euler(0f, StandFacingDeg, 0f));
             _standAnchor = stand.transform;
+            BuildSink(room, wood, light);
+        }
+
+        // A kitchen counter with a basin in front of the standing spot (she stands behind it; the camera looks over it).
+        // Shown only in the washing-up scenes; the low table is hidden then.
+        void BuildSink(GameObject room, Material wood, Material light)
+        {
+            var rot = Quaternion.Euler(0f, StandFacingDeg, 0f);
+            var at = StandPosition + rot * (Vector3.forward * 0.58f);
+            var dark = MaterialOf("WindowFrame");
+            var yellow = Tinted(light, new Color(0.9f, 0.78f, 0.25f));
+            var blue = Tinted(light, new Color(0.55f, 0.72f, 0.85f));
+            int before = _made.Count;
+            MakeProp(PrimitiveType.Cube, "PrologueCounter", at + Vector3.up * 0.44f, rot, new Vector3(1.3f, 0.88f, 0.5f), wood, room);
+            MakeProp(PrimitiveType.Cylinder, "PrologueDishA", at + rot * new Vector3(0.18f, 0.9f, -0.08f), rot, new Vector3(0.2f, 0.012f, 0.2f), light, room);
+            MakeProp(PrimitiveType.Cylinder, "PrologueDishB", at + rot * new Vector3(0.18f, 0.915f, -0.08f), rot, new Vector3(0.17f, 0.012f, 0.17f), light, room);
+            MakeProp(PrimitiveType.Cylinder, "PrologueCup", at + rot * new Vector3(0.0f, 0.935f, 0.12f), rot, new Vector3(0.07f, 0.05f, 0.07f), blue, room);
+            MakeProp(PrimitiveType.Cube, "PrologueSponge", at + rot * new Vector3(0.0f, 0.905f, -0.1f), rot * Quaternion.Euler(0f, 20f, 0f), new Vector3(0.1f, 0.04f, 0.065f), yellow, room);
+            for (int i = before; i < _made.Count; i++) { _sinkProps.Add(_made[i]); _made[i].SetActive(false); }
+            _sponge = _made[_made.Count - 1].transform;
+        }
+
+        static Material Tinted(Material source, Color color)
+        {
+            if (source == null) return null;
+            var m = new Material(source);
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
+            else m.color = color;
+            return m;
         }
 
         static Material MaterialOf(string name)
@@ -355,7 +402,11 @@ namespace Oddity.Game
         public void ShowLine(Line line, string sceneId)
         {
             var stage = StageFor(sceneId);
-            if (!_staged || stage != _stage) SetStage(stage);
+            bool stageChanged = !_staged || stage != _stage;
+            if (stageChanged) SetStage(stage);
+            _choicesUp = false;
+            _plan.OnLine(line, Time.time);
+            if (stageChanged) _plan.Settle(Time.time); // she moved: the new place gets its shot at once, not 0.2 s later
             if (line.Who == "harin") _baseFace = string.IsNullOrEmpty(line.Face) ? "neutral" : line.Face;
             if (!string.IsNullOrEmpty(line.Beat)) PlayBeat(line.Beat);
             else if (line.Who == "harin") PlayBeat(null);
@@ -387,6 +438,14 @@ namespace Oddity.Game
         public void SeekBeat(float t)
         {
             _beatStart = Time.time - t;
+            _plan.Settle(Time.time);
+            _snap = true;
+        }
+
+        /// <summary>Shots: show the waiting insert (hands, plate, sponge) now and keep it up.</summary>
+        public void ShowInsertNow()
+        {
+            _plan.ForceInsert(Time.time);
             _snap = true;
         }
 
@@ -404,6 +463,8 @@ namespace Oddity.Game
                 _harin.MoveTo(_standAnchor);
                 _harin.ApplyPose(Pose.None, 0f);
             }
+            foreach (var go in _tableProps) if (go != null) go.SetActive(stage == Stage.Seated);
+            foreach (var go in _sinkProps) if (go != null) go.SetActive(stage == Stage.Standing);
             _measureFrames = 2;
             _snap = true;
         }
@@ -499,6 +560,7 @@ namespace Oddity.Game
                 return;
             }
             float t = Time.time - _beatStart;
+            _plan.Tick(Time.time, VoiceBusy != null && VoiceBusy(), _choicesUp);
             ApplyFrame(Evaluate(_beat, t), t, _snap);
             _snap = false;
         }
@@ -510,7 +572,22 @@ namespace Oddity.Game
             else _harin.SetFace(face);
             _harin.SetHeadTurn(f.HeadYaw, f.HeadPitch);
             _harin.SetLean(f.Lean);
-            _harin.SetRightArmReach(f.Reach ? new Vector3(0f, -0.35f, 1f) : (Vector3?)null, Vector3.up);
+            bool shotMode = !(_rewinding || NoticeFraming || _plan.Legacy || _plan.Shot == null);
+            if (shotMode) f.HandCut = false; // the planner's insert replaces the old hand cut (which cut in under her voice)
+            if (_plan.InsertActive) f.Reach = true;
+            var reachDir = new Vector3(0f, -0.35f, 1f);
+            var palm = Vector3.up;
+            if (_plan.InsertActive && _plan.InsertBeat == "covers_plate" && _bowlA != null)
+            {
+                // the hand goes over the bowl, palm down
+                var shoulder = _harin.BonePosition(HumanBodyBones.RightUpperArm);
+                if (shoulder != Vector3.zero)
+                {
+                    reachDir = _harin.transform.InverseTransformDirection(_bowlA.position + Vector3.up * 0.06f - shoulder);
+                    palm = Vector3.down;
+                }
+            }
+            _harin.SetRightArmReach(f.Reach ? reachDir : (Vector3?)null, palm);
             if (f.EyesOnCamera != _eyesOnCamera || snap)
             {
                 _eyesOnCamera = f.EyesOnCamera;
@@ -525,6 +602,16 @@ namespace Oddity.Game
                 _measureFrames--;
                 snap = true;
             }
+
+            // shots: the planner's framing, except under the notice card and in the rewind (their old framing is kept)
+            bool legacy = _rewinding || NoticeFraming || _plan.Legacy || _plan.Shot == null;
+            if (!legacy)
+            {
+                PlaceShotCamera(snap);
+                _wasShot = true;
+                return;
+            }
+            if (_wasShot) { snap = true; _wasShot = false; } // cut from the shot framing to the notice framing
 
             f.Dist *= DistScale;
             // the notice card covers the top fifth of the screen: frame her under it while it is up
@@ -541,6 +628,37 @@ namespace Oddity.Game
 
             if (f.HandCut) PlaceHandCamera();
             else PlaceFaceCamera(_dist);
+        }
+
+        /// <summary>The shot camera: the face shots look at her eyes, an insert at the plate or the sponge.</summary>
+        void PlaceShotCamera(bool snap)
+        {
+            float aspect = _cam.aspect > 0.2f ? _cam.aspect : 9f / 16f;
+            var facing = _harin.transform.forward;
+            float side = _stage == Stage.Seated ? 1f : -1f;
+            Vector3 point = _eyes;
+            string name = _plan.Shot;
+            if (_plan.InsertActive)
+            {
+                name = PrologueShots.I;
+                var target = _plan.InsertBeat == "covers_plate" ? _bowlA : (_stage == Stage.Standing ? _sponge : _bowlA);
+                if (target != null) point = target.position;
+
+            }
+            var pose = PrologueShots.PoseFor(point, facing, side, PrologueShots.Get(name), Fov, aspect);
+            if (_plan.Serial != _planSerial)
+            {
+                _shotFrom = new UnityEngine.Pose(_cam.transform.position, _cam.transform.rotation);
+                _planSerial = _plan.Serial;
+            }
+            float p = snap ? 1f : _plan.MoveProgress(Time.time);
+            if (p < 1f)
+                pose = new UnityEngine.Pose(Vector3.Lerp(_shotFrom.position, pose.position, p), Quaternion.Slerp(_shotFrom.rotation, pose.rotation, p));
+            _cam.fieldOfView = Fov;
+            _cam.transform.SetPositionAndRotation(pose.position, pose.rotation);
+            TargetDistance = (pose.position - point).magnitude;
+            _eyeLine = PrologueShots.Get(name).EyeLine;
+            AimFaceLight();
         }
 
         bool NoticeFraming => _noticeShown && (!_rewinding || RewindTime < RewindFaceHoldEnd);
