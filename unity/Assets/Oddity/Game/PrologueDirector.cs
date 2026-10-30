@@ -778,7 +778,7 @@ namespace Oddity.Game
             ir.pivot = new Vector2(0f, 1f);
             ir.sizeDelta = new Vector2(56f, 56f);
             ir.anchoredPosition = new Vector2(30f, -28f);
-            var app = MakeText(_notice.transform, "되감기", 32, new Color(0.8f, 0.8f, 0.86f, 1f), TextAnchor.UpperLeft);
+            var app = MakeText(_notice.transform, "하린", 32, new Color(0.8f, 0.8f, 0.86f, 1f), TextAnchor.UpperLeft);
             Place(app.rectTransform, new Vector2(104f, -34f), new Vector2(-30f, -80f));
             var now = MakeText(_notice.transform, "지금", 30, new Color(0.7f, 0.7f, 0.76f, 1f), TextAnchor.UpperRight);
             Place(now.rectTransform, new Vector2(104f, -34f), new Vector2(-30f, -80f));

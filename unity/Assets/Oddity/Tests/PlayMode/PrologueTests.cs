@@ -131,14 +131,14 @@ namespace Oddity.PlayTests
             Assert.AreEqual(text, boot.Subtitle.CurrentText);
             Assert.IsTrue(boot.InPrologue);
 
-            float start = Time.time;
+            float start = Time.time - boot.Prologue.RewindTime; // a long frame before this line still counts
             while (boot.InPrologue && Time.time - start < PrologueDirector.RewindDuration + 2f) yield return null;
             Assert.IsFalse(boot.InPrologue, "the rewind ends the prologue");
             Assert.GreaterOrEqual(Time.time - start, PrologueDirector.RewindDuration - 0.3f, "the rewind takes about 2.5 s");
             Assert.IsTrue(chat.IsVisible);
             Assert.IsFalse(boot.Subtitle.IsVisible);
             Assert.IsTrue(chat.IsLockNoticeVisible);
-            StringAssert.Contains("되감기", chat.LockNoticeText);
+            StringAssert.Contains("하린", chat.LockNoticeText);
             Assert.IsTrue(chat.IsAskingName, "a new game asks the name next");
             Assert.AreEqual(1, boot.State.Day);
             Assert.AreEqual(Slot.Morning, boot.State.Slot);
