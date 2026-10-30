@@ -59,9 +59,6 @@ namespace Oddity.Game
 
         /// <summary>Seconds the install notice stays alone before the script moves on by itself to Harin's first line.</summary>
         public const float NoticeAutoSeconds = 0.4f;
-        // Task 35: the two install lines became one, so her voice clips (numbered from the old script) shift by one.
-        static readonly System.Collections.Generic.Dictionary<string, int> VoiceLineOffset =
-            new System.Collections.Generic.Dictionary<string, int> { { "d1_morning", 1 } };
         int _lineSerial;
 
         public static float CalmGlitch(float lineGlitch) => Mathf.Clamp01(lineGlitch) * GlitchCalmScale;
@@ -433,8 +430,7 @@ namespace Oddity.Game
                 _lineScene = sceneId;
                 _lineNumber = 0;
             }
-            int offset;
-            return ++_lineNumber + (VoiceLineOffset.TryGetValue(sceneId ?? "", out offset) ? offset : 0);
+            return ++_lineNumber;
         }
 
         void OnLineShown(Line line)
