@@ -33,11 +33,17 @@ namespace Oddity.Game
         public const float EyeLine = 0.28f;
         // 0.55 opened the v58 mouth wide (tongue and mouth inside showed). Task 27: happy 0.35 + relaxed 0.65
         // half shut the eyes over an open mouth and read as sleepy; a little surprised instead keeps the eyes open.
-        public const float HappyWeight = 0.3f;
+        // Task 30: happy 0.3 still half shut them (the preset is Fcl_ALL_Joy, eyes and mouth in one morph), so the
+        // preset is cut to 0.12 and the laugh comes from the mouth and brow parts of the joy face instead.
+        public const float HappyWeight = 0.12f;
         public const string HappyEyeOpener = "surprised";
         public const float HappyEyeOpenerWeight = 0.05f;
         // the lips half together and the corners up, so the laugh reads as a grin instead of a gaping mouth
         public const float HappyMouthClose = 0.5f, HappyMouthSmile = 0.5f;
+        /// <summary>Joy part morphs of the laugh: a hint of smiling eyes, the grin, raised brows.</summary>
+        public const float LaughEyeJoy = 0.08f, LaughMouthJoy = 0.2f, LaughBrowJoy = 0.4f;
+        /// <summary>The mouth inside is lit as brightly as her skin; 20% darker in the room so a laugh does not glow.</summary>
+        public const float MouthInsideBrightness = 0.8f;
         const float CameraSmooth = 0.3f;     // SmoothDamp time; settles in about 1 s
         const float SeatedSideDeg = 12f, StandingSideDeg = -16f;
         static readonly Vector3 StandPosition = new Vector3(-0.45f, 0f, -0.6f);
@@ -46,7 +52,21 @@ namespace Oddity.Game
         public const string RewindBeat = "rewind_to_day_one";
         public const string NoticeBeat = "deletion_notice";
         public const float RewindDuration = 2.5f;
-        const float RewindReverseEnd = 1.7f, RewindBlackEnd = 2.2f;
+        // Task 30, the rewind in four steps so the effects do not pile up:
+        // (a) 0 -> 0.3 s the notice card and the subtitle fade out (CanvasGroup alpha), her face as it was;
+        // (b) 0.3 -> 1.32 s noise and tearing at 70% strength (60% of the old 1.7 s), the face held for the first
+        //     0.3 s, then flipping back through the lines; (c) black from 1.2 s, fully black by 1.8 s, the outfit
+        //     changes at 2.2 s (task 25) while the screen is black; (d) day 1 at 2.5 s.
+        public const float RewindUiFadeEnd = 0.3f;
+        public const float RewindNoiseStart = 0.3f, RewindNoiseEnd = 0.3f + 0.6f * 1.7f, RewindNoiseStrength = 0.7f;
+        public const float RewindFaceHoldEnd = RewindNoiseStart + 0.3f;
+        public const float RewindBlackStart = 1.2f, RewindBlackFull = 1.8f, RewindBlackEnd = 2.2f;
+
+        /// <summary>
+        /// While the notice card is up her eyes sit this far down the frame (under the card, whose lower edge is
+        /// at 0.22) and the camera comes in to <see cref="NoticeDistance"/> so the chest does not fill the bottom half.
+        /// </summary>
+        public const float NoticeEyeLine = 0.475f, NoticeDistance = 0.62f;
 
         static readonly string[] KnownBeatList =
         {
@@ -97,6 +117,8 @@ namespace Oddity.Game
         Canvas _overlay;
         RectTransform _overlayRect;
         GameObject _notice;
+        CanvasGroup _noticeGroup;
+        bool _noticeShown;
         Text _noticeText;
         RawImage _noiseImg, _noiseRed, _noiseCyan;
         Image _black;
@@ -112,6 +134,7 @@ namespace Oddity.Game
         Vector3 _eyes;            // her eye point, measured with no lean
         int _measureFrames = 2;   // after a stage change the bones move on the next LateUpdate
         float _dist = Medium, _distVel;
+        float _eyeLine = EyeLine, _eyeLineVel;
         bool _snap = true;
         readonly List<HistoryEntry> _history = new List<HistoryEntry>();
 
@@ -130,6 +153,24 @@ namespace Oddity.Game
         /// <summary>Rewind playback speed (shots set 0 and use <see cref="SeekRewind"/>).</summary>
         public float RewindSpeed = 1f;
         public bool IsNoticeVisible => _notice != null && _notice.activeSelf;
+        /// <summary>Alpha of the notice card (0 when hidden).</summary>
+        public float NoticeAlpha => IsNoticeVisible && _noticeGroup != null ? _noticeGroup.alpha : 0f;
+        /// <summary>The notice card's lower edge on screen (viewport y, 0 bottom, 1 top).</summary>
+        public float NoticeBottomViewportY
+        {
+            get
+            {
+                if (_notice == null) return 1f;
+                var corners = new Vector3[4];
+                ((RectTransform)_notice.transform).GetWorldCorners(corners);
+                return _cam.WorldToViewportPoint(corners[0]).y;
+            }
+        }
+        /// <summary>Alpha of the rewind noise layer and of the black cover (0..1).</summary>
+        public float NoiseAlpha => _noiseImg != null && _noiseImg.gameObject.activeSelf ? _noiseImg.color.a : 0f;
+        public float BlackAlpha => _black != null && _black.gameObject.activeSelf ? _black.color.a : 0f;
+        /// <summary>Eye line (share of the frame from the top) the camera is using now.</summary>
+        public float CurrentEyeLine => _eyeLine;
         public string NoticeText => _noticeText != null ? _noticeText.text : "";
         /// <summary>Camera distance from her eyes the current beat asks for.</summary>
         public float TargetDistance { get; private set; } = Medium;
@@ -182,6 +223,7 @@ namespace Oddity.Game
             _harin.SetGlitch(0f);
             _harin.SetFade(1f);
             _harin.SetRoomLook(true, prologue: true);
+            _harin.SetMouthInsideBrightness(MouthInsideBrightness);
             _cam.fieldOfView = Fov;
         }
 
@@ -192,6 +234,8 @@ namespace Oddity.Game
             Active = false;
             _rewinding = false;
             if (_harin != null) _harin.BlushSuppressed = false;
+            if (_harin != null) _harin.SetMouthInsideBrightness(1f);
+            if (_subtitle != null) _subtitle.SetAlpha(1f);
             foreach (var (r, mask) in _masks) if (r != null) r.renderingLayerMask = mask;
             _masks.Clear();
             foreach (var (l, on, c, i) in _lights)
@@ -339,6 +383,8 @@ namespace Oddity.Game
             {
                 _noticeText.text = line.Text ?? "";
                 _notice.SetActive(true);
+                _noticeShown = true;
+                _noticeGroup.alpha = 1f;
             }
             _history.Add(new HistoryEntry { Stage = _stage, Face = _baseFace, Beat = _beat });
         }
@@ -455,7 +501,8 @@ namespace Oddity.Game
                     break;
                 case "waits_for_answer": f.Dist = 0.72f; f.Lean = 6f * r; f.HeadPitch = 4f * r; break;
                 case NoticeBeat:
-                    f.Face = "neutral"; f.HeadYaw = -20f * r; f.EyesOnCamera = false; f.EyeYaw = -25f; f.EyePitch = 10f;
+                    // she freezes and lifts her eyes to the card above her (eyes only, about 6.5 degrees up)
+                    f.Face = "neutral"; f.HeadYaw = -6f * r; f.EyesOnCamera = false; f.EyeYaw = -4f; f.EyePitch = -6.5f;
                     break;
                 case RewindBeat: f.Dist = Close; break;
             }
@@ -478,12 +525,7 @@ namespace Oddity.Game
         void ApplyFrame(Frame f, float t, bool snap)
         {
             string face = HarinPuppet.FaceForBeat(f.Face ?? _baseFace, _beat);
-            // the full "happy" preset opens the mouth wide and shuts the eyes; up close a softer mix reads better
-            if (face == "happy")
-            {
-                _harin.SetFaceMix("happy", HappyWeight, HappyEyeOpener, HappyEyeOpenerWeight);
-                _harin.SetMouthClose(HappyMouthClose, HappyMouthSmile);
-            }
+            if (face == "happy") ApplyLaughFace(_harin);
             else _harin.SetFace(face);
             _harin.SetHeadTurn(f.HeadYaw, f.HeadPitch);
             _harin.SetLean(f.Lean);
@@ -504,12 +546,33 @@ namespace Oddity.Game
             }
 
             f.Dist *= DistScale;
+            // the notice card covers the top fifth of the screen: frame her under it while it is up
+            bool underNotice = NoticeFraming;
+            if (underNotice) f.Dist = Mathf.Min(f.Dist, NoticeDistance);
+            float eyeLine = underNotice ? NoticeEyeLine : EyeLine;
             TargetDistance = f.Dist;
-            if (snap) { _dist = f.Dist; _distVel = 0f; }
-            else _dist = Mathf.SmoothDamp(_dist, f.Dist, ref _distVel, CameraSmooth);
+            if (snap) { _dist = f.Dist; _distVel = 0f; _eyeLine = eyeLine; _eyeLineVel = 0f; }
+            else
+            {
+                _dist = Mathf.SmoothDamp(_dist, f.Dist, ref _distVel, CameraSmooth);
+                _eyeLine = Mathf.SmoothDamp(_eyeLine, eyeLine, ref _eyeLineVel, CameraSmooth);
+            }
 
             if (f.HandCut) PlaceHandCamera();
             else PlaceFaceCamera(_dist);
+        }
+
+        bool NoticeFraming => _noticeShown && (!_rewinding || RewindTime < RewindFaceHoldEnd);
+
+        /// <summary>
+        /// The prologue laugh: a little of the happy preset, the joy mouth and brows on their own, the lips half
+        /// together with the corners up. Her eyes stay open (<see cref="HarinPuppet.SmileEyeClosure"/> about 0.2).
+        /// </summary>
+        public static void ApplyLaughFace(HarinPuppet harin)
+        {
+            harin.SetFaceMix("happy", HappyWeight, HappyEyeOpener, HappyEyeOpenerWeight);
+            harin.SetMouthClose(HappyMouthClose, HappyMouthSmile);
+            harin.SetJoyParts(LaughEyeJoy, LaughMouthJoy, LaughBrowJoy);
         }
 
         Vector3 EyePoint()
@@ -534,11 +597,15 @@ namespace Oddity.Game
         /// <see cref="EyeLine"/> of the way down the frame. With the 35 degree lens the bottom edge is
         /// about 0.41 d below her eyes (0.27 m at Extreme: shoulder line; 0.32 m at Medium: above the chest).
         /// </summary>
-        public static UnityEngine.Pose FaceCameraPose(Vector3 eyes, Vector3 facingDir, float d)
+        public static UnityEngine.Pose FaceCameraPose(Vector3 eyes, Vector3 facingDir, float d) =>
+            FaceCameraPose(eyes, facingDir, d, EyeLine);
+
+        /// <summary>The same with her eyes <paramref name="eyeLine"/> of the way down the frame.</summary>
+        public static UnityEngine.Pose FaceCameraPose(Vector3 eyes, Vector3 facingDir, float d, float eyeLine)
         {
             var pos = eyes + facingDir * d - Vector3.up * EyeDrop;
             float tanHalf = Mathf.Tan(Fov * 0.5f * Mathf.Deg2Rad);
-            float above = Mathf.Atan((1f - 2f * EyeLine) * tanHalf) * Mathf.Rad2Deg; // eyes above the optical axis
+            float above = Mathf.Atan((1f - 2f * eyeLine) * tanHalf) * Mathf.Rad2Deg; // eyes above the optical axis
             float rise = Mathf.Atan2(EyeDrop, d) * Mathf.Rad2Deg;                    // eyes above the camera
             var yaw = Quaternion.LookRotation(-facingDir, Vector3.up);
             return new UnityEngine.Pose(pos, yaw * Quaternion.Euler(above - rise, 0f, 0f));
@@ -546,7 +613,7 @@ namespace Oddity.Game
 
         void PlaceFaceCamera(float d)
         {
-            var p = FaceCameraPose(_eyes, FacingDir(), d);
+            var p = FaceCameraPose(_eyes, FacingDir(), d, _eyeLine);
             _cam.fieldOfView = Fov;
             _cam.transform.SetPositionAndRotation(p.position, p.rotation);
             AimFaceLight();
@@ -592,7 +659,10 @@ namespace Oddity.Game
             FitOverlay();
 
             // lock-screen style notification card near the top
-            _notice = new GameObject("Notice", typeof(RectTransform), typeof(Image));
+            _notice = new GameObject("Notice", typeof(RectTransform), typeof(Image), typeof(CanvasGroup));
+            _noticeGroup = _notice.GetComponent<CanvasGroup>();
+            _noticeGroup.interactable = false;
+            _noticeGroup.blocksRaycasts = false;
             _notice.transform.SetParent(go.transform, false);
             var nr = (RectTransform)_notice.transform;
             nr.anchorMin = new Vector2(0f, 1f);
@@ -756,23 +826,48 @@ namespace Oddity.Game
 
         void EvaluateRewind(float t)
         {
-            // back through the lines seen so far, faster and faster
-            float u = Mathf.Clamp01(t / RewindReverseEnd);
+            // (a) the notice card and the subtitle go first
+            float ui = 1f - Smooth(t / RewindUiFadeEnd);
+            if (_noticeShown)
+            {
+                _noticeGroup.alpha = ui;
+                _notice.SetActive(ui > 0.001f);
+            }
+            if (_subtitle != null) _subtitle.SetAlpha(ui);
+
             int n = _history.Count;
-            int index = Mathf.Clamp(Mathf.RoundToInt(Mathf.Lerp(n - 1, 0, u * u)), 0, n - 1);
-            var h = _history[index];
-            if (h.Stage != _stage) SetStage(h.Stage);
-            _baseFace = h.Face;
-            // play each remembered beat backwards from its end, so faces flip in reverse
-            float local = Mathf.Repeat(t * 7f, 1f);
-            var f = Evaluate(h.Beat, 1.6f * (1f - local));
+            Frame f;
+            if (t < RewindFaceHoldEnd)
+            {
+                // her face as it was, through the fade and the first moment of noise
+                var last = _history[n - 1];
+                if (last.Stage != _stage) SetStage(last.Stage);
+                _baseFace = last.Face;
+                f = Evaluate(last.Beat, 10f);
+            }
+            else
+            {
+                // (b) back through the lines seen so far, faster and faster
+                float u = Mathf.Clamp01((t - RewindFaceHoldEnd) / (RewindNoiseEnd - RewindFaceHoldEnd));
+                int index = Mathf.Clamp(Mathf.RoundToInt(Mathf.Lerp(n - 1, 0, u * u)), 0, n - 1);
+                var h = _history[index];
+                if (h.Stage != _stage) SetStage(h.Stage);
+                _baseFace = h.Face;
+                // play each remembered beat backwards from its end, so faces flip in reverse
+                float local = Mathf.Repeat(t * 7f, 1f);
+                f = Evaluate(h.Beat, 1.6f * (1f - local));
+            }
             f.Reach = false;
             f.HandCut = false;
             ApplyFrame(f, 0f, true);
-            // a little vertical camera judder
-            _cam.transform.position += Vector3.up * (Mathf.Sin(t * 53f) * 0.006f);
 
-            float noise = Mathf.Lerp(0.35f, 0.85f, Smooth(t / RewindReverseEnd));
+            float env = t < RewindNoiseStart ? 0f
+                : Smooth((t - RewindNoiseStart) / 0.08f) * (1f - Smooth((t - RewindNoiseEnd) / 0.15f));
+            // a little vertical camera judder while the tape runs
+            if (env > 0f) _cam.transform.position += Vector3.up * (Mathf.Sin(t * 53f) * 0.006f * env);
+
+            float noise = RewindNoiseStrength * env *
+                Mathf.Lerp(0.35f, 0.85f, Smooth((t - RewindNoiseStart) / (RewindNoiseEnd - RewindNoiseStart)));
             float uvY = Mathf.Repeat(t * 9f, 1f);
             var uv = new Rect(0f, uvY, 1f, 1f);
             _noiseImg.uvRect = uv;
@@ -790,10 +885,11 @@ namespace Oddity.Game
                 _tears[i].anchoredPosition = new Vector2(Mathf.Sin(t * 31f + i) * 40f, y * halfH);
                 _tears[i].GetComponent<Image>().color = new Color(1f, 1f, 1f, noise * 0.18f);
             }
-            _osd.color = new Color(1f, 1f, 1f, (Mathf.Repeat(t * 2f, 1f) < 0.65f ? 0.9f : 0.2f) * (1f - Smooth((t - RewindReverseEnd) / 0.3f)));
-            float black = Smooth((t - RewindReverseEnd) / (RewindBlackEnd - RewindReverseEnd));
+            _osd.color = new Color(1f, 1f, 1f, (Mathf.Repeat(t * 2f, 1f) < 0.65f ? 0.9f : 0.2f) * env);
+            // (c) black, and the outfit changes only once it is complete
+            float black = Smooth((t - RewindBlackStart) / (RewindBlackFull - RewindBlackStart));
             _black.color = new Color(0f, 0f, 0f, black);
-            if (t >= RewindBlackEnd && !_covered)
+            if (t >= RewindBlackEnd && !_covered && black >= 0.999f)
             {
                 _covered = true;
                 RewindCovered?.Invoke();

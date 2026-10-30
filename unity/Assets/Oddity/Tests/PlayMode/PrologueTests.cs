@@ -273,6 +273,146 @@ namespace Oddity.PlayTests
             Assert.LessOrEqual(cam.transform.position.y, eyesWorld.y + 0.005f, "the camera is not above her eyes");
         }
 
+        static IEnumerator PlayTo(GameBootstrap boot, Func<bool> stop)
+        {
+            for (int i = 0; i < FrameLimit && !stop(); i++)
+            {
+                Input(boot);
+                yield return null;
+            }
+        }
+
+        static Vector3 EyesWorld(HarinPuppet harin) =>
+            harin.BonePosition(HumanBodyBones.Head) + Vector3.up * 0.075f * harin.transform.lossyScale.y;
+
+        [UnityTest]
+        public IEnumerator Notice_FaceBelowBanner()
+        {
+            yield return LoadScene();
+            var boot = Boot();
+            yield return PlayTo(boot, () => boot.Prologue.CurrentBeat == PrologueDirector.NoticeBeat);
+            Assert.AreEqual(PrologueDirector.NoticeBeat, boot.Prologue.CurrentBeat, "reached the notice line");
+            var cam = boot.Prologue.Camera;
+            cam.aspect = 9f / 16f;
+            boot.Voice.Stop();
+            boot.Prologue.SeekBeat(1f);
+            for (int i = 0; i < 5; i++) yield return null;
+
+            var harin = HarinWardrobe.ActivePuppet();
+            Assert.IsTrue(boot.Prologue.IsNoticeVisible);
+            float banner = boot.Prologue.NoticeBottomViewportY;
+            var eyes = cam.WorldToViewportPoint(EyesWorld(harin));
+            Assert.Less(eyes.y, banner, $"eyes {eyes.y:F3} under the card's lower edge {banner:F3}");
+            Assert.That(1f - eyes.y, Is.InRange(0.44f, 0.51f), $"eyes from the top of the frame: {1f - eyes.y:F3}");
+            // the bottom edge no lower than 8 cm under the collarbones
+            var collar = (harin.BonePosition(HumanBodyBones.LeftShoulder) + harin.BonePosition(HumanBodyBones.RightShoulder)) * 0.5f;
+            var low = cam.WorldToViewportPoint(collar - Vector3.up * 0.08f * harin.transform.lossyScale.y);
+            var col = cam.WorldToViewportPoint(collar);
+            Debug.Log($"Notice framing: eyes {1f - eyes.y:F3} from top, banner bottom {1f - banner:F3}, collar vp {col.y:F3}, collar-8cm vp {low.y:F3}");
+            Assert.LessOrEqual(low.y, 0.005f, $"8 cm under the collarbones is at or below the frame edge: {low.y:F3}");
+
+            // the next line keeps the card up; her eyes stay under it
+            Input(boot);
+            yield return null;
+            Assert.IsTrue(boot.Prologue.IsNoticeVisible, "the card stays up on the next line");
+            boot.Voice.Stop();
+            boot.Prologue.SeekBeat(1f);
+            for (int i = 0; i < 5; i++) yield return null;
+            eyes = cam.WorldToViewportPoint(EyesWorld(harin));
+            Assert.Less(eyes.y, boot.Prologue.NoticeBottomViewportY, $"eyes under the card on the next line: {eyes.y:F3}");
+        }
+
+        [UnityTest]
+        public IEnumerator Rewind_UiClearsFirst()
+        {
+            yield return LoadScene();
+            var boot = Boot();
+            yield return PlayTo(boot, () => boot.Prologue.IsRewinding);
+            Assert.IsTrue(boot.Prologue.IsRewinding, "reached the rewind");
+            var d = boot.Prologue;
+            var harin = HarinWardrobe.ActivePuppet();
+            d.RewindSpeed = 0f;
+            d.SeekRewind(0f);
+            Assert.Greater(d.NoticeAlpha, 0.9f, "the card is up when the rewind starts");
+            Assert.Greater(boot.Subtitle.Alpha, 0.9f, "the subtitle is up when the rewind starts");
+            Assert.AreEqual(0f, d.NoiseAlpha, 1e-4f, "no noise at the start");
+            string face = harin.CurrentFace;
+
+            float noiseAt = -1f;
+            for (float t = 0f; t <= PrologueDirector.RewindDuration; t += 0.01f)
+            {
+                d.SeekRewind(t);
+                if (noiseAt < 0f && d.NoiseAlpha > 0f)
+                {
+                    noiseAt = t;
+                    Assert.LessOrEqual(d.NoticeAlpha, 0.05f, $"card alpha when the noise starts at {t:F2}s");
+                    Assert.LessOrEqual(boot.Subtitle.Alpha, 0.05f, $"subtitle alpha when the noise starts at {t:F2}s");
+                }
+                if (noiseAt >= 0f && t < noiseAt + 0.29f)
+                    Assert.AreEqual(face, harin.CurrentFace, $"her face holds in the first 0.3 s of noise (t {t:F2})");
+            }
+            Assert.That(noiseAt, Is.InRange(0.25f, 0.35f), "noise starts after the 0.3 s fade");
+            // the noise is short and weaker: 60% of the old 1.7 s, 70% strength
+            Assert.AreEqual(1.02f, PrologueDirector.RewindNoiseEnd - PrologueDirector.RewindNoiseStart, 0.01f);
+            float peak = 0f;
+            for (float t = 0f; t <= PrologueDirector.RewindDuration; t += 0.01f) { d.SeekRewind(t); peak = Mathf.Max(peak, d.NoiseAlpha); }
+            Assert.LessOrEqual(peak, 0.85f * 0.55f * 0.7f + 0.01f, "noise at 70% of the old peak");
+            d.SeekRewind(1.6f);
+            Assert.Less(d.NoiseAlpha, 0.01f, "the noise is over before the screen is fully black");
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Wardrobe_SwapOnlyWhenBlack()
+        {
+            yield return LoadScene();
+            var boot = Boot();
+            var w = boot.Wardrobe;
+            yield return PlayTo(boot, () => boot.Prologue.IsRewinding);
+            Assert.IsTrue(boot.Prologue.IsRewinding, "reached the rewind");
+            var d = boot.Prologue;
+            Assert.AreEqual(HarinWardrobe.Outfit.Indoor, w.Wearing);
+
+            float blackAtSwap = -1f;
+            var wearingAtSwap = HarinWardrobe.Outfit.Indoor;
+            Action onCovered = () => { blackAtSwap = d.BlackAlpha; wearingAtSwap = w.Wearing; };
+            d.RewindCovered += onCovered;
+            bool swappedUncovered = false;
+            float start = Time.time;
+            while (boot.InPrologue && Time.time - start < PrologueDirector.RewindDuration + 2f)
+            {
+                if (w.Wearing == HarinWardrobe.Outfit.Summer && d.BlackAlpha < 0.99f) swappedUncovered = true;
+                yield return null;
+            }
+            Assert.IsFalse(boot.InPrologue, "the rewind ends the prologue");
+            Assert.GreaterOrEqual(blackAtSwap, 0.99f, "black cover alpha on the frame the outfit changes");
+            Assert.AreEqual(HarinWardrobe.Outfit.Summer, wearingAtSwap, "the outfit changed at the covered moment");
+            Assert.IsFalse(swappedUncovered, "never the summer outfit under a see-through cover");
+        }
+
+        [UnityTest]
+        public IEnumerator Dinner_EyesOpenWhenLaughing()
+        {
+            yield return LoadScene();
+            var boot = Boot();
+            yield return PlayTo(boot, () => boot.PrologueSceneId == "p_dinner" && boot.Prologue.CurrentBeat == "teases");
+            Assert.AreEqual("teases", boot.Prologue.CurrentBeat, "reached the teasing line");
+            boot.Voice.Stop();
+            boot.Prologue.SeekBeat(0.8f);
+            for (int i = 0; i < 5; i++) yield return null;
+
+            var harin = HarinWardrobe.ActivePuppet();
+            Assert.AreEqual("happy", harin.CurrentFace);
+            Assert.LessOrEqual(harin.SmileEyeClosure, 0.25f, $"eye-closing smile morphs: {harin.SmileEyeClosure:F3}");
+            Assert.LessOrEqual(harin.ExpressionWeight(UniVRM10.ExpressionKey.Happy), 0.15f, "happy preset (Fcl_ALL_Joy) kept low");
+            Assert.Greater(harin.MouthJoyWeight + harin.MouthSmileWeight, 0.3f, "the mouth still smiles");
+            Assert.Greater(harin.MouthCloseWeight, 0.3f, "lips half together");
+            if (harin.HasMouthInsideMaterial)
+                Assert.That(harin.MouthInsideBrightness, Is.InRange(0.75f, 0.85f), "mouth inside 15 -> 25% darker");
+            Debug.Log($"Dinner laugh: eye closure {harin.SmileEyeClosure:F3}, happy {harin.ExpressionWeight(UniVRM10.ExpressionKey.Happy):F3}, " +
+                      $"mouth joy {harin.MouthJoyWeight:F3}, smile {harin.MouthSmileWeight:F3}, close {harin.MouthCloseWeight:F3}");
+        }
+
         [UnityTest]
         public IEnumerator Smile_MouthClosed()
         {

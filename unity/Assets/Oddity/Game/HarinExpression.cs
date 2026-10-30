@@ -123,6 +123,7 @@ namespace Oddity.Game
             else if (key == "flustered") { relaxed = FlusteredRelaxed; happy = FlusteredHappy; }
             else if (key == IdleFace) { relaxed = SoftRelaxed; happy = 0f; }
             else return false;
+            _eyeJoy = _mouthJoy = _browJoy = 0f;
             _mouthCloseTarget = key == IdleFace ? SoftMouthClose : SmileMouthClose;
             _mouthSmileTarget = key == IdleFace ? SoftMouthSmile : 0f;
             _currentFace = ExpressionKey.Relaxed;
@@ -147,6 +148,74 @@ namespace Oddity.Game
             _hasMix = false;
             _mouthCloseTarget = 0f;
             _mouthSmileTarget = 0f;
+            _eyeJoy = _mouthJoy = _browJoy = 0f;
+        }
+
+        // VRoid's part morphs of the joy face. The happy preset drives Fcl_ALL_Joy (eyes, mouth and brows together,
+        // so any amount of it also shuts the eyes); these let a laugh take the mouth and brows without the eyes.
+        // None of them is bound to a VRM expression, so the runtime leaves them alone.
+        public const string EyeJoyShape = "Fcl_EYE_Joy", MouthJoyShape = "Fcl_MTH_Joy", BrowJoyShape = "Fcl_BRW_Joy";
+        int _eyeJoyIndex = -1, _mouthJoyIndex = -1, _browJoyIndex = -1;
+        float _eyeJoy, _mouthJoy, _browJoy;
+
+        /// <summary>
+        /// Joy part morphs (0..1) on the face set now: eyes (Fcl_EYE_Joy), mouth (Fcl_MTH_Joy, fades as she talks)
+        /// and brows (Fcl_BRW_Joy). Any <see cref="SetFace"/> puts them back to 0.
+        /// </summary>
+        public void SetJoyParts(float eyes, float mouth, float brows)
+        {
+            _eyeJoy = Mathf.Clamp01(eyes);
+            _mouthJoy = Mathf.Clamp01(mouth);
+            _browJoy = Mathf.Clamp01(brows);
+        }
+
+        /// <summary>Weight 0..1 of <see cref="MouthJoyShape"/> applied this frame.</summary>
+        public float MouthJoyWeight { get; private set; }
+
+        /// <summary>
+        /// How much the smile presets and morphs shut her eyes this frame: happy (Fcl_ALL_Joy) + relaxed (Fcl_ALL_Fun)
+        /// + Fcl_EYE_Joy. Blinks and poke squints come and go and are not counted. 0 = the resting eye.
+        /// </summary>
+        public float SmileEyeClosure =>
+            ExpressionWeight(ExpressionKey.Happy) + ExpressionWeight(ExpressionKey.Relaxed) + (_eyeJoyIndex >= 0 ? _eyeJoy : 0f);
+
+        // The mouth inside (teeth, tongue) is its own MToon material; a laugh shows it brightly lit.
+        const string MouthInsideMaterial = "FaceMouth";
+        readonly List<(Material m, Color color, Color shade)> _mouthInside = new List<(Material, Color, Color)>();
+        bool _mouthInsideCaptured;
+
+        /// <summary>Multiplies the mouth-inside material's lit and shade colours by <paramref name="brightness"/> (1 = as imported).</summary>
+        public void SetMouthInsideBrightness(float brightness)
+        {
+            if (!_mouthInsideCaptured)
+            {
+                _mouthInsideCaptured = true;
+                if (_mats == null) CaptureMaterials();
+                foreach (var s in _mats)
+                {
+                    var m = s.Material;
+                    if (m == null || !m.name.Contains(MouthInsideMaterial)) continue;
+                    var shade = m.HasProperty("_ShadeColor") ? m.GetColor("_ShadeColor") : Color.black;
+                    _mouthInside.Add((m, m.GetColor("_Color"), shade));
+                }
+            }
+            float k = Mathf.Clamp01(brightness);
+            MouthInsideBrightness = k;
+            foreach (var (m, color, shade) in _mouthInside)
+            {
+                if (m == null) continue;
+                var c = m.GetColor("_Color"); // keep the alpha SetFade may have changed
+                m.SetColor("_Color", new Color(color.r * k, color.g * k, color.b * k, c.a));
+                if (m.HasProperty("_ShadeColor")) m.SetColor("_ShadeColor", new Color(shade.r * k, shade.g * k, shade.b * k, shade.a));
+            }
+        }
+
+        /// <summary>The last <see cref="SetMouthInsideBrightness"/> value (1 before any call).</summary>
+        public float MouthInsideBrightness { get; private set; } = 1f;
+        /// <summary>True when the model has a separate mouth-inside material.</summary>
+        public bool HasMouthInsideMaterial
+        {
+            get { if (!_mouthInsideCaptured) SetMouthInsideBrightness(MouthInsideBrightness); return _mouthInside.Count > 0; }
         }
 
         float FaceWeight(ExpressionKey key)
@@ -178,6 +247,9 @@ namespace Oddity.Game
                     _mouthRenderer = r;
                     _closeIndex = i;
                     _smileIndex = r.sharedMesh.GetBlendShapeIndex(MouthSmileShape);
+                    _eyeJoyIndex = r.sharedMesh.GetBlendShapeIndex(EyeJoyShape);
+                    _mouthJoyIndex = r.sharedMesh.GetBlendShapeIndex(MouthJoyShape);
+                    _browJoyIndex = r.sharedMesh.GetBlendShapeIndex(BrowJoyShape);
                     break;
                 }
             }
@@ -188,6 +260,10 @@ namespace Oddity.Game
             if (_closeIndex >= 0) _mouthRenderer.SetBlendShapeWeight(_closeIndex, MouthCloseWeight * 100f);
             // Fcl_MTH_Fun is not bound to an expression either; the relaxed preset drives Fcl_ALL_Fun, a separate morph
             if (_smileIndex >= 0) _mouthRenderer.SetBlendShapeWeight(_smileIndex, MouthSmileWeight * 100f);
+            MouthJoyWeight = _mouthJoyIndex >= 0 ? _mouthJoy * k : 0f;
+            if (_eyeJoyIndex >= 0) _mouthRenderer.SetBlendShapeWeight(_eyeJoyIndex, _eyeJoy * 100f);
+            if (_mouthJoyIndex >= 0) _mouthRenderer.SetBlendShapeWeight(_mouthJoyIndex, MouthJoyWeight * 100f);
+            if (_browJoyIndex >= 0) _mouthRenderer.SetBlendShapeWeight(_browJoyIndex, _browJoy * 100f);
         }
 
         void CaptureLeanBones()

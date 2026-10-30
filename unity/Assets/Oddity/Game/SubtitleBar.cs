@@ -139,6 +139,30 @@ namespace Oddity.Game
 
         public void SetVisible(bool visible) => _canvas.enabled = visible;
 
+        CanvasGroup _group;
+
+        /// <summary>Alpha of the whole bar (band, text, choices), 1 = normal. Taps still land at 0.</summary>
+        public void SetAlpha(float alpha)
+        {
+            if (_group == null)
+            {
+                _group = gameObject.GetComponent<CanvasGroup>();
+                if (_group == null) _group = gameObject.AddComponent<CanvasGroup>();
+            }
+            _group.alpha = Mathf.Clamp01(alpha);
+        }
+
+        /// <summary>Alpha of the bar as drawn: 0 when hidden or when the band is off and no choices show.</summary>
+        public float Alpha
+        {
+            get
+            {
+                if (!IsVisible) return 0f;
+                if (!_band.activeSelf && _choiceTexts.Count == 0) return 0f;
+                return _group != null ? _group.alpha : 1f;
+            }
+        }
+
         public void ShowLine(Line line)
         {
             SetVisible(true);
