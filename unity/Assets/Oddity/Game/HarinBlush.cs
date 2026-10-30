@@ -112,7 +112,7 @@ namespace Oddity.Game
             }
             _blushMat.SetTexture("_Mask", blushMask);
             _blushMat.SetColor("_BlushColor", BlushColor);
-            _blushMat.SetFloat("_Amount", q * BlushStrength);
+            _blushMat.SetFloat("_Amount", q * BlushStrength * _blushScale);
             if (_origMain != null)
             {
                 Blend(_origMain, ref _blushMain);

@@ -52,10 +52,18 @@ namespace Oddity.Game
         public const float RimDistance = 0.7f;
         public const float RimYawFromCamera = 55f;
         public const float RimPitchFromCamera = 30f;
+        public const uint HairLayerBit = 1u << 6;     // a lighting layer only the hair draws on; the rim light uses only this one
+
+        // her hair and skin at night (task 52): the hair must not outshine the face, the skin must not read pink
+        public const float HairMatcapScale = 0.0f;   // times the day matcap colour (the teal glints on the crown)
+        public const float HairRimScale = 0.20f;      // times the day rim colour
+        public const float HairDim = 0.45f;           // times the hair's base colour
+        public const float SkinNeutralMix = 0.8f;    // how far the skin colours go to the room look's neutral ones
+        public const float BlushScale = 0.40f;        // times the shy blush (it still shows, only softer)
 
         // vignette over the window: black, clear in the middle
-        public const float VignetteStrength = 0.62f;  // alpha in the four corners
-        public const float VignetteStart = 0.42f;     // distance from the middle (0 middle, 1 corner) where it starts
+        public const float VignetteStrength = 0.90f;  // alpha in the four corners
+        public const float VignetteStart = 0.40f;     // distance from the middle (0 middle, 1 corner) where it starts
         public const int VignetteTexture = 128;
 
         // chat below the window
@@ -92,6 +100,8 @@ namespace Oddity.Game
         float _keyIntensity;
         Quaternion _keyRotation;
         bool _saved;
+        HarinPuppet _dressed;   // the puppet whose materials the look changed
+        uint _rimLayers;
 
         /// <summary>True while the night look is applied.</summary>
         public bool IsOn { get; private set; }
@@ -100,6 +110,9 @@ namespace Oddity.Game
         public Light KeyLight => _key;
         public Light FaceLight => _face;
         public Light RimLight => _rim;
+        /// <summary>The lighting layers the rim light uses now (only the hair's while the hair was found), and the ones it has off.</summary>
+        public uint RimLightLayers => _rim != null ? _rim.GetUniversalAdditionalLightData().renderingLayers : 0u;
+        public uint RimDayLayers => _rimLayers;
 
         public void Init(GameBootstrap boot, ChatView chat)
         {
@@ -165,6 +178,7 @@ namespace Oddity.Game
             EnsureBackdrop();
             _backdrop.SetActive(true);
             if (_chat != null) _chat.SetNight(true);
+            DressHarin();
             IsOn = true;
             Aim();
         }
@@ -194,11 +208,40 @@ namespace Oddity.Game
             if (_rim != null) _rim.enabled = false;
             if (_backdrop != null) _backdrop.SetActive(false);
             if (_chat != null) _chat.SetNight(false);
+            UndressHarin();
+        }
+
+        // Hair and skin materials, the shy blush, and the rim light that may only touch the hair. With no HAIR material found the
+        // hair and the rim are left as they were (the rim then reaches the face as before).
+        void DressHarin()
+        {
+            var harin = _boot != null ? _boot.Harin : null;
+            if (harin == null) return;
+            _dressed = harin;
+            harin.SetNightMaterials(true, HairMatcapScale, HairRimScale, HairDim, SkinNeutralMix);
+            harin.BlushScale = BlushScale;
+            if (harin.NightHairMaterials > 0 && _rim != null && harin.SetNightHairLayer(true, HairLayerBit) > 0)
+                _rim.GetUniversalAdditionalLightData().renderingLayers = HairLayerBit;
+        }
+
+        void UndressHarin()
+        {
+            if (_dressed != null)
+            {
+                _dressed.SetNightMaterials(false, 1f, 1f, 1f, 0f);
+                _dressed.BlushScale = 1f;
+                _dressed.SetNightHairLayer(false, 0u);
+            }
+            _dressed = null;
+            if (_rim != null && _rimLayers != 0u) _rim.GetUniversalAdditionalLightData().renderingLayers = _rimLayers;
         }
 
         void LateUpdate()
         {
-            if (IsOn) Aim();
+            if (!IsOn) return;
+            // another outfit is another model: the old one is put back, the new one dressed
+            if (_boot != null && _boot.Harin != _dressed) { UndressHarin(); DressHarin(); }
+            Aim();
         }
 
         // The key stands where the phone is (the camera): left of it and above. The rim comes from behind her, camera right.
@@ -261,6 +304,7 @@ namespace Oddity.Game
             uint layers = _key != null ? _key.GetUniversalAdditionalLightData().renderingLayers : 2u;
             _face = MakeSpot("NightFaceLight", FaceColor, FaceIntensity, FaceAngle, FaceInnerAngle, layers);
             _rim = MakeSpot("NightRimLight", RimColor, RimIntensity, RimAngle, RimInnerAngle, layers);
+            _rimLayers = layers;
         }
 
         Light MakeSpot(string name, Color color, float intensity, float angle, float inner, uint layers)

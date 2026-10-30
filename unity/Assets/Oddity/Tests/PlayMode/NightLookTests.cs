@@ -265,5 +265,157 @@ namespace Oddity.PlayTests
             Assert.IsTrue(SceneConti.NightOn);
             Assert.IsTrue(boot.Night.IsOn);
         }
+
+        // ---------------------------------------------------------------- hair and face (task 52)
+
+        // Renders the window camera once and reads it back.
+        static Texture2D Render(Camera cam)
+        {
+            var target = cam.targetTexture;
+            var rt = target != null ? target : RenderTexture.GetTemporary(512, 512, 24);
+            cam.targetTexture = rt;
+            cam.Render();
+            var prev = RenderTexture.active;
+            RenderTexture.active = rt;
+            var tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
+            tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+            tex.Apply(false);
+            RenderTexture.active = prev;
+            cam.targetTexture = target;
+            if (target == null) RenderTexture.ReleaseTemporary(rt);
+            return tex;
+        }
+
+        // The viewport rectangle (0..1, y up) of the renderers' bounds.
+        static Rect ViewRect(Camera cam, System.Collections.Generic.IEnumerable<Renderer> renderers)
+        {
+            float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
+            foreach (var r in renderers)
+            {
+                var b = r.bounds;
+                for (int i = 0; i < 8; i++)
+                {
+                    var c = b.center + Vector3.Scale(b.extents, new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+                    var v = cam.WorldToViewportPoint(c);
+                    x0 = Mathf.Min(x0, v.x); x1 = Mathf.Max(x1, v.x);
+                    y0 = Mathf.Min(y0, v.y); y1 = Mathf.Max(y1, v.y);
+                }
+            }
+            return Rect.MinMaxRect(Mathf.Clamp01(x0), Mathf.Clamp01(y0), Mathf.Clamp01(x1), Mathf.Clamp01(y1));
+        }
+
+        // Mean brightness (0..1) of the pixels in a viewport rectangle that pass the filter; their count in `n`.
+        static float Mean(Texture2D tex, Rect r, Func<Color, bool> keep, out int n)
+        {
+            int x0 = Mathf.FloorToInt(r.xMin * tex.width), x1 = Mathf.CeilToInt(r.xMax * tex.width);
+            int y0 = Mathf.FloorToInt(r.yMin * tex.height), y1 = Mathf.CeilToInt(r.yMax * tex.height);
+            double sum = 0;
+            n = 0;
+            for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++)
+            {
+                var c = tex.GetPixel(x, y);
+                if (!keep(c)) continue;
+                sum += c.grayscale;
+                n++;
+            }
+            return n == 0 ? 0f : (float)(sum / n);
+        }
+
+        [UnityTest]
+        public IEnumerator NightLook_FaceIsTheBrightest()
+        {
+            yield return Start(3, Slot.Night);
+            var boot = Boot();
+            Assert.IsTrue(StepTo(SceneConti.NightEnd, 4), "end line 4 (the face in the middle of the window)");
+            for (int i = 0; i < 20; i++) yield return null;
+            Assert.IsTrue(boot.Night.IsOn);
+            var harin = boot.Harin;
+            Assert.Greater(harin.NightHairMaterials, 0, "the hair materials were found");
+            var cam = boot.Stage.Camera;
+            var tex = Render(cam);
+
+            Assert.IsTrue(BlushMask.FindSkin(harin.gameObject, out var faceRenderer, out _), "face renderer");
+            var hairRenderers = new System.Collections.Generic.List<Renderer>();
+            foreach (var h in harin.NightHairRenderers) hairRenderers.Add(h.renderer);
+            Assert.IsNotEmpty(hairRenderers, "hair renderers");
+
+            // the face: the middle of the face mesh, from the eyes down to the chin
+            var fr = ViewRect(cam, new[] { faceRenderer });
+            var face = new Rect(fr.x + fr.width * 0.25f, fr.y + fr.height * 0.10f, fr.width * 0.5f, fr.height * 0.55f);
+            // the crown: the top quarter of the hair, its teal pixels only (the dark backdrop is not hair)
+            var hr = ViewRect(cam, hairRenderers);
+            var crown = new Rect(hr.x, hr.yMax - hr.height * 0.25f, hr.width, hr.height * 0.25f);
+            float faceMean = Mean(tex, face, c => true, out int faceN);
+            float crownMean = Mean(tex, crown, c => c.g > c.r * 1.15f && c.b > c.r * 1.15f && c.grayscale > 0.12f, out int crownN);
+            Debug.Log("NIGHTLOOK face " + faceMean.ToString("F3") + " (" + faceN + " px), crown " + crownMean.ToString("F3") + " (" + crownN + " px)");
+            Assert.Greater(crownN, 50, "the crown has hair pixels to measure");
+            Assert.Greater(faceMean, crownMean, "the face is brighter than the top of the head");
+            UnityEngine.Object.Destroy(tex);
+        }
+
+        [UnityTest]
+        public IEnumerator NightLook_RestoresHairMaterial()
+        {
+            SceneConti.SetNightForRun(false);
+            yield return Start(3, Slot.Night);
+            var boot = Boot();
+            Assert.IsTrue(StepTo(SceneConti.NightEnd, 3), "end line 3");
+            yield return null;
+            Assert.IsFalse(boot.Night.IsOn);
+            var harin = boot.Harin;
+            string[] props = { "_MatcapColor", "_RimColor", "_EmissionColor", "_Color", "_ShadeColor" };
+            var maskBefore = new System.Collections.Generic.List<uint>();
+            var mats = new System.Collections.Generic.List<Material>();
+            // sharedMaterials of an instantiated renderer are its own instances, the ones the look changes
+            foreach (var r in harin.GetComponentsInChildren<Renderer>(true))
+            {
+                maskBefore.Add(r.renderingLayerMask);
+                foreach (var m in r.sharedMaterials) if (m != null && (m.name.Contains("HAIR") || m.name.Contains("SKIN"))) mats.Add(m);
+            }
+            Assert.IsNotEmpty(mats, "hair and skin materials");
+            Func<Color[][]> read = () =>
+            {
+                var all = new Color[mats.Count][];
+                for (int k = 0; k < mats.Count; k++)
+                {
+                    all[k] = new Color[props.Length];
+                    for (int i = 0; i < props.Length; i++) all[k][i] = mats[k].HasProperty(props[i]) ? mats[k].GetColor(props[i]) : Color.clear;
+                }
+                return all;
+            };
+            var first = read();
+
+            SceneConti.SetNightForRun(true);
+            yield return null;
+            yield return null;
+            Assert.IsTrue(boot.Night.IsOn, "night is on");
+            Assert.IsTrue(harin.NightMaterialsOn);
+            var during = read();
+            bool changed = false;
+            for (int k = 0; k < mats.Count && !changed; k++)
+                for (int i = 0; i < props.Length; i++) if (during[k][i] != first[k][i]) { changed = true; break; }
+            Assert.IsTrue(changed, "the night look changes the hair and skin colours");
+            Assert.AreEqual(NightLook.HairLayerBit, boot.Night.RimLightLayers, "the rim lights only the hair");
+
+            SceneConti.SetNightForRun(false);
+            yield return null;
+            yield return null;
+            Assert.IsFalse(boot.Night.IsOn);
+            Assert.IsFalse(harin.NightMaterialsOn);
+            var after = read();
+            for (int k = 0; k < mats.Count; k++)
+                for (int i = 0; i < props.Length; i++)
+                {
+                    // colour properties go through a gamma/linear conversion on every Set and Get, so a round trip can differ in the last bit
+                    var a = first[k][i]; var b = after[k][i];
+                    Assert.That(Mathf.Abs(a.r - b.r) + Mathf.Abs(a.g - b.g) + Mathf.Abs(a.b - b.b) + Mathf.Abs(a.a - b.a), Is.LessThan(0.001f),
+                        mats[k].name + " " + props[i] + " is back: " + a + " vs " + b);
+                }
+            int idx = 0;
+            foreach (var r in harin.GetComponentsInChildren<Renderer>(true)) Assert.AreEqual(maskBefore[idx++], r.renderingLayerMask, "lighting layer of " + r.name);
+            Assert.AreEqual(boot.Night.RimDayLayers, boot.Night.RimLightLayers, "the rim light layers are back");
+            Assert.AreEqual(1f, harin.BlushScale, "blush strength back");
+        }
     }
 }
