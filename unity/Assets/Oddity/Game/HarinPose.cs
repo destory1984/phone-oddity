@@ -53,8 +53,15 @@ namespace Oddity.Game
             public const float ElbowOut = 0.5f;                     // elbow pole: out ...
             public const float ElbowBack = 1f;                      // ... and back
 
-            // cut 10 fingers
-            public const float FingerCurlMax = 35f;
+            // cut 10 fingers, at curl 1: first, middle and last joint of index, middle, ring and little finger.
+            // A resting hand is never straight, and the outer fingers bend more (10 -> 25 deg at the first joint).
+            public static readonly float[] CurlProximal = { 10f, 15f, 20f, 25f };
+            public static readonly float[] CurlIntermediate = { 15f, 20f, 25f, 30f };
+            public static readonly float[] CurlDistal = { 8f, 10f, 12f, 15f };
+            // the VRoid T-pose thumb sticks straight out; bring it in beside the palm and a little under it
+            public const float ThumbIn = 30f, ThumbDown = 20f, ThumbCurl = 12f;
+            // finger tip and knuckle radius over the desk when the hand rests on it (metres)
+            public const float TipRadius = 0.007f, KnuckleRadius = 0.012f;
         }
 
         /// <summary>Hip joint to the mattress surface under it (thigh thickness), metres.</summary>
@@ -80,6 +87,11 @@ namespace Oddity.Game
             HumanBodyBones.LeftMiddleProximal, HumanBodyBones.RightMiddleProximal,
         };
 
+        static readonly HumanBodyBones[] RightThumb =
+        {
+            HumanBodyBones.RightThumbProximal, HumanBodyBones.RightThumbIntermediate, HumanBodyBones.RightThumbDistal,
+        };
+
         static readonly HumanBodyBones[] RightFingers =
         {
             HumanBodyBones.RightIndexProximal, HumanBodyBones.RightIndexIntermediate, HumanBodyBones.RightIndexDistal,
@@ -95,6 +107,7 @@ namespace Oddity.Game
         float _rightSide = 1f;  // +1 when her right is +X in model space
         Vector3 _reachElbow, _reachWrist, _reachTip, _reachPalmN;
         float _fingerCurl;
+        float _reachGround = float.NegativeInfinity;
 
         public Pose CurrentPose => _pose;
         /// <summary>Wrist (hand bone) to the middle finger tip, model units.</summary>
@@ -103,6 +116,9 @@ namespace Oddity.Game
         public float ForearmLength { get; private set; } = 0.23f;
         /// <summary>Foot bone height above the sole in the T-pose, model units.</summary>
         public float AnkleHeight { get; private set; } = 0.07f;
+
+        /// <summary>Angle (degrees) between a bone's current local rotation and its T-pose one (0 when not posed).</summary>
+        public float FingerBend(HumanBodyBones b) => _bones.TryGetValue(b, out var x) ? Quaternion.Angle(x.T.localRotation, x.Local) : 0f;
         /// <summary>Seat contact point (between the hip joints, one thigh radius lower) in model space.</summary>
         public Vector3 SeatContactLocal { get; private set; }
 
@@ -112,6 +128,7 @@ namespace Oddity.Game
             if (animator == null) return;
             var all = new List<HumanBodyBones>(PoseBoneIds);
             all.AddRange(RightFingers);
+            all.AddRange(RightThumb);
             foreach (var id in all)
             {
                 var t = animator.GetBoneTransform(id);
@@ -152,14 +169,20 @@ namespace Oddity.Game
             _poseT = Mathf.Clamp01(t);
         }
 
-        /// <summary>World targets for <see cref="Pose.Cut10Reach"/>: elbow, wrist, middle finger tip, and the palm normal.</summary>
-        public void SetReachTargets(Vector3 elbow, Vector3 wrist, Vector3 tip, Vector3 palm, float fingerCurl)
+        /// <summary>
+        /// World targets for <see cref="Pose.Cut10Reach"/>: elbow, wrist, middle finger tip, and the palm normal
+        /// (the way the palm faces). fingerCurl 1 is a resting hand (up to 1.5). Above groundY no finger tip or
+        /// knuckle goes under it: the hand is tipped up at the wrist until the lowest one rests on it.
+        /// </summary>
+        public void SetReachTargets(Vector3 elbow, Vector3 wrist, Vector3 tip, Vector3 palm, float fingerCurl,
+            float groundY = float.NegativeInfinity)
         {
             _reachElbow = elbow;
             _reachWrist = wrist;
             _reachTip = tip;
             _reachPalmN = palm.normalized;
-            _fingerCurl = Mathf.Clamp01(fingerCurl);
+            _fingerCurl = Mathf.Clamp(fingerCurl, 0f, 1.5f);
+            _reachGround = groundY;
         }
 
         /// <summary>Eyes follow this transform (VRM look-at); null looks straight ahead.</summary>
@@ -221,19 +244,26 @@ namespace Oddity.Game
         public static readonly Color PrologueClothTint = new Color(0.70f, 0.95f, 1f, 1f);
         public const float PrologueClothDesat = 0.6f;
         public const float RoomSkinToony = 0.1f, RoomSkinShift = -0.2f;
+        // Cut 10, her hand on the desk under the warm lamp: the prologue's apricot skin, a darker warm shade and a
+        // narrower ramp so the shadow edge shows between the fingers, and a faint violet rim from the portal.
+        public static readonly Color DeskSkinShade = new Color(0.56f, 0.41f, 0.38f, 1f);
+        public static readonly Color DeskSkinBase = new Color(0.86f, 0.92f, 0.82f, 1f);
+        public const float DeskSkinToony = 0.55f, DeskSkinShift = -0.05f;
+        public static readonly Color DeskRim = new Color(0.16f, 0.09f, 0.3f, 1f);
+        public const float DeskRimPower = 4f, DeskRimLift = 0f;
         public static readonly Color HairTeal = new Color(0x1f / 255f, 0xb5 / 255f, 0xb8 / 255f, 1f);
         public const float HairGlow = 0.04f;
 
-        class LookState { public Material M; public Color Emission, Shade, Base, Matcap; public float Toony, Shift; public bool Skin, Hair, Cloth; }
+        class LookState { public Material M; public Color Emission, Shade, Base, Matcap, Rim; public float Toony, Shift, RimPower, RimLift; public bool Skin, Hair, Cloth; }
         List<LookState> _look;
 
         /// <summary>
         /// On: MToon emission 0 (the hair glowed), skin shade colour from pink to a warm grey, a skin base that
         /// cancels the lamp's red, a softer shading ramp on the skin and no matcap on it, so the room lights do
-        /// not wash her out. <paramref name="prologue"/> picks the skin colours for the prologue's warmer lamp.
-        /// Off: the imported values.
+        /// not wash her out. <paramref name="prologue"/> picks the skin colours for the prologue's warmer lamp,
+        /// <paramref name="desk"/> the cut 10 hand look (<see cref="DeskSkinShade"/>). Off: the imported values.
         /// </summary>
-        public void SetRoomLook(bool on, bool prologue = false)
+        public void SetRoomLook(bool on, bool prologue = false, bool desk = false)
         {
             if (_mats == null) CaptureMaterials();
             if (_look == null)
@@ -250,6 +280,9 @@ namespace Oddity.Game
                         Shade = m.GetColor("_ShadeColor"),
                         Base = m.GetColor("_Color"),
                         Matcap = m.HasProperty("_MatcapColor") ? m.GetColor("_MatcapColor") : Color.black,
+                        Rim = m.HasProperty("_RimColor") ? m.GetColor("_RimColor") : Color.black,
+                        RimPower = m.HasProperty("_RimFresnelPower") ? m.GetFloat("_RimFresnelPower") : 5f,
+                        RimLift = m.HasProperty("_RimLift") ? m.GetFloat("_RimLift") : 0f,
                         Toony = m.GetFloat(MToon10Prop.ShadingToonyFactor),
                         Shift = m.GetFloat(MToon10Prop.ShadingShiftFactor),
                         Skin = m.name.Contains("SKIN"),
@@ -271,13 +304,17 @@ namespace Oddity.Game
                     continue;
                 }
                 if (!l.Skin) continue;
-                l.M.SetColor("_ShadeColor", !on ? l.Shade : prologue ? PrologueSkinShade : SkinShade);
-                var c = !on ? l.Base : prologue ? PrologueSkinBase : SkinBase;
+                bool d = on && desk;
+                l.M.SetColor("_ShadeColor", !on ? l.Shade : d ? DeskSkinShade : prologue ? PrologueSkinShade : SkinShade);
+                var c = !on ? l.Base : d ? DeskSkinBase : prologue ? PrologueSkinBase : SkinBase;
                 c.a = l.M.GetColor("_Color").a; // keep the fade alpha
                 l.M.SetColor("_Color", c);
-                l.M.SetFloat(MToon10Prop.ShadingToonyFactor, on ? RoomSkinToony : l.Toony);
-                l.M.SetFloat(MToon10Prop.ShadingShiftFactor, on ? RoomSkinShift : l.Shift);
+                l.M.SetFloat(MToon10Prop.ShadingToonyFactor, !on ? l.Toony : d ? DeskSkinToony : RoomSkinToony);
+                l.M.SetFloat(MToon10Prop.ShadingShiftFactor, !on ? l.Shift : d ? DeskSkinShift : RoomSkinShift);
                 if (l.M.HasProperty("_MatcapColor")) l.M.SetColor("_MatcapColor", on ? Color.black : l.Matcap);
+                if (l.M.HasProperty("_RimColor")) l.M.SetColor("_RimColor", d ? DeskRim : l.Rim);
+                if (l.M.HasProperty("_RimFresnelPower")) l.M.SetFloat("_RimFresnelPower", d ? DeskRimPower : l.RimPower);
+                if (l.M.HasProperty("_RimLift")) l.M.SetFloat("_RimLift", d ? DeskRimLift : l.RimLift);
             }
         }
 
@@ -381,22 +418,86 @@ namespace Oddity.Game
             var v = _reachWrist - _reachElbow;
             var h = _reachTip - _reachWrist;
             ArmChain(true, u, v, h, _reachPalmN);
-            CurlFingers(_fingerCurl * P.FingerCurlMax, _reachPalmN);
+            CurlFingers(_fingerCurl, _reachPalmN);
+            if (!float.IsNegativeInfinity(_reachGround)) RestOnGround(_reachGround, _reachPalmN);
         }
 
-        void CurlFingers(float degrees, Vector3 palm)
+        // The hand's hinge axis: turning a finger about it by a positive angle bends it towards the palm side.
+        bool HandFrame(Vector3 palm, out Vector3 axis, out Vector3 normal, out Vector3 hinge)
         {
-            if (degrees <= 0f) return;
-            // each finger bone bends towards the palm side
+            var hand = T(HumanBodyBones.RightHand);
+            var mid = T(HumanBodyBones.RightMiddleProximal);
+            axis = normal = hinge = Vector3.zero;
+            if (hand == null || mid == null) return false;
+            axis = (mid.position - hand.position).normalized;
+            normal = Vector3.ProjectOnPlane(palm, axis).normalized;
+            hinge = Vector3.Cross(axis, normal).normalized; // (axis x n) x axis = n
+            return normal.sqrMagnitude > 0.5f;
+        }
+
+        void CurlFingers(float curl, Vector3 palm)
+        {
+            if (curl <= 0f || !HandFrame(palm, out var axis, out var n, out var hinge)) return;
+            // each finger bone turns about the hand's hinge axis, towards the palm (the way the palm faces)
             for (int i = 0; i < RightFingers.Length; i++)
             {
                 var b = T(RightFingers[i]);
                 if (b == null) continue;
-                Transform next = (i % 3) < 2 ? T(RightFingers[i + 1]) : null;
-                var dir = next != null ? next.position - b.position : b.position - b.parent.position;
-                if (dir.sqrMagnitude < 1e-8f) continue;
-                var target = Vector3.RotateTowards(dir, -palm * dir.magnitude, degrees * Mathf.Deg2Rad, 0f);
-                b.rotation = Quaternion.FromToRotation(dir, target) * b.rotation;
+                int finger = i / 3, joint = i % 3;
+                float deg = (joint == 0 ? P.CurlProximal : joint == 1 ? P.CurlIntermediate : P.CurlDistal)[finger] * curl;
+                b.rotation = Quaternion.AngleAxis(deg, hinge) * b.rotation;
+            }
+
+            // thumb: in towards the index finger and down beside the palm, then its two outer joints bend a little
+            var t0 = T(RightThumb[0]);
+            var t1 = T(RightThumb[1]);
+            if (t0 == null || t1 == null) return;
+            float k = Mathf.Clamp01(curl);
+            var dir = t1.position - t0.position;
+            var want = Vector3.RotateTowards(dir, axis * dir.magnitude, P.ThumbIn * k * Mathf.Deg2Rad, 0f);
+            want = Vector3.RotateTowards(want, n * dir.magnitude, P.ThumbDown * k * Mathf.Deg2Rad, 0f);
+            t0.rotation = Quaternion.FromToRotation(dir, want) * t0.rotation;
+            for (int j = 1; j < RightThumb.Length; j++)
+            {
+                var b = T(RightThumb[j]);
+                if (b != null) b.rotation = Quaternion.AngleAxis(P.ThumbCurl * k, hinge) * b.rotation;
+            }
+        }
+
+        // Finger tips (2 cm past the last joint) and the knuckles may not go under the ground:
+        // the hand turns up about the wrist until the lowest one rests on it.
+        void RestOnGround(float groundY, Vector3 palm)
+        {
+            var hand = T(HumanBodyBones.RightHand);
+            if (hand == null) return;
+            float s = transform.lossyScale.y;
+            for (int iter = 0; iter < 3; iter++)
+            {
+                if (!HandFrame(palm, out _, out _, out var hinge)) return;
+                float worst = 0f, reach = 0f;
+                for (int f = 0; f < 4; f++)
+                {
+                    var knuckle = T(RightFingers[f * 3]);
+                    var mid = T(RightFingers[f * 3 + 1]);
+                    var last = T(RightFingers[f * 3 + 2]);
+                    if (knuckle == null || mid == null || last == null) continue;
+                    var tip = last.position + (last.position - mid.position).normalized * 0.02f * s;
+                    Check(tip, P.TipRadius);
+                    Check(knuckle.position, P.KnuckleRadius);
+                }
+                var thumb = T(RightThumb[2]);
+                if (thumb != null) Check(thumb.position, P.TipRadius);
+                if (worst <= 1e-4f || reach < 0.02f) return;
+                float angle = Mathf.Asin(Mathf.Clamp01(worst / reach)) * Mathf.Rad2Deg;
+                hand.rotation = Quaternion.AngleAxis(-angle, hinge) * hand.rotation;
+
+                void Check(Vector3 p, float radius)
+                {
+                    float deficit = groundY + radius * s - p.y;
+                    if (deficit <= worst) return;
+                    worst = deficit;
+                    reach = Vector3.ProjectOnPlane(p - hand.position, hinge).magnitude;
+                }
             }
         }
 

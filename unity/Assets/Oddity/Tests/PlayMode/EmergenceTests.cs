@@ -244,6 +244,82 @@ namespace Oddity.PlayTests
             Assert.Greater(wrist.y, plane, "wrist out of the screen by 3.5 s");
         }
 
+        // Middle finger tip: the distal bone plus 2 cm along it (the bone sits at the last joint).
+        static Vector3 MiddleTip(HarinPuppet h)
+        {
+            var d = h.BonePosition(HumanBodyBones.RightMiddleDistal);
+            var m = h.BonePosition(HumanBodyBones.RightMiddleIntermediate);
+            return d + (d - m).normalized * 0.02f * h.transform.lossyScale.x;
+        }
+
+        // Cut 10 at 3.0 s (finger tips on the desk): wrist to middle finger tip on screen is 1.0 to 1.4 times
+        // the phone's long side on screen (a 17 to 18 cm hand next to a 14.6 cm phone).
+        [UnityTest]
+        public IEnumerator Cut10_HandRealSize()
+        {
+            yield return LoadAndHold();
+            var seq = Boot().Emergence;
+            var harin = HarinWardrobe.ActivePuppet();
+            var cam = seq.Cut10Camera;
+            cam.aspect = 9f / 16f;
+            seq.Seek(3f);
+            yield return null;
+            Vector2 S(Vector3 w) { var v = cam.WorldToViewportPoint(w); return new Vector2(v.x * cam.aspect, v.y); }
+            var c = seq.ScreenCorners;
+            float phone = (Vector2.Distance(S(c[0]), S(c[3])) + Vector2.Distance(S(c[1]), S(c[2]))) * 0.5f;
+            var wrist = harin.BonePosition(HumanBodyBones.RightHand);
+            var tip = MiddleTip(harin);
+            float hand = Vector2.Distance(S(wrist), S(tip));
+            var phoneMid = (c[0] + c[1] + c[2] + c[3]) * 0.25f;
+            string info = $"hand {hand:0.000} phone {phone:0.000} ratio {hand / phone:0.00} hand3d {Vector3.Distance(wrist, tip):0.000} "
+                + $"phone3d {Vector3.Distance(c[0], c[3]):0.000} scale {harin.transform.lossyScale.x:0.000} "
+                + $"cam→phone {Vector3.Distance(cam.transform.position, phoneMid):0.000} cam→hand {Vector3.Distance(cam.transform.position, (wrist + tip) * 0.5f):0.000} "
+                + $"wristH {wrist.y - seq.DeskPlaneY:0.000} tipH {tip.y - seq.DeskPlaneY:0.000} fov {cam.fieldOfView:0.0}";
+            Debug.Log("CUT10SIZE " + info);
+            Assert.That(hand / phone, Is.InRange(1.0f, 1.4f), info);
+        }
+
+        // Cut 10: the first joint of index to little finger is bent at least 8° from the T-pose, little the most.
+        [UnityTest]
+        public IEnumerator Cut10_FingersCurled()
+        {
+            yield return LoadAndHold();
+            var seq = Boot().Emergence;
+            var harin = HarinWardrobe.ActivePuppet();
+            var fingers = new[] { HumanBodyBones.RightIndexProximal, HumanBodyBones.RightMiddleProximal, HumanBodyBones.RightRingProximal, HumanBodyBones.RightLittleProximal };
+            foreach (float t in new[] { 3f, 3.5f })
+            {
+                seq.Seek(t);
+                yield return null;
+                var bends = fingers.Select(harin.FingerBend).ToArray();
+                string info = $"at {t:0.0}s " + string.Join(" ", fingers.Select((f, i) => $"{f} {bends[i]:0.0}"));
+                Debug.Log("CUT10FINGERS " + info);
+                foreach (var b in bends) Assert.GreaterOrEqual(b, 8f, info);
+                Assert.Greater(bends[3], bends[0], "little bends more than index: " + info);
+            }
+        }
+
+        // Cut 10: once the finger tips are on the desk the contact shadow is on and at least 0.2 alpha.
+        [UnityTest]
+        public IEnumerator Cut10_ContactShadow()
+        {
+            yield return LoadAndHold();
+            var seq = Boot().Emergence;
+            seq.Seek(2f);
+            yield return null;
+            float before = seq.ContactShadowAlpha;
+            foreach (float t in new[] { 3f, 3.5f, 3.9f })
+            {
+                seq.Seek(t);
+                yield return null;
+                var r = seq.ContactShadow;
+                Assert.IsNotNull(r, "no contact shadow");
+                Assert.IsTrue(r.enabled && r.gameObject.activeInHierarchy, $"contact shadow off at {t:0.0}s");
+                Assert.Greater(seq.ContactShadowAlpha, 0.2f, $"contact shadow alpha at {t:0.0}s");
+                Assert.Greater(seq.ContactShadowAlpha, before, "darker once the hand is down");
+            }
+        }
+
         // Cut 12: the seat contact rests on the mattress and both soles on the floor.
         [UnityTest]
         public IEnumerator Cut12_SeatedOnBed()

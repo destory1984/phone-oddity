@@ -36,22 +36,41 @@ namespace Oddity.Game
         const float ImageW = 1600f, ImageH = 2844f;
         // phone screen corners in the picture (pixels, y down): top left, top right, bottom right, bottom left
         static readonly Vector2[] ScreenPx = { new Vector2(71, 1803), new Vector2(426, 1683), new Vector2(824, 2166), new Vector2(383, 2357) };
-        static readonly Vector2 HandTowardsPx = new Vector2(1250, 2550); // the hand reaches towards here
+        static readonly Vector2 HandTowardsPx = new Vector2(1300, 2350); // the hand reaches towards here (Task 29: less towards the camera)
         const int DeskGridX = 24, DeskGridY = 40;
-        const float WristAbove = 0.07f;      // wrist height over the screen once out (forearm shows 5 to 10 cm)
-        const float WristOut = 0.09f;        // wrist distance from the crossing point along the forearm (about 51° rise)
+        // Task 29: the wrist was 7 cm up and the hand hung down towards the camera, so it showed 1.45x the phone's
+        // long side on screen (a 14.6 cm hand next to a 14.6 cm phone). Lower, the palm rests on the desk
+        // and the hand is foreshortened like the phone.
+        // The forearm still rises steeply (49°) out of the screen: a flatter one showed its top 6 cm behind
+        // the crossing, outside the ring. The wrist bends back so the palm lies on the desk.
+        const float WristAbove = 0.045f;     // wrist height over the screen once out (the palm rests on the desk)
+        const float WristOut = 0.06f;        // wrist distance from the crossing point along the forearm (6 cm of forearm)
         const float BodyTiltDeg = 5f;        // her up axis under the desk, lifted this much from the reach direction (head and feet both stay under the plane)
         const float UpperArmSteeper = 10f;   // upper arm angle over the forearm angle (under the desk)
-        const float RingRadius = 0.05f;
+        const float RingRadius = 0.055f;    // covers the forearm's cut through the screen (drawn over the arm)
         const float GlowRadius = 0.13f;
-        const float ShadowSize = 0.05f;
+        // contact shadow: a broad soft blob under the whole hand and a darker one under palm and fingers,
+        // nudged away from the lamp; faint while the hand is over the desk, dark once it rests on it
+        const float ShadowWidth = 0.1f, ShadowCoreWidth = 0.06f, ShadowLampShift = 0.02f;
+        const float ShadowNear = 0.15f, ShadowTouch = 0.6f, ShadowCoreTouch = 0.75f;
+        // violet light over the forearm where it goes into the screen, drawn over the arm, so the cut
+        // through the desk plane reads as the arm sinking into light
+        // (set back from the reach: the forearm's top meets the plane behind the crossing, the wrist stays clear)
+        const float VeilRadius = 0.05f, VeilAlpha = 0.9f, VeilBack = 0.025f;
+        // blended, not added: arm and screen under it turn the same colour, so the edge of the cut disappears
+        static readonly Color VeilColor = new Color(0.78f, 0.62f, 1f);
+        // violet light from the portal, low on the arm (a rim from below)
+        static readonly Color PortalLightColor = new Color(0.55f, 0.35f, 1f);
+        // (5 cm under the desk plane: right at the arm a point light burns it white)
+        const float PortalLightIntensity = 0.004f, PortalLightRange = 0.3f, PortalLightDepth = 0.05f;
         // wrist light: the swirl picture lies over the ring and turns 20 → 40 °/s from 1.0 to 4.0 s,
         // brightest while the wrist comes out (2.0 to 3.0 s)
         const float SwirlFrom = 1f, SwirlPeakAt = 2.5f, SwirlSpeed0 = 20f, SwirlSpeed1 = 40f, SwirlRadius = 0.065f;
         const float SwirlEllipseW = 0.92f, SwirlEllipseH = 0.55f;   // the swirl's ellipse in its picture (fraction of the side)
         // warm lamp light on her in cut 10 only, from the upper left of the picture (the desk lamp side)
-        const float Cut10WarmKelvin = 4800f, Cut10WarmIntensity = 1f;
-        static readonly Vector3 Cut10WarmDir = new Vector3(0.85f, -0.4f, -0.1f);
+        // low (about 20° over the desk) so the sides of the fingers away from the lamp fall into shade
+        const float Cut10WarmKelvin = 4800f, Cut10WarmIntensity = 0.85f;
+        static readonly Vector3 Cut10WarmDir = new Vector3(0.85f, -0.35f, -0.4f);
         const float Cut10Glitch = 0.2f;      // body jitter while the arm is out (1 cm at 1)
 
         // ---------------------------------------------------------------- cut 11 and 12 (the room)
@@ -113,6 +132,9 @@ namespace Oddity.Game
         /// <summary>Phone screen corners on the cut 10 desk plane (TL, TR, BR, BL as in the picture).</summary>
         public Vector3[] ScreenCorners => _screenCorners;
         public float DeskPlaneY => Cut10DeskOrigin.y;
+        /// <summary>The cut 10 contact shadow under her hand (null before the first play).</summary>
+        public Renderer ContactShadow => _shadow != null ? _shadow.GetComponent<Renderer>() : null;
+        public float ContactShadowAlpha => _shadowMat != null ? _shadowMat.GetColor("_Color").a : 0f;
         public float MattressTop { get; private set; } = 0.45f;
         public float MattressFrontX { get; private set; } = -0.92f;
 
@@ -130,8 +152,10 @@ namespace Oddity.Game
         Vector3[] _screenCorners;
         Vector3 _cross;        // where the arm passes through the screen
         Vector3 _reachDir;     // horizontal direction of the reach on the desk
-        Material _noiseMat, _ringMat, _glowMat, _shadowMat, _swirlMat;
-        Transform _ring, _glow, _shadow, _swirlPivot;
+        Material _noiseMat, _ringMat, _glowMat, _shadowMat, _shadowCoreMat, _swirlMat;
+        Transform _ring, _glow, _shadow, _shadowCore, _swirlPivot, _veil;
+        Material _veilMat;
+        Light _portalLight;
 
         Light _lamp, _window, _keyLight;
         Light _faceLight, _catchLight;
@@ -312,7 +336,7 @@ namespace Oddity.Game
             float glitch = t < Cut10At ? t / Cut10At : t < RoomAt ? 1f : Mathf.Clamp01(1f - (t - RoomAt));
             harin.SetGlitch(t < Cut10At ? glitch : t < RoomAt ? Cut10Glitch : glitch);
             if (chat != null) chat.SetGlitch(Mathf.Min(glitch, 1f));
-            harin.SetRoomLook(t >= Cut10At);
+            harin.SetRoomLook(t >= Cut10At, desk: t >= Cut10At && t < RoomAt);
             harin.SetHeadTurn(t < Cut10At ? 35f * Smooth(t / Cut10At) : 0f, 0f);
             harin.SetRightArmReach(null);
             harin.SetEyeTarget(t >= EyesAt ? mainCamera.transform : null);
@@ -482,6 +506,7 @@ namespace Oddity.Game
             // the ring texture is a flat ellipse (about 0.88 by 0.2 of the image); stretch it back into a circle
             // lying on the desk plane, so the arm hides its far half and its near half covers the arm
             _ring = FxQuad("Cut10Ring", portalRing, true, 3003, out _ringMat);
+            _ringMat.SetFloat("_ZTest", (float)UnityEngine.Rendering.CompareFunction.Always);
             _ring.position = _cross + Vector3.up * 0.002f;
             _ring.localScale = new Vector3(RingRadius * 2f / 0.88f, RingRadius * 2f / 0.2f, 1f);
             _ring.rotation = Quaternion.LookRotation(Vector3.down, _reachDir) * Quaternion.Euler(0f, 0f, 90f);
@@ -507,8 +532,25 @@ namespace Oddity.Game
             var wd = warm.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalLightData>();
             wd.renderingLayers = uint.MaxValue;
 
-            _shadow = FxQuad("Cut10ContactShadow", soft, false, 3002, out _shadowMat);
-            _shadow.localScale = new Vector3(ShadowSize, ShadowSize * 0.7f, 1f);
+            _veil = FxQuad("Cut10WristVeil", SoftDisc(0.4f), false, 3005, out _veilMat);
+            _veilMat.SetFloat("_ZTest", (float)UnityEngine.Rendering.CompareFunction.Always);
+            _veil.SetPositionAndRotation(_cross - _reachDir * VeilBack + Vector3.up * 0.003f, Quaternion.LookRotation(Vector3.down, _reachDir));
+            _veil.localScale = new Vector3(VeilRadius * 2f, VeilRadius * 2f, 1f);
+
+            var portal = new GameObject("Cut10PortalLight");
+            portal.transform.SetParent(_rig, false);
+            portal.transform.position = _cross - Vector3.up * PortalLightDepth;
+            _portalLight = portal.AddComponent<Light>();
+            _portalLight.type = LightType.Point;
+            _portalLight.color = PortalLightColor;
+            _portalLight.range = PortalLightRange;
+            _portalLight.intensity = 0f;
+            _portalLight.shadows = LightShadows.None;
+            portal.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalLightData>().renderingLayers = uint.MaxValue;
+
+            var blob = SoftDisc(0.35f);
+            _shadow = FxQuad("Cut10ContactShadow", blob, false, 3002, out _shadowMat);
+            _shadowCore = FxQuad("Cut10ContactShadowCore", blob, false, 3002, out _shadowCoreMat);
             _rig.gameObject.SetActive(false);
         }
 
@@ -535,6 +577,24 @@ namespace Oddity.Game
             m.SetFloat("_DstBlend", (float)(additive ? UnityEngine.Rendering.BlendMode.One : UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha));
             m.SetColor("_Color", new Color(1f, 1f, 1f, 0f));
             return m;
+        }
+
+        // round spot, alpha 1 out to flat of the radius, then a smooth fall to 0 at the edge, made in code
+        static Texture2D SoftDisc(float flat)
+        {
+            const int n = 64;
+            var tex = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, name = "SoftDisc" };
+            var px = new Color32[n * n];
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    float dx = (x + 0.5f) / n * 2f - 1f, dy = (y + 0.5f) / n * 2f - 1f;
+                    float a = Smooth((1f - Mathf.Sqrt(dx * dx + dy * dy)) / (1f - flat));
+                    px[y * n + x] = new Color32(255, 255, 255, (byte)(a * 255f));
+                }
+            tex.SetPixels32(px);
+            tex.Apply();
+            return tex;
         }
 
         // round soft spot (white, alpha 1 in the middle → 0 at the edge), made in code
@@ -589,7 +649,8 @@ namespace Oddity.Game
                 : hl;
             float wristOut = t < 2f ? tip - hl : Mathf.Lerp(0f, WristOut, Smooth((t - 2f) / 1f));
             float bend = Smooth((t - 2f) / 1f);
-            float curl = Smooth((t - 3f) / 0.5f) * 0.5f;
+            // a resting hand from the start, a little more once it takes her weight on the desk
+            float curl = 0.6f + 0.4f * bend + 0.25f * Smooth((t - 3f) / 0.5f);
 
             var wrist = _cross + axis * wristOut;
             var elbow = wrist - axis * lf;
@@ -613,7 +674,7 @@ namespace Oddity.Game
             _anchor.SetPositionAndRotation(root, rot);
             harin.MoveTo(_anchor);
             harin.SetFace("relaxed");
-            harin.SetReachTargets(elbow, wrist, tipPos, Vector3.down, curl);
+            harin.SetReachTargets(elbow, wrist, tipPos, Vector3.down, curl, t >= 2f ? DeskPlaneY : float.NegativeInfinity);
             harin.ApplyPose(Pose.Cut10Reach, bend);
 
             // effects
@@ -630,6 +691,8 @@ namespace Oddity.Game
             float ringGrow = 1f + 0.25f * flare;
             _ring.localScale = new Vector3(RingRadius * 2f / 0.88f * ringGrow, RingRadius * 2f / 0.2f * ringGrow, 1f);
             _glowMat.SetColor("_Color", new Color(0.6f, 0.35f, 1f, 0.25f * ringA + 0.3f * flare));
+            _portalLight.intensity = PortalLightIntensity * (ringA + flare);
+            _veilMat.SetColor("_Color", new Color(VeilColor.r, VeilColor.g, VeilColor.b, VeilAlpha * ringA));
 
             // wrist light: turns 20 → 40 °/s from 1.0 s, brightest at 2.5 s (the wrist coming out), then eases to 40%
             float st = Mathf.Max(0f, t - SwirlFrom), sd = RoomAt - SwirlFrom;
@@ -639,11 +702,21 @@ namespace Oddity.Game
                 * Mathf.Lerp(1f, 0.4f, Smooth((t - SwirlPeakAt) / (RoomAt - SwirlPeakAt)));
             _swirlMat.SetColor("_Color", new Color(1f, 1f, 1f, 0.9f * swirlA));
 
+            // contact shadow along the hand, from under the wrist to the finger tips
             float touch = 1f - Mathf.Clamp01((tipPos.y - DeskPlaneY) / 0.02f);
-            var shadowAt = tipPos - _reachDir * 0.02f;
-            _shadow.position = new Vector3(shadowAt.x, DeskPlaneY + 0.0012f, shadowAt.z);
-            _shadow.rotation = Quaternion.LookRotation(Vector3.down, _reachDir);
-            _shadowMat.SetColor("_Color", new Color(0f, 0f, 0.02f, 0.55f * touch * bend));
+            float near = 1f - Mathf.Clamp01((tipPos.y - DeskPlaneY) / 0.08f);
+            var lampShift = new Vector3(Cut10WarmDir.x, 0f, Cut10WarmDir.z).normalized * ShadowLampShift;
+            var w0 = new Vector3(wrist.x, DeskPlaneY, wrist.z);
+            var w1 = new Vector3(tipPos.x, DeskPlaneY, tipPos.z);
+            float len = Mathf.Max(0.03f, Vector3.Distance(w0, w1));
+            var along = len > 1e-4f ? (w1 - w0).normalized : _reachDir;
+            var look = Quaternion.LookRotation(Vector3.down, along);
+            _shadow.SetPositionAndRotation((w0 + w1) * 0.5f + lampShift + Vector3.up * 0.0012f, look);
+            _shadow.localScale = new Vector3(ShadowWidth, len * 1.35f, 1f);
+            _shadowMat.SetColor("_Color", new Color(0.02f, 0.01f, 0.03f, Mathf.Clamp01((ShadowNear * near + ShadowTouch * touch) * Mathf.Max(bend, 0.3f))));
+            _shadowCore.SetPositionAndRotation(Vector3.Lerp(w0, w1, 0.6f) + lampShift * 0.5f + Vector3.up * 0.0014f, look);
+            _shadowCore.localScale = new Vector3(ShadowCoreWidth, len * 0.9f, 1f);
+            _shadowCoreMat.SetColor("_Color", new Color(0.02f, 0.01f, 0.02f, ShadowCoreTouch * touch * bend));
         }
 
         // ---------------------------------------------------------------- cuts 11 and 12

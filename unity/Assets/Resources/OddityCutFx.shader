@@ -1,5 +1,6 @@
 // Unlit see-through quad for the emergence effects (screen noise, portal ring, glow, contact shadow).
 // Blend is set per material: SrcAlpha One for light, SrcAlpha OneMinusSrcAlpha for shadow.
+// _ZTest Always lets the portal ring draw over the arm where it crosses the screen (hides the cut).
 // Lives in Resources so Shader.Find keeps it in player builds.
 Shader "Oddity/CutFx"
 {
@@ -9,6 +10,7 @@ Shader "Oddity/CutFx"
         _Color ("Tint", Color) = (1,1,1,1)
         [Enum(UnityEngine.Rendering.BlendMode)] _SrcBlend ("Src Blend", Float) = 5
         [Enum(UnityEngine.Rendering.BlendMode)] _DstBlend ("Dst Blend", Float) = 1
+        [Enum(UnityEngine.Rendering.CompareFunction)] _ZTest ("ZTest", Float) = 4
     }
 
     SubShader
@@ -19,7 +21,7 @@ Shader "Oddity/CutFx"
         {
             Blend [_SrcBlend] [_DstBlend]
             ZWrite Off
-            ZTest LEqual
+            ZTest [_ZTest]
             Cull Off
 
             CGPROGRAM
