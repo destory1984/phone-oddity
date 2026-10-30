@@ -73,6 +73,7 @@ namespace Oddity.Game
         DialogueRunner _prologueRunner;
         PrologueDirector _director;
         HarinVoice _voice;
+        PlayerBabble _babble;
         bool _inPrologue;
         Coroutine _breath;
         string _lineScene;
@@ -122,6 +123,8 @@ namespace Oddity.Game
         public string PrologueSceneId => _inPrologue && _prologueRunner != null && _prologueRunner.Current != null ? _prologueRunner.Current.Id : null;
         public PrologueDirector Prologue => _director;
         public HarinVoice Voice => _voice;
+        /// <summary>The player's chatter sounds (see <see cref="PlayerBabble"/>).</summary>
+        public PlayerBabble Babble => _babble;
         /// <summary>True while a prologue line waits for a tap.</summary>
         public bool PrologueAwaitingTap => _inPrologue && _awaitingTap;
         public bool PrologueSeen => File.Exists(PrologueSeenPath);
@@ -251,6 +254,8 @@ namespace Oddity.Game
             _voice = gameObject.AddComponent<HarinVoice>();
             _voice.Init(Harin);
             _voice.Follow = () => Harin; // lip sync goes to whichever model is worn
+            _babble = gameObject.AddComponent<PlayerBabble>();
+            _babble.HarinBusy = () => _voice != null && _voice.IsBusy; // the chatter waits for her voice
             SetPhoneIdle();
             InitPoke();
 
@@ -449,10 +454,12 @@ namespace Oddity.Game
                 if (line.Who == "harin")
                 {
                     if (_act2) _voice.PlayLine(CurrentSceneId, number, line.Face, line.Beat);
-                    else _voice.PlayLine(CurrentSceneId, number, line.Face, line.Beat, () => !chat.IsTyping);
+                    else _voice.PlayLine(CurrentSceneId, number, line.Face, line.Beat, () => !chat.IsTyping && !_babble.IsPlaying);
                 }
                 else _voice.Stop();
             }
+            // the player's lines chatter; a tap cuts it (OnTapped), Harin's next line waits for it to end
+            if (_babble != null && line.Who == "player") _babble.Play(line.Text);
             if (_act2)
             {
                 _subtitle.ShowLine(line);
@@ -573,6 +580,7 @@ namespace Oddity.Game
         // The emergence and act 2 drive Harin themselves.
         void LeavePhone()
         {
+            if (_babble != null) _babble.Stop();
             _pendingFace = null;
             if (_stage != null) _stage.Enabled = false;
             if (_glitchMoment != null) { StopCoroutine(_glitchMoment); _glitchMoment = null; }
@@ -671,7 +679,7 @@ namespace Oddity.Game
 
         /// <summary>
         /// Dev panel: delete every progress file (save, its .bad and .tmp copies, the prologue-seen mark) and load the scene again,
-        /// so the game starts from the first prologue line. The voice set choice (PlayerPrefs) stays.
+        /// so the game starts from the first prologue line. The voice set and babble choices (PlayerPrefs) stay.
         /// </summary>
         public void RestartFromBeginning()
         {
@@ -712,11 +720,13 @@ namespace Oddity.Game
             {
                 if (!_awaitingTap || (_director != null && _director.IsRewinding)) return;
                 _awaitingTap = false;
+                _babble.Stop();
                 _prologueRunner.Advance();
                 return;
             }
             if (!_awaitingTap) return;
             _awaitingTap = false;
+            _babble.Stop();
             _runner.Advance();
         }
 
@@ -756,6 +766,7 @@ namespace Oddity.Game
             _awaitingTap = false;
             if (_breath != null) { StopCoroutine(_breath); _breath = null; }
             _voice.Stop();
+            _babble.Stop();
             _director.ShowLine(line, sceneId);
             if (line.Beat == PrologueDirector.RewindBeat)
             {
@@ -782,6 +793,7 @@ namespace Oddity.Game
             // the notice text sits on the lock-screen card, not on the subtitle band
             if (line.Beat == PrologueDirector.NoticeBeat) _subtitle.HideBand();
             if (line.Who == "harin") _voice.PlayLine(sceneId, number, line.Face, line.Beat);
+            else if (line.Who == "player") _babble.Play(line.Text);
             _awaitingTap = true;
         }
 
@@ -807,6 +819,7 @@ namespace Oddity.Game
             _awaitingTap = false;
             if (_breath != null) { StopCoroutine(_breath); _breath = null; }
             _voice.Stop();
+            _babble.Stop();
             _prologueRunner.LineShown -= OnPrologueLine;
             _prologueRunner.ChoicesShown -= OnPrologueChoices;
             _prologueRunner.SlotFinished -= OnPrologueFinished;
@@ -845,6 +858,8 @@ namespace Oddity.Game
                 var e = current.Choices[index].Effects;
                 _bigChoice = e != null && Mathf.Abs(e.Stability) + Mathf.Abs(e.Deviation) + Mathf.Abs(e.Heart) >= BigChoiceEffect;
             }
+            // the answer bubble the player just picked chatters too
+            if (_babble != null && current != null && index >= 0 && index < current.Choices.Count) _babble.Play(current.Choices[index].Text);
             _runner.Choose(index);
         }
 

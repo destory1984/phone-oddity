@@ -27,6 +27,7 @@ namespace Oddity.Game
         GameObject _panel;
         Text _status;
         Text _voiceLabel;
+        Text _babbleLabel;
         Text[] _valueTexts;
         float _nextRefresh;
         float _fpsStart;
@@ -84,6 +85,16 @@ namespace Oddity.Game
             HarinVoice.VoiceSet = HarinVoice.NextVoiceSet();
             if (_voiceLabel != null) _voiceLabel.text = VoiceLabel();
             if (_boot.Voice != null) _boot.Voice.Replay();
+        }
+
+        static string BabbleLabel() => "재잘거림: " + (PlayerBabble.Setting == "off" ? "끔" : PlayerBabble.Setting == "low" ? "Low" : PlayerBabble.Setting == "high" ? "High" : "Mid");
+
+        /// <summary>Next babble setting (Low, Mid, High, off); a playing line is cut so the change is heard on the next one.</summary>
+        public void SwitchBabble()
+        {
+            PlayerBabble.Setting = PlayerBabble.NextSetting();
+            if (_babbleLabel != null) _babbleLabel.text = BabbleLabel();
+            if (_boot.Babble != null) _boot.Babble.Stop();
         }
 
         public void JumpToEmergence()
@@ -214,6 +225,9 @@ namespace Oddity.Game
             var voice = MakeButton(prt, VoiceLabel(), new Color(0.38f, 0.33f, 0.62f, 1f), 0f, RowHeight);
             _voiceLabel = voice.GetComponentInChildren<Text>();
             voice.onClick.AddListener(SwitchVoice);
+            var babble = MakeButton(prt, BabbleLabel(), new Color(0.38f, 0.33f, 0.62f, 1f), 0f, RowHeight);
+            _babbleLabel = babble.GetComponentInChildren<Text>();
+            babble.onClick.AddListener(SwitchBabble);
 
             _panel.SetActive(false);
             _fpsStart = Time.unscaledTime;
