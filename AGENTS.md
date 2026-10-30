@@ -8,7 +8,7 @@
 |---|---|
 | `packages/com.oddity.core/` | 게임 규칙 (Unity에 기대지 않는 C#). 대본 읽기, 선택, 효과, 저장 |
 | `harness/Oddity.Core` | 위 규칙을 dotnet으로 짓는 프로젝트 |
-| `harness/Oddity.Core.Tests/` | 규칙 시험 35개. Unity 없이 몇 초에 돈다 |
+| `harness/Oddity.Core.Tests/` | 규칙 시험 70개. Unity 없이 몇 초에 돈다 |
 | `unity/` | Unity 6000.3.27f1 프로젝트 (URP, 세로 1080x1920) |
 | `unity/Assets/Oddity/Game/` | 화면 쪽 코드. `HarinPuppet` (표정, 눈 깜빡임, 깨짐, 투명도) |
 | `unity/Assets/Oddity/Editor/` | 에디터 도구. `Shots.cs` (화면 찍기), `ShotScenes.cs` 와 `ShotScenes.txt` (장면 표) |
