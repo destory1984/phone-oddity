@@ -339,28 +339,9 @@ namespace Oddity.Game
         // every shot, plus a weak point light just in front of her face for the eye highlights.
         void BuildFaceLight(uint harinMask)
         {
-            var go = new GameObject("PrologueFaceLight");
-            _made.Add(go);
-            _faceLight = go.AddComponent<Light>();
-            _faceLight.type = LightType.Spot;
-            _faceLight.color = Mathf.CorrelatedColorTemperatureToRGB(6500f);
-            _faceLight.intensity = 0.5f;
-            _faceLight.range = 4f;
-            _faceLight.spotAngle = 50f;
-            _faceLight.innerSpotAngle = 25f;
-            _faceLight.shadows = LightShadows.None;
-            var data = _faceLight.GetUniversalAdditionalLightData();
-            data.renderingLayers = harinMask;
-
-            var c = new GameObject("PrologueCatchLight");
-            _made.Add(c);
-            _catchLight = c.AddComponent<Light>();
-            _catchLight.type = LightType.Point;
-            _catchLight.color = Mathf.CorrelatedColorTemperatureToRGB(6500f);
-            _catchLight.intensity = 0.015f;
-            _catchLight.range = 1.2f;
-            _catchLight.shadows = LightShadows.None;
-            _catchLight.GetUniversalAdditionalLightData().renderingLayers = harinMask;
+            (_faceLight, _catchLight) = FaceLights.Build("PrologueFaceLight", "PrologueCatchLight", harinMask);
+            _made.Add(_faceLight.gameObject);
+            _made.Add(_catchLight.gameObject);
         }
 
         // ------------------------------------------------------------------ lines and beats
@@ -673,7 +654,7 @@ namespace Oddity.Game
             var ni = _notice.GetComponent<Image>();
             ni.color = new Color(0.1f, 0.1f, 0.14f, 0.86f);
             ni.raycastTarget = false;
-            var icon = MakeImage(_notice.transform, "Icon", new Color(0.45f, 0.36f, 0.78f, 1f));
+            var icon = UiKit.Image("Icon", _notice.transform, new Color(0.45f, 0.36f, 0.78f, 1f), false);
             var ir = icon.rectTransform;
             ir.anchorMin = ir.anchorMax = new Vector2(0f, 1f);
             ir.pivot = new Vector2(0f, 1f);
@@ -694,7 +675,7 @@ namespace Oddity.Game
             _tears = new RectTransform[6];
             for (int i = 0; i < _tears.Length; i++)
             {
-                var band = MakeImage(go.transform, "Tear" + i, new Color(1f, 1f, 1f, 0f));
+                var band = UiKit.Image("Tear" + i, go.transform, new Color(1f, 1f, 1f, 0f), false);
                 var br = band.rectTransform;
                 br.anchorMin = new Vector2(0f, 0.5f);
                 br.anchorMax = new Vector2(1f, 0.5f);
@@ -703,8 +684,8 @@ namespace Oddity.Game
             }
             _osd = MakeText(go.transform, "◀◀  되감기", 64, new Color(1f, 1f, 1f, 0f), TextAnchor.UpperLeft);
             Place(_osd.rectTransform, new Vector2(60f, -150f), new Vector2(-60f, -260f));
-            _black = MakeImage(go.transform, "Black", new Color(0f, 0f, 0f, 0f));
-            Stretch(_black.rectTransform);
+            _black = UiKit.Image("Black", go.transform, new Color(0f, 0f, 0f, 0f), false);
+            UiKit.Stretch(_black.rectTransform);
             SetRewindVisible(false);
         }
 
@@ -736,30 +717,7 @@ namespace Oddity.Game
         }
 
         Text MakeText(Transform parent, string text, int size, Color color, TextAnchor anchor)
-        {
-            var go = new GameObject("Text", typeof(RectTransform), typeof(Text));
-            go.transform.SetParent(parent, false);
-            var t = go.GetComponent<Text>();
-            t.font = _font;
-            t.fontSize = size;
-            t.color = color;
-            t.alignment = anchor;
-            t.text = text;
-            t.raycastTarget = false;
-            t.horizontalOverflow = HorizontalWrapMode.Wrap;
-            t.verticalOverflow = VerticalWrapMode.Overflow;
-            return t;
-        }
-
-        static Image MakeImage(Transform parent, string name, Color color)
-        {
-            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
-            go.transform.SetParent(parent, false);
-            var img = go.GetComponent<Image>();
-            img.color = color;
-            img.raycastTarget = false;
-            return img;
-        }
+            => UiKit.Text("Text", parent, _font, text, size, anchor, color, false, HorizontalWrapMode.Wrap, VerticalWrapMode.Overflow);
 
         RawImage MakeRaw(Transform parent, string name, Color color)
         {
@@ -769,15 +727,8 @@ namespace Oddity.Game
             img.texture = _noise != null ? _noise : Texture2D.whiteTexture;
             img.color = color;
             img.raycastTarget = false;
-            Stretch(img.rectTransform);
+            UiKit.Stretch(img.rectTransform);
             return img;
-        }
-
-        static void Stretch(RectTransform r)
-        {
-            r.anchorMin = Vector2.zero;
-            r.anchorMax = Vector2.one;
-            r.offsetMin = r.offsetMax = Vector2.zero;
         }
 
         static void Place(RectTransform r, Vector2 topLeft, Vector2 bottomRight)

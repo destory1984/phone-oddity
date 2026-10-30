@@ -372,7 +372,7 @@ namespace Oddity.Game
             // wallpaper doubles as the tap catcher
             var bg = MakeImage("Wallpaper", _root, wallpaper != null ? Color.white : new Color(0.89f, 0.86f, 0.96f, 1f));
             bg.sprite = wallpaper;
-            Stretch(bg.rectTransform);
+            UiKit.Stretch(bg.rectTransform);
             bg.raycastTarget = true;
             bg.gameObject.AddComponent<TapCatcher>().Init(this);
 
@@ -472,7 +472,7 @@ namespace Oddity.Game
             var list = new GameObject("Choices", typeof(RectTransform), typeof(VerticalLayoutGroup));
             list.transform.SetParent(_choiceArea, false);
             _choiceList = (RectTransform)list.transform;
-            Stretch(_choiceList);
+            UiKit.Stretch(_choiceList);
             var clg = list.GetComponent<VerticalLayoutGroup>();
             clg.padding = new RectOffset(60, 60, ChoicePadY, ChoicePadY);
             clg.spacing = ChoiceSpacing;
@@ -483,7 +483,7 @@ namespace Oddity.Game
             clg.childAlignment = TextAnchor.MiddleCenter;
 
             _waitingText = MakeText("Waiting", _choiceArea, "", 56, TextAnchor.MiddleCenter, new Color(0.3f, 0.26f, 0.45f, 1f));
-            Stretch(_waitingText.rectTransform);
+            UiKit.Stretch(_waitingText.rectTransform);
             _waitingText.raycastTarget = false;
 
             BuildNamePanel();
@@ -497,7 +497,7 @@ namespace Oddity.Game
             var panel = new GameObject("NamePanel", typeof(RectTransform), typeof(VerticalLayoutGroup));
             panel.transform.SetParent(_choiceArea, false);
             _namePanel = (RectTransform)panel.transform;
-            Stretch(_namePanel);
+            UiKit.Stretch(_namePanel);
             var lg = panel.GetComponent<VerticalLayoutGroup>();
             lg.padding = new RectOffset(60, 60, 40, 40);
             lg.spacing = 24f;
@@ -515,12 +515,12 @@ namespace Oddity.Game
             fieldImage.gameObject.AddComponent<LayoutElement>().preferredHeight = 110f;
             _nameInput = fieldImage.gameObject.AddComponent<InputField>();
             var inputText = MakeText("Text", fieldImage.rectTransform, "", BodyFontSize, TextAnchor.MiddleLeft, new Color(0.15f, 0.12f, 0.25f, 1f));
-            Stretch(inputText.rectTransform);
+            UiKit.Stretch(inputText.rectTransform);
             inputText.rectTransform.offsetMin = new Vector2(24f, 6f);
             inputText.rectTransform.offsetMax = new Vector2(-24f, -6f);
             inputText.supportRichText = false;
             var placeholder = MakeText("Placeholder", fieldImage.rectTransform, "이름", BodyFontSize, TextAnchor.MiddleLeft, new Color(0.6f, 0.58f, 0.7f, 1f));
-            Stretch(placeholder.rectTransform);
+            UiKit.Stretch(placeholder.rectTransform);
             placeholder.rectTransform.offsetMin = new Vector2(24f, 6f);
             placeholder.rectTransform.offsetMax = new Vector2(-24f, -6f);
             _nameInput.textComponent = inputText;
@@ -556,7 +556,7 @@ namespace Oddity.Game
 
             _noticeText = MakeText("NoticeText", _notice, "", 42, TextAnchor.MiddleLeft, Color.white);
             var trt = _noticeText.rectTransform;
-            Stretch(trt);
+            UiKit.Stretch(trt);
             trt.offsetMin = new Vector2(150f, 10f);
             trt.offsetMax = new Vector2(-30f, -10f);
             _noticeText.raycastTarget = false;
@@ -653,27 +653,10 @@ namespace Oddity.Game
 
         // ---------------------------------------------------------------- helpers
 
-        Image MakeImage(string name, RectTransform parent, Color color)
-        {
-            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
-            go.transform.SetParent(parent, false);
-            var img = go.GetComponent<Image>();
-            img.color = color;
-            return img;
-        }
+        Image MakeImage(string name, RectTransform parent, Color color) => UiKit.Image(name, parent, color);
 
         Text MakeText(string name, RectTransform parent, string text, int size, TextAnchor anchor, Color color)
-        {
-            var go = new GameObject(name, typeof(RectTransform), typeof(Text));
-            go.transform.SetParent(parent, false);
-            var t = go.GetComponent<Text>();
-            t.font = _font;
-            t.fontSize = size;
-            t.alignment = anchor;
-            t.color = color;
-            t.text = text;
-            return t;
-        }
+            => UiKit.Text(name, parent, _font, text, size, anchor, color);
 
         Button MakeButton(RectTransform parent, string text, Color color, float height)
         {
@@ -682,17 +665,9 @@ namespace Oddity.Game
             var button = img.gameObject.AddComponent<Button>();
             button.targetGraphic = img;
             var label = MakeText("Text", img.rectTransform, text, BodyFontSize, TextAnchor.MiddleCenter, Color.white);
-            Stretch(label.rectTransform);
+            UiKit.Stretch(label.rectTransform);
             label.raycastTarget = false;
             return button;
-        }
-
-        static void Stretch(RectTransform rt)
-        {
-            rt.anchorMin = Vector2.zero;
-            rt.anchorMax = Vector2.one;
-            rt.offsetMin = Vector2.zero;
-            rt.offsetMax = Vector2.zero;
         }
 
         void OnWindowClick(PointerEventData eventData)

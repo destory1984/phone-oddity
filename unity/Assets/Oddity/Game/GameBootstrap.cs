@@ -135,7 +135,7 @@ namespace Oddity.Game
             if (chat == null) chat = FindFirstObjectByType<ChatView>();
             if (wardrobe == null) wardrobe = FindFirstObjectByType<HarinWardrobe>();
             if (wardrobe != null) wardrobe.Wear(HarinWardrobe.Outfit.Summer); // the phone starts in the summer outfit
-            if (harin == null) harin = wardrobe != null && wardrobe.Summer != null ? wardrobe.Summer : FindFirstObjectByType<HarinPuppet>();
+            if (harin == null) harin = wardrobe != null && wardrobe.Summer != null ? wardrobe.Summer : HarinWardrobe.ActivePuppet();
             if (emergence == null) emergence = FindFirstObjectByType<EmergenceSequence>();
             if (emergence == null) emergence = gameObject.AddComponent<EmergenceSequence>();
             emergence.SetArt(cut10DeskPhone, screenNoise, portalRing, wristSwirl);
@@ -172,65 +172,44 @@ namespace Oddity.Game
             cam.transform.SetPositionAndRotation(pose.position, pose.rotation);
         }
 
+        // Reads one StreamingAssets file: a plain file on desktop, UnityWebRequest on Android (inside the apk).
+        // done gets the text, or null with the error in err.
+        static System.Collections.Generic.IEnumerable<object> ReadStreaming(string path, System.Action<string, string> done)
+        {
+            if (Application.platform != RuntimePlatform.Android)
+            {
+                done(File.Exists(path) ? File.ReadAllText(path) : null, "missing file");
+                yield break;
+            }
+            using (var req = UnityEngine.Networking.UnityWebRequest.Get(path))
+            {
+                yield return req.SendWebRequest();
+                bool ok = req.result == UnityEngine.Networking.UnityWebRequest.Result.Success;
+                done(ok ? req.downloadHandler.text : null, req.error);
+            }
+        }
+
         // Reads day1..EmergenceDay and the prologue. On desktop nothing yields, so Init runs inside Start.
         System.Collections.IEnumerator LoadAllThenInit()
         {
             string dir = Path.Combine(Application.streamingAssetsPath, "script");
             var days = new System.Collections.Generic.Dictionary<int, string>();
-            string prologue = null;
-            bool android = Application.platform == RuntimePlatform.Android; // StreamingAssets sits inside the apk there
+            string prologue = null, text = null, err = null;
             for (int day = 1; day <= CoreInfo.EmergenceDay + 1; day++)
             {
-                string path = Path.Combine(dir, "day" + day + ".json");
-                string text = null;
-                if (!android)
+                foreach (var o in ReadStreaming(Path.Combine(dir, "day" + day + ".json"), (t, e) => { text = t; err = e; })) yield return o; // inline, so desktop never yields
+                if (text == null && day == 1 && Application.platform == RuntimePlatform.Android)
                 {
-                    if (File.Exists(path)) text = File.ReadAllText(path);
-                }
-                else
-                {
-                    using (var req = UnityEngine.Networking.UnityWebRequest.Get(path))
-                    {
-                        yield return req.SendWebRequest();
-                        if (req.result == UnityEngine.Networking.UnityWebRequest.Result.Success) text = req.downloadHandler.text;
-                        else if (day == 1)
-                        {
-                            Debug.LogError("GameBootstrap: cannot read script: " + req.error);
-                            chat.ShowLockNotice("대본을 읽지 못했다: " + req.error);
-                            yield break;
-                        }
-                    }
+                    Debug.LogError("GameBootstrap: cannot read script: " + err);
+                    chat.ShowLockNotice("대본을 읽지 못했다: " + err);
+                    yield break;
                 }
                 if (text != null) days[day] = text;
             }
-            string prologuePath = Path.Combine(dir, "prologue.json");
-            if (!android)
-            {
-                if (File.Exists(prologuePath)) prologue = File.ReadAllText(prologuePath);
-            }
-            else
-            {
-                using (var req = UnityEngine.Networking.UnityWebRequest.Get(prologuePath))
-                {
-                    yield return req.SendWebRequest();
-                    if (req.result == UnityEngine.Networking.UnityWebRequest.Result.Success) prologue = req.downloadHandler.text;
-                    else Debug.LogWarning("GameBootstrap: no prologue: " + req.error);
-                }
-            }
-            string pokePath = Path.Combine(dir, "poke.json");
-            if (!android)
-            {
-                if (File.Exists(pokePath)) _pokeJson = File.ReadAllText(pokePath);
-            }
-            else
-            {
-                using (var req = UnityEngine.Networking.UnityWebRequest.Get(pokePath))
-                {
-                    yield return req.SendWebRequest();
-                    if (req.result == UnityEngine.Networking.UnityWebRequest.Result.Success) _pokeJson = req.downloadHandler.text;
-                    else Debug.LogWarning("GameBootstrap: no touch reactions: " + req.error);
-                }
-            }
+            foreach (var o in ReadStreaming(Path.Combine(dir, "prologue.json"), (t, e) => { prologue = t; err = e; })) yield return o; // inline, so desktop never yields
+            if (prologue == null && Application.platform == RuntimePlatform.Android) Debug.LogWarning("GameBootstrap: no prologue: " + err);
+            foreach (var o in ReadStreaming(Path.Combine(dir, "poke.json"), (t, e) => { _pokeJson = t; err = e; })) yield return o; // inline, so desktop never yields
+            if (_pokeJson == null && Application.platform == RuntimePlatform.Android) Debug.LogWarning("GameBootstrap: no touch reactions: " + err);
             Init(days, prologue);
         }
 

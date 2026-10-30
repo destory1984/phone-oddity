@@ -219,20 +219,10 @@ namespace Oddity.Game
 
         Text MakeText(Transform parent, string text, float height, TextAnchor anchor)
         {
-            var go = new GameObject("Text", typeof(RectTransform), typeof(Text), typeof(LayoutElement));
-            go.transform.SetParent(parent, false);
-            var le = go.GetComponent<LayoutElement>();
+            var t = UiKit.Text("Text", parent, _font, text, FontSize, anchor, Color.white, false, HorizontalWrapMode.Overflow, VerticalWrapMode.Overflow);
+            var le = t.gameObject.AddComponent<LayoutElement>();
             le.minHeight = height;
             le.preferredHeight = height;
-            var t = go.GetComponent<Text>();
-            t.font = _font;
-            t.fontSize = FontSize;
-            t.alignment = anchor;
-            t.color = Color.white;
-            t.text = text;
-            t.raycastTarget = false;
-            t.horizontalOverflow = HorizontalWrapMode.Overflow;
-            t.verticalOverflow = VerticalWrapMode.Overflow;
             return t;
         }
 

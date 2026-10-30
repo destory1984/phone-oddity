@@ -101,7 +101,7 @@ namespace Oddity.Game
         const float Cut12SideDeg = 20f;
         // the 6500 K face light and catch light of the prologue, used in the room too (cuts 11, 12 and act 2)
         // (the prologue's light sits about 1.1 m from her face; further away here, so it is scaled by distance squared)
-        const float FaceLightKelvin = 6500f, FaceLightIntensity = 0.5f, CatchLightIntensity = 0.015f;
+        const float FaceLightIntensity = FaceLights.KeyIntensity;
         const float FaceLightRefDistance = 1.1f, FaceLightMaxBoost = 3f;
         // lights (Kelvin; intensity multipliers on the scene values)
         const float LampKelvin = 3500f, WindowKelvin = 7000f;
@@ -181,7 +181,7 @@ namespace Oddity.Game
 
         void FindReferences()
         {
-            if (harin == null) harin = FindFirstObjectByType<HarinPuppet>();
+            if (harin == null) harin = HarinWardrobe.ActivePuppet();
             if (chat == null) chat = FindFirstObjectByType<ChatView>();
             if (mainCamera == null)
             {
@@ -296,26 +296,8 @@ namespace Oddity.Game
         // the same soft key as the prologue's: from the camera's upper right, lighting only Harin
         void BuildFaceLights(uint harinMask)
         {
-            var go = new GameObject("RoomFaceLight");
-            _faceLight = go.AddComponent<Light>();
-            _faceLight.type = LightType.Spot;
-            _faceLight.color = Mathf.CorrelatedColorTemperatureToRGB(FaceLightKelvin);
-            _faceLight.intensity = FaceLightIntensity;
-            _faceLight.range = 4f;
-            _faceLight.spotAngle = 50f;
-            _faceLight.innerSpotAngle = 25f;
-            _faceLight.shadows = LightShadows.None;
-            go.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalLightData>().renderingLayers = harinMask;
+            (_faceLight, _catchLight) = FaceLights.Build("RoomFaceLight", "RoomCatchLight", harinMask);
             _faceLight.enabled = false;
-
-            var c = new GameObject("RoomCatchLight");
-            _catchLight = c.AddComponent<Light>();
-            _catchLight.type = LightType.Point;
-            _catchLight.color = Mathf.CorrelatedColorTemperatureToRGB(FaceLightKelvin);
-            _catchLight.intensity = CatchLightIntensity;
-            _catchLight.range = 1.2f;
-            _catchLight.shadows = LightShadows.None;
-            c.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalLightData>().renderingLayers = harinMask;
             _catchLight.enabled = false;
         }
 

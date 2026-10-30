@@ -67,7 +67,7 @@ namespace Oddity.Game
             // full-view transparent button: tap anywhere to advance
             var hit = new GameObject("TapArea", typeof(RectTransform), typeof(Image), typeof(Button));
             hit.transform.SetParent(transform, false);
-            Stretch((RectTransform)hit.transform);
+            UiKit.Stretch((RectTransform)hit.transform);
             hit.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0f);
             hit.GetComponent<Button>().onClick.AddListener(Tap);
 
@@ -84,21 +84,13 @@ namespace Oddity.Game
             img.color = new Color(0f, 0f, 0f, 0.6f);
             img.raycastTarget = false;
 
-            var tgo = new GameObject("Text", typeof(RectTransform), typeof(Text));
-            tgo.transform.SetParent(band.transform, false);
-            var tr = (RectTransform)tgo.transform;
-            Stretch(tr);
+            _text = UiKit.Text("Text", band.transform, _font, null, FontSize, TextAnchor.MiddleCenter, new Color(0.96f, 0.95f, 0.98f, 1f),
+                false, HorizontalWrapMode.Wrap, VerticalWrapMode.Overflow);
+            var tr = _text.rectTransform;
+            UiKit.Stretch(tr);
             tr.offsetMin = new Vector2(60f, 30f);
             tr.offsetMax = new Vector2(-60f, -30f);
-            _text = tgo.GetComponent<Text>();
-            _text.font = _font;
-            _text.fontSize = FontSize;
             _text.lineSpacing = 1.1f;
-            _text.alignment = TextAnchor.MiddleCenter;
-            _text.color = new Color(0.96f, 0.95f, 0.98f, 1f);
-            _text.horizontalOverflow = HorizontalWrapMode.Wrap;
-            _text.verticalOverflow = VerticalWrapMode.Overflow;
-            _text.raycastTarget = false;
 
             // choice buttons stack upward from the band's bottom edge
             var area = new GameObject("Choices", typeof(RectTransform));
@@ -112,14 +104,6 @@ namespace Oddity.Game
 
             SetVisible(false);
             Fit();
-        }
-
-        static void Stretch(RectTransform r)
-        {
-            r.anchorMin = Vector2.zero;
-            r.anchorMax = Vector2.one;
-            r.offsetMin = Vector2.zero;
-            r.offsetMax = Vector2.zero;
         }
 
         void LateUpdate() => Fit();
@@ -201,16 +185,8 @@ namespace Oddity.Game
                 go.GetComponent<Image>().color = new Color(0.36f, 0.31f, 0.6f, 0.92f);
                 go.GetComponent<Button>().onClick.AddListener(() => PickChoice(index));
 
-                var tgo = new GameObject("Text", typeof(RectTransform), typeof(Text));
-                tgo.transform.SetParent(go.transform, false);
-                Stretch((RectTransform)tgo.transform);
-                var t = tgo.GetComponent<Text>();
-                t.font = _font;
-                t.fontSize = ChoiceFontSize;
-                t.alignment = TextAnchor.MiddleCenter;
-                t.color = Color.white;
-                t.text = label;
-                t.raycastTarget = false;
+                var t = UiKit.Text("Text", go.transform, _font, label, ChoiceFontSize, TextAnchor.MiddleCenter, Color.white, false);
+                UiKit.Stretch(t.rectTransform);
             }
         }
 
