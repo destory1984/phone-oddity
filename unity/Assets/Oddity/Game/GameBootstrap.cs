@@ -700,6 +700,7 @@ namespace Oddity.Game
             if (cue.Gaze == ContiGaze.Lens) _gazeGoal = _stage.Camera.transform;
             else if (cue.Gaze == ContiGaze.Free) _gazeGoal = null;
             if (!string.IsNullOrEmpty(cue.Sfx)) PlaySfx(cue.Sfx);
+            if (SceneConti.MotionOn && !string.IsNullOrEmpty(cue.Motion) && Harin != null) Harin.PlayMotion(cue.Motion);
         }
 
         void PlaySfx(string name)
@@ -782,7 +783,7 @@ namespace Oddity.Game
             if (_stage != null) _stage.Enabled = false;
             if (_night != null) _night.Refresh(); // the dark room goes back before the emergence draws
             if (_glitchMoment != null) { StopCoroutine(_glitchMoment); _glitchMoment = null; }
-            if (Harin != null) { Harin.SetIdle(false); Harin.StopPokeMotion(); }
+            if (Harin != null) { Harin.SetIdle(false); Harin.StopPokeMotion(); Harin.StopMotion(); }
             ClearGaze();
             if (_poke != null) _poke.Cancel();
             if (_voice != null) _voice.Stop();

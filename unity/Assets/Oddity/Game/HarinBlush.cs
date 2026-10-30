@@ -180,6 +180,7 @@ namespace Oddity.Game
 
         void OnDestroy()
         {
+            if (_mGraph.IsValid()) _mGraph.Destroy();
             if (_blushSkin != null && _blushApplied > 0f)
             {
                 _blushSkin.SetTexture(MainTexId, _origMain);

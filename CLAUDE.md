@@ -11,7 +11,8 @@
 | `harness/Oddity.Core.Tests/` | 규칙 시험 70개. Unity 없이 몇 초에 돈다 |
 | `unity/` | Unity 6000.3.27f1 프로젝트 (URP, 세로 1080x1920) |
 | `unity/Assets/Oddity/Game/` | 화면 쪽 코드. `HarinPuppet` (표정, 눈 깜빡임, 깨짐, 투명도), `SceneConti` (3일차 밤 콘티와 강도 끔·약·중·강·근), `NightLook` (콘티 장면에서만 켜는 밤 조명) |
-| `unity/Assets/Oddity/Editor/` | 에디터 도구. `Shots.cs` (화면 찍기), `ShotScenes.cs` 와 `ShotScenes.txt` (장면 표) |
+| `unity/Assets/Oddity/Editor/` | 에디터 도구. `Shots.cs` (화면 찍기), `ShotScenes.cs` 와 `ShotScenes.txt` (장면 표), `MotionImport.cs` (Mixamo Humanoid 임포트), `MotionSheet.cs` (동작을 넓은 화면으로 찍는 시트) |
+| `unity/Assets/Oddity/DevMotion/` | Mixamo FBX (git 무시, 재배포 금지). `HarinMotion.cs` 가 상반신에만 입힌다 |
 | `unity/Assets/Oddity/Tests/EditMode/` | Unity 안에서 도는 시험 (대본 내용 등) |
 | `unity/Assets/Scenes/Prototype.unity` | 시제품 장면. `AppStageCamera` 가 하린을 1024x1024 로 그린다 |
 | `hari/`, `harin/` | 하린 그림과 3D 원본 재료 (게임 코드 아님) |

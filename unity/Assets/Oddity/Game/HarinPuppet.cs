@@ -259,6 +259,8 @@ namespace Oddity.Game
             else if (_armPose != null)
                 foreach (var (t, q) in _armPose) t.localRotation = q;
 
+            if (_pose != Pose.None) StopMotion();
+            ApplyMotion();
             ApplyLean();
             ApplyIdleBreath();
             var root = transform.rotation;

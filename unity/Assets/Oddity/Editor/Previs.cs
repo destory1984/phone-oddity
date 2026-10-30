@@ -17,7 +17,7 @@ namespace Oddity.EditorTools
 {
     /// <summary>
     /// Previs video (task 49): Unity.exe -executeMethod Oddity.EditorTools.Previs.Run
-    ///   -previsScene d3_night -previsLevels 1,2,3,4 [-previsDay] -previsDir ABS_DIR -previsFfmpeg ABS_FFMPEG
+    ///   -previsScene d3_night -previsLevels 1,2,3,4 [-previsDay] [-previsMotion] -previsDir ABS_DIR -previsFfmpeg ABS_FFMPEG
     /// (-previsDay films with the night look off and puts "_day" in the file names)
     /// Per conti strength: a save at day 3 night, play mode, then <see cref="PrevisAutoPlay"/> reads the scene like a
     /// person while the phone camera (540x960) is filmed in real time: ffmpeg gets one frame per 1/24 s of the wall
@@ -58,7 +58,7 @@ namespace Oddity.EditorTools
         static Target _target;
         static string _dir, _ffmpeg;
         static int _level;
-        static bool _day;
+        static bool _day, _motion;
         static int _failures;
         static bool _recording;
         static bool _optionsSaved, _oldEnabled;
@@ -101,6 +101,7 @@ namespace Oddity.EditorTools
             _dir = ArgValue(args, "-previsDir");
             _ffmpeg = ArgValue(args, "-previsFfmpeg");
             _day = Array.IndexOf(args, "-previsDay") >= 0;
+            _motion = Array.IndexOf(args, "-previsMotion") >= 0;
             _target = Targets.FirstOrDefault(t => t.Name == scene);
             if (_target == null)
             {
@@ -155,6 +156,7 @@ namespace Oddity.EditorTools
                 HarinVoice.ResourceDirOverride = null;
                 SceneConti.SetLevelForRun(_level);
                 SceneConti.SetNightForRun(!_day);
+                SceneConti.SetMotionForRun(_motion);
                 EditorSceneManager.OpenScene(PrototypeScene, OpenSceneMode.Single);
                 EditorApplication.EnterPlaymode();
             }
@@ -224,8 +226,8 @@ namespace Oddity.EditorTools
             Debug.Log("PREVIS start " + _target.Name + " level " + _level + (_day ? " day" : " night") + " voiceSet " + HarinVoice.VoiceSet + " babble " + PlayerBabble.Setting);
         }
 
-        // file name stem: d3_night_L2 or d3_night_L2_day
-        static string Stem() => _target.Name + "_L" + _level + (_day ? "_day" : "");
+        // file name stem: d3_night_L2, d3_night_L2_day, d3_night_L2_motion
+        static string Stem() => _target.Name + "_L" + _level + (_day ? "_day" : "") + (_motion ? "_motion" : "");
 
         static string Stamp() => "f" + Math.Max(0, _written - 1).ToString("D5") + " t=" + _now.ToString("0.000", CultureInfo.InvariantCulture) + "s";
 

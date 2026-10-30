@@ -49,6 +49,8 @@ namespace Oddity.Game
         /// <summary>Face set while the typing indicator shows (before the line), after its Delay.</summary>
         public ContiFace TypingFace;
         public string Sfx;
+        /// <summary>A Mixamo motion (file name in Resources/Motion) on the upper body while the line shows; played only when <see cref="SceneConti.MotionOn"/>.</summary>
+        public string Motion;
         /// <summary>True: the line shows the glitch flash (the day 3 night rule would flash every Harin line and bury the conti).</summary>
         public bool Glitch;
     }
@@ -163,6 +165,17 @@ namespace Oddity.Game
         /// <summary>Forget the cached night setting so the next read goes to PlayerPrefs again (tests).</summary>
         public static void ClearNightCache() { _night = -1; }
 
+        static bool _motionOn;
+
+        /// <summary>The Mixamo motions of the cues (task 51); default off, this run only (never saved).</summary>
+        public static bool MotionOn { get => _motionOn; set => _motionOn = value; }
+
+        /// <summary>Sets the motion switch for this run only (shots, previs, tests).</summary>
+        public static void SetMotionForRun(bool on) { _motionOn = on; }
+
+        /// <summary>The line that carries the motion in the pilot.</summary>
+        public const string MotionName = "Bashful";
+
         /// <summary>True for the two scenes the conti table is written for.</summary>
         public static bool IsContiScene(string sceneId) => sceneId == Night || sceneId == NightEnd;
 
@@ -227,7 +240,7 @@ namespace Oddity.Game
             };
             t[Key(Night, 3)] = new ContiCue { Start = shotL, Head1 = new ContiHead(0f, 6f, 0f), Gaze = ContiGaze.Lens };
             t[Key(Night, 4)] = new ContiCue { Head1 = new ContiHead(0f, 0f, 3f), Gaze = ContiGaze.Free, Face1 = new ContiFace(0f, "smile") };
-            t[Key(Night, 5)] = new ContiCue { Start = h2, End = h2End, MoveSeconds = H2PushSeconds, Head1 = new ContiHead(0f, 0f, 8f), Gaze = ContiGaze.Free };
+            t[Key(Night, 5)] = new ContiCue { Start = h2, End = h2End, MoveSeconds = H2PushSeconds, Head1 = new ContiHead(0f, 0f, 8f), Gaze = ContiGaze.Free, Motion = MotionName };
             t[Key(Night, 6)] = new ContiCue { Head1 = new ContiHead(1.0f, 0f, 0f) };
             t[Key(Night, 7)] = new ContiCue { Start = shotM, Head1 = new ContiHead(0f, 0f, -2f), Gaze = ContiGaze.Lens };
             t[Key(Night, 8)] = new ContiCue { Head1 = new ContiHead(0.5f, 0f, 0f) };
