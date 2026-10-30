@@ -189,6 +189,33 @@ namespace Oddity.PlayTests
             Assert.IsFalse(boot.EndOfContent);
         }
 
+        [UnityTest]
+        public IEnumerator Dev_RestartFromBeginning()
+        {
+            SaveState(Slot.Morning);
+            yield return LoadScene();
+            var boot = Boot();
+            string seen = _savePath + "." + GameBootstrap.PrologueSeenFile;
+            File.WriteAllText(seen, "1");
+            File.WriteAllText(_savePath + ".bad", "x");
+            Assert.IsTrue(File.Exists(_savePath));
+            string before = PlayerPrefs.GetString("oddity.voiceSet", "");
+            PlayerPrefs.SetString("oddity.voiceSet", "harinB");
+            try
+            {
+                boot.ClearProgressFiles();
+                Assert.IsFalse(File.Exists(_savePath), "save deleted");
+                Assert.IsFalse(File.Exists(_savePath + ".bad"), ".bad deleted");
+                Assert.IsFalse(File.Exists(seen), "prologue-seen mark deleted");
+                Assert.AreEqual("harinB", PlayerPrefs.GetString("oddity.voiceSet", ""), "voice set kept");
+                boot.ClearProgressFiles(); // nothing left: no exception
+            }
+            finally
+            {
+                PlayerPrefs.SetString("oddity.voiceSet", before);
+            }
+        }
+
         IEnumerator RunNightTask(string taskText, int startHeart, int expectedHeart)
         {
             SaveState(Slot.Night, startHeart);

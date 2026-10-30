@@ -4,7 +4,7 @@ namespace Oddity.Core
 {
     public class SlotClock
     {
-        public static readonly TimeSpan FastInterval = TimeSpan.FromSeconds(60);
+        public static readonly TimeSpan FastInterval = TimeSpan.Zero;
 
         private readonly GameState _state;
         private readonly Func<DateTime> _utcNow;

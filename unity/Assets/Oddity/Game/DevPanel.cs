@@ -64,6 +64,13 @@ namespace Oddity.Game
         /// <summary>The "day +1" button: jump to the next day's morning and start it now.</summary>
         public void NextDay() => _boot.NextDayNow();
 
+        /// <summary>Wipe all progress and start again from the first prologue line; the panel closes.</summary>
+        public void RestartFromBeginning()
+        {
+            if (_panel != null) _panel.SetActive(false);
+            _boot.RestartFromBeginning();
+        }
+
         public void ClearSave() => _boot.ClearSaveAndReload();
 
         /// <summary>Forget that the prologue was seen and reload, so it plays again.</summary>
@@ -198,6 +205,7 @@ namespace Oddity.Game
                 var plus = MakeButton(row.transform, "+", new Color(0.35f, 0.3f, 0.5f, 1f), 100f, RowHeight);
                 plus.onClick.AddListener(() => Adjust(index, 1));
             }
+            MakeButton(prt, "처음부터 다시", new Color(0.6f, 0.25f, 0.3f, 1f), 0f, RowHeight).onClick.AddListener(RestartFromBeginning);
             MakeButton(prt, "다음 슬롯", new Color(0.38f, 0.33f, 0.62f, 1f), 0f, RowHeight).onClick.AddListener(NextSlot);
             MakeButton(prt, "날 +1", new Color(0.38f, 0.33f, 0.62f, 1f), 0f, RowHeight).onClick.AddListener(NextDay);
             MakeButton(prt, "저장 지우기", new Color(0.6f, 0.25f, 0.3f, 1f), 0f, RowHeight).onClick.AddListener(ClearSave);

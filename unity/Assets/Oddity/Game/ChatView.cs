@@ -295,6 +295,17 @@ namespace Oddity.Game
             }
         }
 
+        /// <summary>Between slots: a short "next story" notice in the wait spot (no countdown). WaitingSeconds is 0 while it shows.</summary>
+        public void ShowNextStory()
+        {
+            HideBottom();
+            _choiceArea.gameObject.SetActive(true);
+            _waitingText.gameObject.SetActive(true);
+            _waitingText.text = "다음 이야기…";
+            _lastWaitingShown = int.MinValue;
+            WaitingSeconds = 0;
+        }
+
         public void ShowLockNotice(string text)
         {
             _noticeText.text = text ?? "";

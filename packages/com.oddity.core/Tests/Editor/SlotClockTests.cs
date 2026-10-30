@@ -8,7 +8,7 @@ namespace Oddity.Core.Tests
         private static readonly DateTime T0 = new DateTime(2026, 10, 29, 9, 0, 0, DateTimeKind.Utc);
 
         [Test]
-        public void Close_AdvancesSlotAndWaits60s()
+        public void Close_AdvancesSlotWithNoWait()
         {
             DateTime now = T0;
             var state = new GameState();
@@ -16,8 +16,8 @@ namespace Oddity.Core.Tests
             Assert.IsTrue(clock.IsOpen);
             clock.CloseCurrent();
             Assert.AreEqual(Slot.Evening, state.Slot);
-            Assert.IsFalse(clock.IsOpen);
-            Assert.AreEqual(TimeSpan.FromSeconds(60), clock.Remaining);
+            Assert.IsTrue(clock.IsOpen);
+            Assert.AreEqual(TimeSpan.Zero, clock.Remaining);
         }
 
         [Test]
@@ -42,14 +42,14 @@ namespace Oddity.Core.Tests
         }
 
         [Test]
-        public void ClockMovedBack_RemainingCappedAt60s()
+        public void ClockMovedBack_RemainingStaysZero()
         {
             DateTime now = T0;
             var clock = new SlotClock(new GameState(), () => now);
             clock.CloseCurrent();
             now = T0.AddHours(-1);
-            Assert.AreEqual(TimeSpan.FromSeconds(60), clock.Remaining);
-            Assert.IsFalse(clock.IsOpen);
+            Assert.AreEqual(TimeSpan.Zero, clock.Remaining);
+            Assert.IsTrue(clock.IsOpen);
         }
 
         [Test]
@@ -60,10 +60,8 @@ namespace Oddity.Core.Tests
             var clock = new SlotClock(state, () => now);
             clock.CloseCurrent();
             now = T0.AddHours(-3);
-            Assert.IsFalse(clock.IsOpen);
-            Assert.AreEqual(now + SlotClock.FastInterval, state.NextOpenUtc);
-            now = now.AddSeconds(61);
-            Assert.IsTrue(clock.IsOpen); // opens 60 s after the clock went back, not hours later
+            Assert.IsTrue(clock.IsOpen);
+            Assert.AreEqual(now + SlotClock.FastInterval, state.NextOpenUtc); // clamped, not hours later
         }
 
         [Test]

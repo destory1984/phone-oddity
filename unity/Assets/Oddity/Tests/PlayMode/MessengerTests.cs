@@ -76,7 +76,7 @@ namespace Oddity.PlayTests
         }
 
         [UnityTest]
-        public IEnumerator Choice_ShowsWaiting_About60s()
+        public IEnumerator Chat_NextStoryNoWait()
         {
             SavePlayer(Slot.Morning);
             yield return LoadScene();
@@ -89,13 +89,13 @@ namespace Oddity.PlayTests
                 yield return null;
             }
 
-            Assert.GreaterOrEqual(chat.WaitingSeconds, 59);
-            Assert.LessOrEqual(chat.WaitingSeconds, 60);
-
-            _now = _now.AddSeconds(20);
-            yield return null;
-            Assert.GreaterOrEqual(chat.WaitingSeconds, 39);
-            Assert.LessOrEqual(chat.WaitingSeconds, 40);
+            Assert.AreEqual(0, chat.WaitingSeconds, "no countdown after the slot");
+            Assert.AreEqual(Slot.Evening, UnityEngine.Object.FindFirstObjectByType<GameBootstrap>().State.Slot);
+            float t0 = Time.unscaledTime;
+            while (chat.WaitingSeconds >= 0 && Time.unscaledTime - t0 < 2f) yield return null;
+            Assert.AreEqual(-1, chat.WaitingSeconds);
+            Assert.AreEqual(Slot.Evening, UnityEngine.Object.FindFirstObjectByType<GameBootstrap>().State.Slot);
+            Assert.AreNotEqual("", chat.CurrentLineText);
         }
 
         [UnityTest]

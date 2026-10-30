@@ -82,6 +82,9 @@ namespace Oddity.Game
         DialogueRunner _runner;
         bool _awaitingTap;
         bool _waiting;
+        bool _holdNext; // slot ended: a short pause before the next slot opens by itself
+        float _holdUntil;
+        const float NextStoryPause = 1.5f;
         bool _act2;
         SubtitleBar _subtitle;
         Coroutine _fadeDip;
@@ -364,7 +367,8 @@ namespace Oddity.Game
                 _pendingFace = null;
                 ApplyPhoneLine(line, _pendingMoment);
             }
-            if (!_waiting) return;
+            if (_waiting && _holdNext && Time.unscaledTime >= _holdUntil) BeginOrWait(true);
+            if (!_waiting || _holdNext) return;
             if (Clock.IsOpen)
             {
                 BeginOrWait(true);
@@ -378,6 +382,7 @@ namespace Oddity.Game
         void BeginOrWait(bool announce)
         {
             _waiting = false;
+            _holdNext = false;
             if (!SelectDay(State.Day) || _script.EntryFor(State.Slot) == null)
             {
                 ShowEndOfContent();
@@ -606,7 +611,10 @@ namespace Oddity.Game
                 emergence.Play();
                 return;
             }
-            BeginOrWait(false);
+            _waiting = true;
+            _holdNext = true;
+            _holdUntil = Time.unscaledTime + NextStoryPause;
+            chat.ShowNextStory();
         }
 
         public void SaveNow() => SaveState();
@@ -651,6 +659,30 @@ namespace Oddity.Game
         {
             if (File.Exists(_savePath)) File.Delete(_savePath);
             UnityEngine.SceneManagement.SceneManager.LoadScene(gameObject.scene.buildIndex);
+        }
+
+        /// <summary>
+        /// Dev panel: delete every progress file (save, its .bad and .tmp copies, the prologue-seen mark) and load the scene again,
+        /// so the game starts from the first prologue line. The voice set choice (PlayerPrefs) stays.
+        /// </summary>
+        public void RestartFromBeginning()
+        {
+            ClearProgressFiles();
+            SkipPrologue = false;
+            UnityEngine.SceneManagement.SceneManager.LoadScene(gameObject.scene.buildIndex);
+        }
+
+        /// <summary>Delete the progress files. A missing file or a failed delete is ignored.</summary>
+        public void ClearProgressFiles()
+        {
+            string save = string.IsNullOrEmpty(_savePath)
+                ? (string.IsNullOrEmpty(SavePathOverride) ? Path.Combine(Application.persistentDataPath, "save.json") : SavePathOverride)
+                : _savePath;
+            foreach (var f in new[] { save, save + ".bad", save + ".tmp", PrologueSeenPath })
+            {
+                try { if (File.Exists(f)) File.Delete(f); }
+                catch (Exception) { }
+            }
         }
 
         /// <summary>Dev panel: skip the night and play the emergence now.</summary>
