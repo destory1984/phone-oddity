@@ -28,6 +28,7 @@ namespace Oddity.Game
         Text _status;
         Text _voiceLabel;
         Text _babbleLabel;
+        Text _contiLabel;
         Text[] _valueTexts;
         float _nextRefresh;
         float _fpsStart;
@@ -95,6 +96,22 @@ namespace Oddity.Game
             PlayerBabble.Setting = PlayerBabble.NextSetting();
             if (_babbleLabel != null) _babbleLabel.text = BabbleLabel();
             if (_boot.Babble != null) _boot.Babble.Stop();
+        }
+
+        static string ContiLabel() => "콘티: " + SceneConti.LevelName(SceneConti.Level);
+
+        /// <summary>Next conti strength (off, weak, mid, strong, off ...); it takes hold on the next line.</summary>
+        public void SwitchConti()
+        {
+            SceneConti.Level = SceneConti.NextLevel();
+            if (_contiLabel != null) _contiLabel.text = ContiLabel();
+        }
+
+        /// <summary>The day 3 night conti scene from its first line; the panel closes.</summary>
+        public void ContiScene()
+        {
+            if (_panel != null) _panel.SetActive(false);
+            _boot.ContiSceneNow();
         }
 
         public void JumpToEmergence()
@@ -228,6 +245,11 @@ namespace Oddity.Game
             var babble = MakeButton(prt, BabbleLabel(), new Color(0.38f, 0.33f, 0.62f, 1f), 0f, RowHeight);
             _babbleLabel = babble.GetComponentInChildren<Text>();
             babble.onClick.AddListener(SwitchBabble);
+
+            var conti = MakeButton(prt, ContiLabel(), new Color(0.38f, 0.33f, 0.62f, 1f), 0f, RowHeight);
+            _contiLabel = conti.GetComponentInChildren<Text>();
+            conti.onClick.AddListener(SwitchConti);
+            MakeButton(prt, "콘티 장면 바로", new Color(0.38f, 0.33f, 0.62f, 1f), 0f, RowHeight).onClick.AddListener(ContiScene);
 
             _panel.SetActive(false);
             _fpsStart = Time.unscaledTime;

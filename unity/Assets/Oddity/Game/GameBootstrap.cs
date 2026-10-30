@@ -110,6 +110,18 @@ namespace Oddity.Game
         /// <summary>Phone: on the player's lines the head goes back this slowly.</summary>
         public const float PhonePlayerHeadSeconds = 1.2f;
 
+        // ---- conti (SceneConti): the cue of the phone line on screen, and its timeline ----
+        ContiCue _lineCue;        // the cue of the line that was just shown (valid when _lineHasCue)
+        bool _lineHasCue;
+        ContiCue _cue;            // the cue playing
+        bool _cueLive;
+        bool _h1Done, _h2Done, _f1Done, _f2Done;
+        float _tapBlockUntil;     // a tap that skips the cup sound waits until then
+        float _typingFaceAt;      // when the typing-time face is set (0 = none)
+        ContiFace _typingFace;
+        AudioSource _sfx;
+        string _lastSfx;
+
         /// <summary>Fired after the Night slot is closed and saved, just before the emergence plays.</summary>
         public event Action NightFinished;
 
@@ -154,6 +166,12 @@ namespace Oddity.Game
         public Transform PhoneGazeTarget => _gazeGoal;
         /// <summary>The phone line her gaze follows now (null between slots).</summary>
         public Line PhoneGazeLine => _gazeLine;
+        /// <summary>Line number (from 1) of the line shown last in the scene being played.</summary>
+        public int LineNumber => _lineNumber;
+        /// <summary>Name of the last conti sound effect that started, or null.</summary>
+        public string LastSfx => _lastSfx;
+        /// <summary>True while a conti cue's head and face timeline runs.</summary>
+        public bool ContiLive => _cueLive && _stage != null && _stage.InConti;
         /// <summary>0 = eyes straight ahead, 1 = on the camera (eases over <see cref="PhoneGazeSeconds"/>).</summary>
         public float PhoneGazeWeight => _gazeWeight;
 
@@ -387,6 +405,7 @@ namespace Oddity.Game
         void Update()
         {
             UpdateGazeEase();
+            UpdateConti();
             if (_pendingFace != null && !chat.IsTyping)
             {
                 Line line = _pendingFace;
@@ -423,6 +442,8 @@ namespace Oddity.Game
             }
             if (announce) chat.ShowLockNotice("하린: " + OpeningText(State.Slot));
             _gazeLine = null; // between slots her eyes are free again until her first line
+            _cueLive = false;
+            _tapBlockUntil = 0f;
             if (_stage != null) _stage.BeginSlot(State.Slot, State.Day);
             ApplyGaze();
             _runner.StartSlot(State.Slot);
@@ -432,6 +453,7 @@ namespace Oddity.Game
         {
             Debug.Log("GameBootstrap: no script for day " + State.Day + " " + State.Slot);
             EndOfContent = true;
+            if (_stage != null && _stage.InConti) { _stage.EndConti(); _cueLive = false; } // no script: the planner's camera again
             var line = new Line { Who = "harin", Text = EndOfContentText, Face = "happy", Typing = 0f };
             _pendingFace = null;
             chat.ShowLine(line);
@@ -498,8 +520,12 @@ namespace Oddity.Game
             else
             {
                 bool harinLine = line.Who == "harin";
-                if (_stage != null) _stage.OnLine(line);
-                bool moment = line.Glitch >= GlitchMomentAt
+                _typingFaceAt = 0f;
+                _lineHasCue = SceneConti.Level > 0 && SceneConti.TryGet(CurrentSceneId, number, SceneConti.Level, out _lineCue);
+                if (!_lineHasCue && _stage != null && _stage.InConti) { _stage.EndConti(); _cueLive = false; }
+                if (_stage != null && !_lineHasCue) _stage.OnLine(line);
+                bool moment = _lineHasCue ? _lineCue.Glitch
+                    : line.Glitch >= GlitchMomentAt
                     || (harinLine && (_bigChoice || (State.Day >= CoreInfo.EmergenceDay && State.Slot == Slot.Night)));
                 if (harinLine) _bigChoice = false;
                 chat.ShowLine(line);
@@ -508,6 +534,11 @@ namespace Oddity.Game
                     // she is still typing: keep the idle face until the bubble shows
                     _pendingFace = line;
                     _pendingMoment = moment;
+                    if (_lineHasCue && _lineCue.TypingFace.Has)
+                    {
+                        _typingFace = _lineCue.TypingFace;
+                        _typingFaceAt = Time.unscaledTime + Mathf.Max(0.001f, _typingFace.Delay);
+                    }
                     SetPhoneIdle();
                     SetPhoneGlitch(CalmGlitch(line.Glitch));
                 }
@@ -568,6 +599,7 @@ namespace Oddity.Game
         void ApplyGaze()
         {
             if (Harin == null || _stage == null || _act2 || _inPrologue || _stage.Camera == null) return;
+            if (_gazeLine != null && _stage.InConti) return; // a conti cue sets the eyes and the head itself
             var line = _gazeLine;
             bool conversation = _stage.Enabled && line != null && (line.Who == "harin" || line.Who == "player");
             bool herLine = conversation && line.Who == "harin";
@@ -627,7 +659,9 @@ namespace Oddity.Game
         // A phone line is on screen: Harin's lines show their face, other lines leave her at the idle smile.
         void ApplyPhoneLine(Line line, bool moment)
         {
+            _typingFaceAt = 0f;
             _gazeLine = line;
+            if (_lineHasCue) StartCue(_lineCue);
             ApplyGaze();
             if (Harin != null)
             {
@@ -646,6 +680,60 @@ namespace Oddity.Game
                 if (_stage != null) _stage.GlitchCut();
             }
             else SetPhoneGlitch(CalmGlitch(line.Glitch));
+            UpdateConti(); // the cue's items with no delay show with the line
+        }
+
+        // A conti cue starts with its line: the camera, the sound, the eyes; the head and the face follow their delays.
+        void StartCue(ContiCue cue)
+        {
+            if (_stage == null || !_stage.Enabled) return;
+            _stage.PlayCue(cue);
+            if (!_stage.InConti) return;
+            _cue = cue;
+            _cueLive = true;
+            _h1Done = _h2Done = _f1Done = _f2Done = false;
+            if (cue.Gaze == ContiGaze.Lens) _gazeGoal = _stage.Camera.transform;
+            else if (cue.Gaze == ContiGaze.Free) _gazeGoal = null;
+            if (!string.IsNullOrEmpty(cue.Sfx)) PlaySfx(cue.Sfx);
+        }
+
+        void PlaySfx(string name)
+        {
+            var clip = Resources.Load<AudioClip>("Sfx/" + name);
+            if (clip == null) return;
+            if (_sfx == null)
+            {
+                _sfx = gameObject.AddComponent<AudioSource>();
+                _sfx.playOnAwake = false;
+                _sfx.spatialBlend = 0f;
+            }
+            _sfx.clip = clip;
+            _sfx.volume = SceneConti.SfxVolume;
+            _sfx.Play();
+            _lastSfx = name;
+            if (ChatView.TypingEnabled) _tapBlockUntil = Time.unscaledTime + clip.length + SceneConti.TapBlockExtraSeconds;
+        }
+
+        void UpdateConti()
+        {
+            if (_typingFaceAt > 0f && Harin != null)
+            {
+                if (!chat.IsTyping) _typingFaceAt = 0f;
+                else if (Time.unscaledTime >= _typingFaceAt) { Harin.SetFace(_typingFace.Name); _typingFaceAt = 0f; }
+            }
+            if (!_cueLive || Harin == null || _stage == null || !_stage.InConti) return;
+            float t = _stage.CueSeconds;
+            if (!_h1Done && _cue.Head1.Has && t >= _cue.Head1.Delay) { _h1Done = true; TurnHeadFor(_cue.Head1); }
+            if (!_h2Done && _cue.Head2.Has && t >= _cue.Head2.Delay) { _h2Done = true; TurnHeadFor(_cue.Head2); }
+            if (!_f1Done && _cue.Face1.Has && t >= _cue.Face1.Delay) { _f1Done = true; Harin.SetFace(_cue.Face1.Name); }
+            if (!_f2Done && _cue.Face2.Has && t >= _cue.Face2.Delay) { _f2Done = true; Harin.SetFace(_cue.Face2.Name); }
+        }
+
+        // Yaw is towards the side the camera stands on (her left when it is in front); Down > 0 looks down.
+        void TurnHeadFor(ContiHead h)
+        {
+            float side = _stage.ContiPreset.Yaw < 0f ? -1f : 1f;
+            Harin.EaseHeadTurn(side * h.Yaw, h.Down, h.Seconds);
         }
 
         System.Collections.IEnumerator AutoAdvanceNotice(int serial)
@@ -684,6 +772,8 @@ namespace Oddity.Game
         {
             if (_babble != null) _babble.Stop();
             _pendingFace = null;
+            _cueLive = false;
+            _typingFaceAt = 0f;
             if (_stage != null) _stage.Enabled = false;
             if (_glitchMoment != null) { StopCoroutine(_glitchMoment); _glitchMoment = null; }
             if (Harin != null) { Harin.SetIdle(false); Harin.StopPokeMotion(); }
@@ -722,6 +812,7 @@ namespace Oddity.Game
             }
             Clock.CloseCurrent();
             SaveState();
+            _cueLive = false;
             _gazeLine = null;
             ApplyGaze();
             // CloseCurrent has moved the day on, so the day that just ended is State.Day - 1
@@ -761,6 +852,13 @@ namespace Oddity.Game
         {
             if (EmergenceOrPrologueBusy || _act2) { Debug.Log("GameBootstrap: dev day +1 ignored during the prologue or emergence"); return; }
             JumpTo(State.Day + 1, Slot.Morning);
+        }
+
+        /// <summary>Dev panel: the day 3 night conti scene, from its first line, with no wait.</summary>
+        public void ContiSceneNow()
+        {
+            if (EmergenceOrPrologueBusy || _act2) { Debug.Log("GameBootstrap: dev conti scene ignored during the prologue or emergence"); return; }
+            JumpTo(3, Slot.Night);
         }
 
         /// <summary>Dev panel and shots: go to the given day and slot and start it now.</summary>
@@ -830,6 +928,7 @@ namespace Oddity.Game
                 return;
             }
             if (!_awaitingTap) return;
+            if (Time.unscaledTime < _tapBlockUntil) return; // the cup sound plays out
             _awaitingTap = false;
             _babble.Stop();
             _runner.Advance();

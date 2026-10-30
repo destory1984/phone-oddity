@@ -274,8 +274,31 @@ namespace Oddity.Game
     public class AppStageDirector : MonoBehaviour
     {
         public CamPlanner Planner { get; } = new CamPlanner();
-        /// <summary>False during the prologue, the emergence and act 2 (the window is not drawn then).</summary>
-        public bool Enabled { get; set; } = true;
+        bool _enabled = true;
+        /// <summary>False during the prologue, the emergence and act 2 (the window is not drawn then). Turning it off ends a conti cue.</summary>
+        public bool Enabled
+        {
+            get => _enabled;
+            set { _enabled = value; if (!value) _conti = false; }
+        }
+
+        // ---- conti: a hand-written cue (SceneConti) drives the camera in place of the planner ----
+        bool _conti;
+        ContiCue _move;      // only its End, MoveDelay, MoveSeconds and Overshoot are read; a cue with neither a cut nor an End lets it run on
+        float _cueT, _moveT, _cueLast;
+        CamShots.Preset _cueFrom, _cueNow;
+        /// <summary>True while a cue (and not the planner) places the camera.</summary>
+        public bool InConti => _conti && _enabled;
+        /// <summary>Seconds the cue has run; it stands still while choices are up.</summary>
+        public float CueSeconds => _cueT;
+        /// <summary>The framing the cue shows now.</summary>
+        public CamShots.Preset ContiPreset => _cueNow;
+        /// <summary>Counts every cue start.</summary>
+        public int CueSerial { get; private set; }
+        public bool ChoicesUp => _choicesUp;
+        /// <summary>The point the camera looks at and the way she faces, as of the last cut (tests compare the camera with PoseFor of these).</summary>
+        public Vector3 AnchorEyes => _eyes;
+        public Vector3 AnchorFacing => _facing;
 
         Camera _cam;
         Func<HarinPuppet> _harin;
@@ -306,6 +329,7 @@ namespace Oddity.Game
         public void BeginSlot(Slot slot, int day)
         {
             Enabled = true;
+            _conti = false;
             _choicesUp = false;
             Planner.BeginSlot(slot, day, Now);
             Apply(true);
@@ -315,6 +339,7 @@ namespace Oddity.Game
         {
             if (!Enabled) return;
             _choicesUp = false;
+            if (_conti) return; // the cue decides, not the line's cam
             Planner.OnLine(line, Now);
             Apply(false);
         }
@@ -323,7 +348,7 @@ namespace Oddity.Game
 
         public void GlitchCut()
         {
-            if (!Enabled) return;
+            if (!Enabled || _conti) return;
             Planner.GlitchCut(Now);
             Apply(false);
         }
@@ -332,6 +357,7 @@ namespace Oddity.Game
         public void Force(string name, bool drift = false)
         {
             Enabled = true;
+            _conti = false;
             Planner.DriftOn = drift;
             if (Planner.Force(name, Now)) Apply(true);
         }
@@ -339,9 +365,114 @@ namespace Oddity.Game
         void LateUpdate()
         {
             if (!Enabled || _cam == null) return;
+            if (_conti) { TickConti(); return; }
             bool busy = _voiceBusy != null && _voiceBusy();
             Planner.Tick(Now, busy, _choicesUp);
             Apply(false);
+        }
+
+        /// <summary>
+        /// Plays a conti cue: cuts to its start framing (none = keep the picture), then moves to its end framing.
+        /// While it runs the planner does nothing (no change, no drift, no glitch cut).
+        /// </summary>
+        public void PlayCue(ContiCue cue)
+        {
+            if (_cam == null || !Enabled) return;
+            var harin = _harin != null ? _harin() : null;
+            if (harin == null) return;
+            bool cut = cue.Start.Has;
+            if (cut || !_hasAnchor)
+            {
+                var head = harin.BonePosition(HumanBodyBones.Head);
+                if (head == Vector3.zero && !_hasAnchor) return;
+                if (head != Vector3.zero)
+                {
+                    _eyes = head + Vector3.up * 0.075f * harin.transform.lossyScale.y;
+                    _facing = harin.transform.forward;
+                }
+                _hasAnchor = true;
+            }
+            if (cut) _cueFrom = ToPreset(cue.Start);
+            else if (cue.End.Has || !_conti) _cueFrom = _conti ? _cueNow : CamShots.Get(Planner.Shot);
+            if (cut || cue.End.Has || !_conti) { _move = cue; _moveT = 0f; }
+            _conti = true;
+            _choicesUp = false;
+            _cueT = 0f;
+            _cueLast = Now;
+            CueSerial++;
+            EvaluateCue();
+            ApplyCue();
+            if (cut)
+            {
+                TargetPose = new UnityEngine.Pose(_cam.transform.position, _cam.transform.rotation);
+                ShotStarted?.Invoke();
+            }
+        }
+
+        /// <summary>Shots: the running move is over, the camera stands on its end framing.</summary>
+        public void SkipMove()
+        {
+            if (!_conti) return;
+            _moveT = 1000f;
+            EvaluateCue();
+            ApplyCue();
+        }
+
+        /// <summary>Hands the camera back to the planner at the shot it was on (a line without a cue, a stronger setting of "off").</summary>
+        public void EndConti()
+        {
+            if (!_conti) return;
+            _conti = false;
+            Force(Planner.Shot, Planner.DriftOn);
+        }
+
+        static CamShots.Preset ToPreset(ContiShot s) => new CamShots.Preset { Name = "conti", Width = s.Width, EyeLine = s.EyeLine, Yaw = s.Yaw, Pitch = s.Pitch };
+
+        static CamShots.Preset Mix(CamShots.Preset a, CamShots.Preset b, float p) => new CamShots.Preset
+        {
+            Name = "conti",
+            Width = Mathf.Lerp(a.Width, b.Width, p),
+            EyeLine = Mathf.Lerp(a.EyeLine, b.EyeLine, p),
+            Yaw = Mathf.Lerp(a.Yaw, b.Yaw, p),
+            Pitch = Mathf.Lerp(a.Pitch, b.Pitch, p),
+        };
+
+        // The framing at the cue's clock: an ease-out move after the delay, then (with overshoot) a short way back.
+        void EvaluateCue()
+        {
+            if (!_move.End.Has) { _cueNow = _cueFrom; return; }
+            var end = ToPreset(_move.End);
+            if (Planner.ReduceMotion) { _cueNow = end; return; }
+            float x = _move.MoveSeconds <= 0f ? 1f : Mathf.Clamp01((_moveT - _move.MoveDelay) / _move.MoveSeconds);
+            float p = Mathf.Sin(x * Mathf.PI * 0.5f);
+            var aim = end;
+            aim.Width = end.Width * (1f - _move.Overshoot);
+            _cueNow = Mix(_cueFrom, aim, p);
+            float back = _moveT - _move.MoveDelay - _move.MoveSeconds;
+            if (_move.Overshoot > 0f && back > 0f)
+            {
+                float r = Mathf.Clamp01(back / SceneConti.OvershootBackSeconds);
+                _cueNow.Width = Mathf.Lerp(aim.Width, end.Width, r * r * (3f - 2f * r));
+            }
+        }
+
+        void ApplyCue()
+        {
+            var pose = PoseFor(_eyes, _facing, _cam.fieldOfView, _cueNow);
+            _cam.transform.SetPositionAndRotation(pose.position, pose.rotation);
+        }
+
+        void TickConti()
+        {
+            float dt = Mathf.Max(0f, Now - _cueLast);
+            _cueLast = Now;
+            if (!_choicesUp)
+            {
+                _cueT += dt;
+                _moveT += dt;
+                EvaluateCue();
+            }
+            ApplyCue();
         }
 
         // Re-anchors when the shot has changed, then sets the camera pose.

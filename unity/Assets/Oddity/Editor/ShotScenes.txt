@@ -23,3 +23,10 @@ prologue_rewind
 chat_cam_M
 chat_cam_S
 chat_cam_E
+chat_conti_L
+chat_conti_side_low
+chat_conti_side_mid
+chat_conti_side_high
+chat_conti_H2
+chat_conti_C2
+chat_conti_end

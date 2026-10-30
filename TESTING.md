@@ -8,7 +8,7 @@
 |---|---|---|---|
 | dotnet 규칙 시험 | `test --dotnet-only` | 약 5초 | `harness/Oddity.Core.Tests` 70개. 대본, 선택, 효과, 저장 |
 | Unity EditMode | `test` | 약 1분 | `unity/Assets/Oddity/Tests/EditMode`. 대본 내용, 어셈블리 컴파일 |
-| Unity PlayMode | `test` | 수 분 | `unity/Assets/Oddity/Tests/PlayMode`. 장면을 돌려 메신저, 프롤로그, 출현, 옷을 본다. `test` 전체는 dotnet 시험까지 245개 |
+| Unity PlayMode | `test` | 수 분 | `unity/Assets/Oddity/Tests/PlayMode`. 장면을 돌려 메신저, 프롤로그, 출현, 옷을 본다. `test` 전체는 dotnet 시험까지 255개 |
 | shot | `shot 장면` | 약 30초 | 장면을 800px 폭 png 로 찍고 baseline 과 차이를 % 로 본다 |
 | check | `check` | 약 20초 | 컴파일만. 시험보다 먼저 돌린다 |
 

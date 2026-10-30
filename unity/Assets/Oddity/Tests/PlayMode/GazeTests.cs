@@ -38,6 +38,7 @@ namespace Oddity.PlayTests
             ChatView.TypingEnabled = true;
             GameBootstrap.ClockOverride = null;
             HarinVoice.ResourceDirOverride = null;
+            SceneConti.ClearLevelCache();
             if (File.Exists(_savePath)) File.Delete(_savePath);
         }
 
@@ -149,6 +150,8 @@ namespace Oddity.PlayTests
         [UnityTest]
         public IEnumerator Gaze_LooksDownBeatExempt()
         {
+            // this test is about the planner's glitch cut, which the day 3 night conti (task 48) replaces
+            SceneConti.SetLevelForRun(0); // not saved; TearDown reads the real setting again
             yield return Start(3, Slot.Night);
             var boot = Boot();
             Assert.IsTrue(StepUntil(() => HerLine(boot) && boot.PhoneGazeLine.Beat == "teases"), "her ordinary line is reached");
