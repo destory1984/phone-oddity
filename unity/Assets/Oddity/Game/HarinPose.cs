@@ -318,6 +318,57 @@ namespace Oddity.Game
             }
         }
 
+        // The outing M1 knit's baggy sleeve (material N00_007_01_Tops_01_CLOTH) hangs off the wrist as flat sheets when
+        // only the hand shows in cut 10, so that slot is blanked there and put back for the cuts that show her body.
+        // The skirt is the other Tops slot (N00_002_03) and stays.
+        const string KnitMaterialName = "N00_007_01_Tops_01_CLOTH";
+        SkinnedMeshRenderer _knitRenderer;
+        int _knitSlot = -1;
+        Material _knitMaterial;
+        bool _knitSearched;
+        Material _knitBlank;
+
+        public bool KnitHidden => _knitRenderer != null && _knitRenderer.sharedMaterials[_knitSlot] != _knitMaterial;
+
+        // A null slot would draw the error pink, so the slot gets a fully transparent material instead.
+        // The shader has no shadow caster pass, so it casts no shadow either.
+        Material KnitBlank()
+        {
+            if (_knitBlank != null) return _knitBlank;
+            var shader = Shader.Find("Oddity/CutFx");
+            _knitBlank = new Material(shader != null ? shader : Shader.Find("Hidden/InternalErrorShader")) { name = "KnitBlank", hideFlags = HideFlags.HideAndDontSave };
+            _knitBlank.SetColor("_Color", Color.clear);
+            _knitBlank.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            _knitBlank.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            _knitBlank.SetFloat("_ZWrite", 0f);
+            return _knitBlank;
+        }
+
+        /// <summary>Hides or restores the knit's material slot (blank transparent material: nothing drawn, no shadow). No-op without that material.</summary>
+        public void SetKnitHidden(bool hidden)
+        {
+            if (!_knitSearched)
+            {
+                _knitSearched = true;
+                if (_mats == null) CaptureMaterials();
+                foreach (var r in GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                {
+                    var mats = r.materials; // per-renderer instances, same as the room look changes
+                    for (int i = 0; i < mats.Length; i++)
+                    {
+                        if (mats[i] == null || !mats[i].name.Contains(KnitMaterialName)) continue;
+                        _knitRenderer = r; _knitSlot = i; _knitMaterial = mats[i];
+                        break;
+                    }
+                    if (_knitRenderer != null) break;
+                }
+            }
+            if (_knitRenderer == null || hidden == KnitHidden) return;
+            var all = _knitRenderer.sharedMaterials;
+            all[_knitSlot] = hidden ? KnitBlank() : _knitMaterial;
+            _knitRenderer.sharedMaterials = all;
+        }
+
         static Color CoolCloth(Color c)
         {
             float y = c.r * 0.299f + c.g * 0.587f + c.b * 0.114f;

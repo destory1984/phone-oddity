@@ -336,6 +336,7 @@ namespace Oddity.Game
             harin.SetRoomLook(t >= Cut10At, desk: t >= Cut10At && t < RoomAt);
             harin.SetHeadTurn(t < Cut10At ? 35f * Smooth(t / Cut10At) : 0f, 0f);
             harin.SetRightArmReach(null);
+            harin.SetKnitHidden(t >= Cut10At && t < RoomAt); // only her hand shows in cut 10; the knit sleeve is back for the room
             harin.SetEyeTarget(t >= EyesAt ? mainCamera.transform : null);
             // seated and past EyesAt she looks at the player: the head lifts a little more than the pose's own
             harin.EaseHeadTurn(0f, t >= SeatAt && t >= EyesAt ? -(Act2HeadToCamera + Act2HeadLift) : 0f, Act2EaseSeconds);

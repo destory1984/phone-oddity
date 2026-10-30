@@ -91,6 +91,25 @@ namespace Oddity.PlayTests
         }
 
         [UnityTest]
+        public IEnumerator Emergence_KnitHiddenInHandCutAndBackWhenBodyShows()
+        {
+            yield return SceneManager.LoadSceneAsync(SceneName, LoadSceneMode.Single);
+            yield return null;
+            yield return null;
+            var seq = Boot().Emergence;
+            seq.Speed = 0f;
+            seq.Seek(1f); // cut 10: only the hand is in frame
+            var harin = HarinWardrobe.ActivePuppet();
+            Assert.IsTrue(harin.KnitHidden, "knit sleeve must not draw while only the hand shows");
+            for (int i = 0; i < 20; i++) yield return null; // stays hidden while the sequence keeps evaluating
+            Assert.IsTrue(harin.KnitHidden, "knit sleeve came back by itself in cut 10");
+            seq.Seek(EmergenceSequence.RoomAt + 1f); // cut 11: her body is in frame
+            Assert.IsFalse(harin.KnitHidden, "knit must be back when the pullback shows her body");
+            seq.Seek(EmergenceSequence.Cut10At + 1f);
+            Assert.IsTrue(harin.KnitHidden, "knit hidden again when cut 10 is re-entered");
+        }
+
+        [UnityTest]
         public IEnumerator Emergence_EndsInRoom()
         {
             yield return LoadAndPlay();
