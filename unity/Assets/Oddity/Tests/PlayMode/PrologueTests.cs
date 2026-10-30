@@ -205,6 +205,27 @@ namespace Oddity.PlayTests
             Assert.AreEqual(HarinVoice.DefaultVoiceSet, HarinVoice.VoiceSets[0]);
         }
 
+        [Test]
+        public void Voice_SavedSetMissingFallsBack()
+        {
+            bool had = PlayerPrefs.HasKey("oddity.voiceSet");
+            string saved = PlayerPrefs.GetString("oddity.voiceSet", "");
+            try
+            {
+                PlayerPrefs.SetString("oddity.voiceSet", "noSuchSet");
+                HarinVoice.ClearVoiceSetCache();
+                string expected = HarinVoice.DefaultVoiceSet;
+                foreach (var s in HarinVoice.VoiceSets) if (HarinVoice.HasVoiceSet(s)) { expected = s; break; }
+                Assert.AreEqual(expected, HarinVoice.VoiceSet);
+                Assert.AreEqual(expected, PlayerPrefs.GetString("oddity.voiceSet"), "PlayerPrefs corrected");
+            }
+            finally
+            {
+                if (had) PlayerPrefs.SetString("oddity.voiceSet", saved); else PlayerPrefs.DeleteKey("oddity.voiceSet");
+                HarinVoice.ClearVoiceSetCache();
+            }
+        }
+
         [UnityTest]
         public IEnumerator Voice_SetSwitch_PicksSuffix()
         {

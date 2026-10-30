@@ -74,6 +74,15 @@ namespace Oddity.Game
                     try { _voiceSet = PlayerPrefs.GetString(VoiceSetPref, DefaultVoiceSet); }
                     catch (Exception) { _voiceSet = DefaultVoiceSet; }
                     if (string.IsNullOrEmpty(_voiceSet)) _voiceSet = DefaultVoiceSet;
+                    // a remembered set whose files are gone (an old APK's karina) falls back to the first set that has files
+                    if (!HasVoiceSet(_voiceSet))
+                    {
+                        string found = null;
+                        foreach (var s in VoiceSets) if (HasVoiceSet(s)) { found = s; break; }
+                        _voiceSet = found ?? DefaultVoiceSet;
+                        try { PlayerPrefs.SetString(VoiceSetPref, _voiceSet); PlayerPrefs.Save(); }
+                        catch (Exception) { }
+                    }
                 }
                 return _voiceSet;
             }
@@ -84,6 +93,9 @@ namespace Oddity.Game
                 catch (Exception) { }
             }
         }
+
+        /// <summary>Forget the cached set so the next read goes to PlayerPrefs again (tests).</summary>
+        public static void ClearVoiceSetCache() { _voiceSet = null; }
 
         /// <summary>Clip every voice set records; a set counts as present when this clip loads.</summary>
         public const string ProbeClip = "harin_sfx_breath_";
