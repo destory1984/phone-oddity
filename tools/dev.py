@@ -453,6 +453,12 @@ def roomtest():
     for line in text.splitlines():
         if line.startswith("ROOMTEST"):
             print(line.strip().replace(str(ROOMTEST_OUT.as_posix()) + "/", ""))
+    if os.environ.get("ODDITY_SKINTEST") == "1":
+        # skin compare: stills only (no video), then crop and tile them
+        if code is None or "ROOMTEST_DONE skin" not in text:
+            print("ROOMTEST FAILED; see unity/Logs/roomtest.log")
+            return 1
+        return skin_compare()
     silent = ROOMTEST_OUT / "room_test.silent.mp4"
     if code is None or "ROOMTEST_DONE" not in text or not silent.exists():
         print("ROOMTEST FAILED; see unity/Logs/roomtest.log")
@@ -468,6 +474,59 @@ def roomtest():
         print("ROOMTEST sheet failed: " + r.stderr[-500:])
         return 1
     print(f"ROOMTEST {video.relative_to(ROOT).as_posix()} {video.stat().st_size / 1048576:.1f} MB, {sheet.relative_to(ROOT).as_posix()}, {time.time() - t0:.0f}s")
+    return 0
+
+
+SKIN_LOOKS = [("A", "A current"), ("B", "B shade"), ("C", "C light"), ("D", "D blush"), ("E", "E rim"), ("F", "F all")]
+
+
+def skin_compare():
+    """ODDITY_SKINTEST: crop the 18 raw 1920x1080 stills into skin_X.png / _close / _face and tile them into compare.png."""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        print("SKIN compare skipped: Pillow is not installed")
+        return 1
+    out = ROOMTEST_OUT / "skin"
+    raw = out / "raw"
+    cells = {}
+    for key, _ in SKIN_LOOKS:
+        for view, suffix in (("full", ""), ("close", "_close"), ("face", "_face")):
+            src = raw / f"{key}_{view}.png"
+            if not src.exists():
+                print(f"SKIN missing {src.name}")
+                return 1
+            im = Image.open(src).convert("RGB")
+            w, h = im.size
+            if view == "full":
+                box = (w // 2 - 300, 0, w // 2 + 300, h)          # whole body, portrait strip 600x1080
+            else:
+                box = (w // 2 - h // 2, 0, w // 2 + h // 2, h)    # camera already close: centre square 1080x1080
+            im = im.crop(box)
+            im.save(out / f"skin_{key}{suffix}.png")
+            cells[(key, view)] = im
+    cw = 400
+    heights = {"full": round(cw * 1080 / 600), "close": cw, "face": cw}
+    label_h = 48
+    total_h = label_h + sum(heights.values())
+    sheet = Image.new("RGB", (cw * len(SKIN_LOOKS), total_h), (20, 20, 20))
+    draw = ImageDraw.Draw(sheet)
+    font = None
+    for cand in ("C:/Windows/Fonts/arialbd.ttf", "C:/Windows/Fonts/arial.ttf"):
+        if Path(cand).exists():
+            font = ImageFont.truetype(cand, 30)
+            break
+    for col, (key, label) in enumerate(SKIN_LOOKS):
+        x = col * cw
+        draw.text((x + 12, 7), label, fill=(255, 255, 255), font=font)
+        y = label_h
+        for view in ("full", "close", "face"):
+            im = cells[(key, view)].resize((cw, heights[view]), Image.LANCZOS)
+            sheet.paste(im, (x, y))
+            y += heights[view]
+    dst = out / "compare.png"
+    sheet.save(dst)
+    print(f"SKIN compare {dst.relative_to(ROOT).as_posix()} {sheet.size[0]}x{sheet.size[1]}")
     return 0
 
 

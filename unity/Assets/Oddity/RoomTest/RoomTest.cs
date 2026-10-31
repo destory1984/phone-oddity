@@ -166,6 +166,7 @@ namespace Oddity.RoomTest
                 _rootYaw = _front ? 0f : -WalkYaw;   // side walk starts at frame right and goes to frame left first
                 _rootPos = _front ? new Vector3(0f, 0f, FrontStart) : new Vector3(WalkXFar, 0f, 0f);
             }
+            _skin = Environment.GetEnvironmentVariable("ODDITY_SKINTEST") == "1" && RoomTest.DebugClip == null;
             Time.captureDeltaTime = 1f / Fps;
             UnityEngine.Random.InitState(54);
             try { Build(); }
@@ -196,6 +197,7 @@ namespace Oddity.RoomTest
             key.intensity = 0.55f;
             key.shadows = LightShadows.None;
             lightGo.transform.rotation = Quaternion.Euler(35f, 150f, 0f);
+            _keyLight = key;
 
             // Harin, built inactive so HarinPuppet's Awake sees the Vrm10Instance before it runs
             var holder = new GameObject("Holder");
@@ -295,6 +297,7 @@ namespace Oddity.RoomTest
             _cutSmug = MakeCut("cut_smug.png");
 
             if (RoomTest.DebugClip != null) { Directory.CreateDirectory(RoomTest.DebugShots); return; }
+            if (_skin) { Directory.CreateDirectory(SkinRawDir); return; }   // skin compare: stills only, no ffmpeg
             string video = Path.Combine(RoomTest.OutDir, "room_test.silent.mp4");
             File.Delete(video);
             var psi = new ProcessStartInfo
@@ -1696,6 +1699,7 @@ namespace Oddity.RoomTest
         void Update()
         {
             if (_harin == null || _done) return;
+            if (_skin) { SkinUpdate(); return; }
             int total = Mathf.RoundToInt((RoomTest.DebugClip != null ? DebugLength : Length) * Fps);
             int k = _frame;                            // the state set now is frame k (negative while warming up)
             try
@@ -2105,6 +2109,7 @@ namespace Oddity.RoomTest
             var root = _harin.transform;
             root.rotation = Quaternion.Euler(0f, _rootYaw, 0f);
             root.position = new Vector3(_rootPos.x, root.position.y, _rootPos.z);
+            if (_skin) { SkinLate(root); return; }
             if (_rawMode) { /* nothing of ours writes a bone, and the root keeps y 0: the clip's own hip height decides */ if (_walkOnly) Fix65(); }
             else
             {
@@ -2183,6 +2188,318 @@ namespace Oddity.RoomTest
             // ODDITY_HAPPY=0.25: a little of the open smile on top; much more and the mouth gapes
             if (rt != null && float.TryParse(Environment.GetEnvironmentVariable("ODDITY_HAPPY"), NumberStyles.Float, CultureInfo.InvariantCulture, out float happy))
                 rt.Expression.SetWeight(ExpressionKey.Happy, happy);
+        }
+
+        // ------------------------------------------------------------------ skin compare (ODDITY_SKINTEST=1)
+
+        // One frozen standing frame (the idle clip at 0 s, Relaxed 0.7), shot in six looks A..F from three cameras (whole body, legs, face)
+        // inside a single run. Only per-renderer material instances and the scene's ambient/key light change; the VRM asset is never written.
+        // Raw 1920x1080 stills go to OutDir/skin/raw/<look>_<view>.png; tools/dev.py crops them and builds compare.png.
+        bool _skin;
+        Light _keyLight;
+        class SkinMat
+        {
+            public Material M; public Renderer R; public int Sub; public bool Face;
+            public Color Shade, Rim; public float Shift, Toony, RimPower, RimLift, RimMix;
+            public Texture Main, ShadeTex;
+        }
+        readonly List<SkinMat> _skinMats = new List<SkinMat>();
+        Texture2D _skinPaint; Texture _skinPaintSrc;
+        Vector3 _skinCamPos; Quaternion _skinCamRot;
+        Color _skinAmbient0; float _skinKey0;
+        static readonly string[] SkinLooks = { "A", "B", "C", "D", "E", "F" };
+        static readonly string[] SkinViews = { "full", "close", "face" };
+        static string SkinRawDir => Path.Combine(RoomTest.OutDir, "skin", "raw");
+
+        static string Fl(float x) => x.ToString("0.###", CultureInfo.InvariantCulture);
+        static string Col(Color c) => "(" + Fl(c.r) + "," + Fl(c.g) + "," + Fl(c.b) + ")";
+
+        void SkinPose()
+        {
+            _rootYaw = 0f; _rootPos = Vector3.zero;
+            _bored.SetTime(0.0);
+            _mixer.SetInputWeight(0, 1f);
+            _mixer.SetInputWeight(1, 0f);
+            _graph.Evaluate(0f);
+        }
+
+        void SkinCaptureMats()
+        {
+            _skinCamPos = _cam.transform.position; _skinCamRot = _cam.transform.rotation;
+            _skinAmbient0 = RenderSettings.ambientLight; _skinKey0 = _keyLight.intensity;
+            foreach (var r in _harin.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                var ms = r.materials;   // instantiates per-renderer copies: the imported asset stays untouched
+                for (int i = 0; i < ms.Length; i++)
+                {
+                    var m = ms[i];
+                    if (m == null || !m.name.Contains("SKIN") || !m.HasProperty("_ShadeColor")) continue;
+                    var sm = new SkinMat
+                    {
+                        M = m, R = r, Sub = i, Face = r.name == "Face",
+                        Shade = m.GetColor("_ShadeColor"),
+                        Shift = m.GetFloat("_ShadingShiftFactor"), Toony = m.GetFloat("_ShadingToonyFactor"),
+                        Rim = m.HasProperty("_RimColor") ? m.GetColor("_RimColor") : Color.black,
+                        RimPower = m.HasProperty("_RimFresnelPower") ? m.GetFloat("_RimFresnelPower") : 5f,
+                        RimLift = m.HasProperty("_RimLift") ? m.GetFloat("_RimLift") : 0f,
+                        RimMix = m.HasProperty("_RimLightingMix") ? m.GetFloat("_RimLightingMix") : 1f,
+                        Main = m.HasProperty("_MainTex") ? m.GetTexture("_MainTex") : null,
+                        ShadeTex = m.HasProperty("_ShadeTex") ? m.GetTexture("_ShadeTex") : null,
+                    };
+                    _skinMats.Add(sm);
+                    Debug.Log("ROOMTEST skin mat " + r.name + "/" + m.name + " shade " + Col(sm.Shade) + " shift " + Fl(sm.Shift) + " toony " + Fl(sm.Toony) + " rim " + Col(sm.Rim) + " pow " + Fl(sm.RimPower) +
+                              " lift " + Fl(sm.RimLift) + " mix " + Fl(sm.RimMix) + " main " + (sm.Main != null ? sm.Main.name + " " + sm.Main.width + "x" + sm.Main.height : "none") +
+                              " shadeTex " + (sm.ShadeTex != null ? sm.ShadeTex.name + (sm.ShadeTex == sm.Main ? " (same as main)" : "") : "none"));
+                }
+            }
+            Debug.Log("ROOMTEST skin materials found " + _skinMats.Count + ", ambient " + Col(_skinAmbient0) + ", key " + Fl(_skinKey0));
+        }
+
+        void SkinRestore()
+        {
+            foreach (var s in _skinMats)
+            {
+                var m = s.M;
+                m.SetColor("_ShadeColor", s.Shade);
+                m.SetFloat("_ShadingShiftFactor", s.Shift);
+                m.SetFloat("_ShadingToonyFactor", s.Toony);
+                if (m.HasProperty("_RimColor")) m.SetColor("_RimColor", s.Rim);
+                if (m.HasProperty("_RimFresnelPower")) m.SetFloat("_RimFresnelPower", s.RimPower);
+                if (m.HasProperty("_RimLift")) m.SetFloat("_RimLift", s.RimLift);
+                if (m.HasProperty("_RimLightingMix")) m.SetFloat("_RimLightingMix", s.RimMix);
+                if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", s.Main);
+                if (m.HasProperty("_ShadeTex")) m.SetTexture("_ShadeTex", s.ShadeTex);
+            }
+            RenderSettings.ambientLight = _skinAmbient0;
+            _keyLight.intensity = _skinKey0;
+        }
+
+        void SkinApply(string look)
+        {
+            SkinRestore();
+            bool b = look == "B" || look == "F", c = look == "C" || look == "F", d = look == "D" || look == "F", e = look == "E" || look == "F";
+            if (b)
+                foreach (var s in _skinMats)
+                {
+                    s.M.SetColor("_ShadeColor", new Color(0.93f, 0.70f, 0.62f, 1f));
+                    s.M.SetFloat("_ShadingShiftFactor", s.Face ? -0.30f : -0.10f);
+                    s.M.SetFloat("_ShadingToonyFactor", s.Face ? 0.75f : 0.85f);
+                }
+            if (c)
+            {
+                RenderSettings.ambientLight = new Color(0.46f, 0.45f, 0.47f);
+                _keyLight.intensity = 1.05f;
+            }
+            if (d && _skinPaint != null)
+                foreach (var s in _skinMats)
+                    if (!s.Face && s.Main == _skinPaintSrc)
+                    {
+                        s.M.SetTexture("_MainTex", _skinPaint);
+                        if (s.ShadeTex == s.Main) s.M.SetTexture("_ShadeTex", _skinPaint);
+                    }
+            if (e)
+                foreach (var s in _skinMats)
+                {
+                    if (!s.M.HasProperty("_RimColor")) { Debug.Log("ROOMTEST skin E: " + s.M.name + " has no _RimColor"); continue; }
+                    s.M.SetColor("_RimColor", new Color(0.9f, 0.45f, 0.35f) * 0.4f);   // "low strength": 40% of the warm colour
+                    s.M.SetFloat("_RimFresnelPower", 3.5f);
+                    s.M.SetFloat("_RimLift", 0f);
+                    s.M.SetFloat("_RimLightingMix", 1f);
+                }
+        }
+
+        // Soft round blush on knees, elbows, shoulders, backs of the hands and ankles, painted into a runtime copy of the Body skin texture.
+        // Every skin vertex gets a weight from its distance to the nearest joint; the weights are rasterised over the mesh triangles in UV space.
+        void SkinBuildPaint()
+        {
+            var target = _skinMats.FirstOrDefault(s => !s.Face && s.Main != null);
+            if (target == null) { Debug.Log("ROOMTEST skin D skipped: no Body SKIN material with a _MainTex"); return; }
+            var src = target.Main;
+            int tw = src.width, th = src.height;
+            var joints = new List<(string n, Vector3 p, float r)>();
+            Transform Bn(HumanBodyBones id) => _anim.GetBoneTransform(id);
+            void AddJ(string n, Vector3? p, float r) { if (p.HasValue) joints.Add((n, p.Value, r)); }
+            Vector3? Pos(HumanBodyBones id) => Bn(id) != null ? Bn(id).position : (Vector3?)null;
+            foreach (var side in new[] { "Left", "Right" })
+            {
+                HumanBodyBones Id(string part) => (HumanBodyBones)Enum.Parse(typeof(HumanBodyBones), side + part);
+                AddJ(side + "Knee", Pos(Id("LowerLeg")), 0.07f);
+                AddJ(side + "Elbow", Pos(Id("LowerArm")), 0.05f);
+                AddJ(side + "Shoulder", Pos(Id("UpperArm")), 0.06f);
+                AddJ(side + "Ankle", Pos(Id("Foot")), 0.05f);
+                var h = Pos(Id("Hand")); var mid = Pos(Id("MiddleProximal"));
+                AddJ(side + "HandBack", h.HasValue && mid.HasValue ? (h.Value + mid.Value) * 0.5f : h, 0.045f);
+            }
+            var weight = new float[tw * th];
+            var near = new Dictionary<string, int>();
+            foreach (var j in joints) near[j.n] = 0;
+            int tris = 0;
+            var baked = new Mesh();
+            foreach (var g in _skinMats.Where(s => !s.Face && s.Main == src).GroupBy(s => s.R))
+            {
+                var smr = (SkinnedMeshRenderer)g.Key;
+                var shared = smr.sharedMesh;
+                var uv = shared.uv;
+                smr.BakeMesh(baked, true);
+                var bv = baked.vertices;
+                if (uv.Length != bv.Length) { Debug.Log("ROOMTEST skin D: uv count " + uv.Length + " != vertex count " + bv.Length + " on " + smr.name); continue; }
+                var vw = new float[bv.Length];
+                for (int i = 0; i < bv.Length; i++)
+                {
+                    var wp = smr.transform.TransformPoint(bv[i]);
+                    float best = 0f; string bn = null;
+                    foreach (var j in joints)
+                    {
+                        float t = 1f - Vector3.Distance(wp, j.p) / j.r;
+                        if (t <= 0f) continue;
+                        float w = t * t * (3f - 2f * t);
+                        if (w > best) { best = w; bn = j.n; }
+                    }
+                    vw[i] = best;
+                    if (bn != null) near[bn]++;
+                }
+                foreach (var s in g)
+                {
+                    var idx = shared.GetIndices(s.Sub);
+                    for (int t = 0; t + 2 < idx.Length; t += 3)
+                    {
+                        int a = idx[t], b2 = idx[t + 1], c = idx[t + 2];
+                        if (vw[a] <= 0f && vw[b2] <= 0f && vw[c] <= 0f) continue;
+                        tris++;
+                        Raster(weight, tw, th, uv[a], uv[b2], uv[c], vw[a], vw[b2], vw[c]);
+                    }
+                }
+            }
+            Destroy(baked);
+            Debug.Log("ROOMTEST skin D vertices near joints " + string.Join(", ", near.Select(kv => kv.Key + " " + kv.Value)) + "; " + tris + " triangles rasterised on a " + tw + "x" + th + " texture");
+            if (tris == 0) { Debug.Log("ROOMTEST skin D skipped: no skin triangle near any joint (UV not found)"); return; }
+
+            var rt = RenderTexture.GetTemporary(tw, th, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+            Graphics.Blit(src, rt);
+            var prev = RenderTexture.active;
+            RenderTexture.active = rt;
+            var tex = new Texture2D(tw, th, TextureFormat.RGBA32, true, false);
+            tex.ReadPixels(new Rect(0, 0, tw, th), 0, 0);
+            RenderTexture.active = prev;
+            RenderTexture.ReleaseTemporary(rt);
+            var px = tex.GetPixels32();
+            var tint = new Color(0.95f, 0.58f, 0.52f);
+            const float Strength = 0.35f;
+            int painted = 0;
+            for (int i = 0; i < px.Length; i++)
+            {
+                float f = Strength * Mathf.Clamp01(weight[i]);
+                if (f <= 0f) continue;
+                painted++;
+                var c = px[i];
+                c.r = (byte)Mathf.Clamp(Mathf.RoundToInt(c.r * (1f + f * (tint.r - 1f))), 0, 255);
+                c.g = (byte)Mathf.Clamp(Mathf.RoundToInt(c.g * (1f + f * (tint.g - 1f))), 0, 255);
+                c.b = (byte)Mathf.Clamp(Mathf.RoundToInt(c.b * (1f + f * (tint.b - 1f))), 0, 255);
+                px[i] = c;
+            }
+            tex.SetPixels32(px);
+            tex.wrapMode = src.wrapMode; tex.filterMode = src.filterMode; tex.anisoLevel = src.anisoLevel;
+            tex.Apply(true, false);
+            _skinPaint = tex; _skinPaintSrc = src;
+            Debug.Log("ROOMTEST skin D painted " + painted + " of " + px.Length + " texels, strength max " + Fl(Strength) + ", tint " + Col(tint));
+        }
+
+        // fills the max of the interpolated vertex weights over the triangle's UV footprint, with a small margin so seams stay closed
+        static void Raster(float[] buf, int tw, int th, Vector2 a, Vector2 b, Vector2 c, float wa, float wb, float wc)
+        {
+            Vector2 pa = new Vector2(a.x * tw, a.y * th), pb = new Vector2(b.x * tw, b.y * th), pc = new Vector2(c.x * tw, c.y * th);
+            int x0 = Mathf.Max(0, Mathf.FloorToInt(Mathf.Min(pa.x, Mathf.Min(pb.x, pc.x)) - 1f)), x1 = Mathf.Min(tw - 1, Mathf.CeilToInt(Mathf.Max(pa.x, Mathf.Max(pb.x, pc.x)) + 1f));
+            int y0 = Mathf.Max(0, Mathf.FloorToInt(Mathf.Min(pa.y, Mathf.Min(pb.y, pc.y)) - 1f)), y1 = Mathf.Min(th - 1, Mathf.CeilToInt(Mathf.Max(pa.y, Mathf.Max(pb.y, pc.y)) + 1f));
+            float den = (pb.y - pc.y) * (pa.x - pc.x) + (pc.x - pb.x) * (pa.y - pc.y);
+            if (Mathf.Abs(den) < 1e-6f) return;
+            const float Eps = 0.02f;
+            for (int y = y0; y <= y1; y++)
+                for (int x = x0; x <= x1; x++)
+                {
+                    float qx = x + 0.5f, qy = y + 0.5f;
+                    float l1 = ((pb.y - pc.y) * (qx - pc.x) + (pc.x - pb.x) * (qy - pc.y)) / den;
+                    float l2 = ((pc.y - pa.y) * (qx - pc.x) + (pa.x - pc.x) * (qy - pc.y)) / den;
+                    float l3 = 1f - l1 - l2;
+                    if (l1 < -Eps || l2 < -Eps || l3 < -Eps) continue;
+                    l1 = Mathf.Clamp01(l1); l2 = Mathf.Clamp01(l2); l3 = Mathf.Clamp01(l3);
+                    float sum = l1 + l2 + l3;
+                    if (sum <= 0f) continue;
+                    float w = (wa * l1 + wb * l2 + wc * l3) / sum;
+                    int i = y * tw + x;
+                    if (w > buf[i]) buf[i] = w;
+                }
+        }
+
+        void SkinCamera(string view)
+        {
+            var tr = _cam.transform;
+            tr.rotation = _skinCamRot;
+            if (view == "full") { tr.position = _skinCamPos; return; }
+            Vector3 target; float visible;
+            if (view == "close")
+            {
+                target = (_anim.GetBoneTransform(HumanBodyBones.LeftLowerLeg).position + _anim.GetBoneTransform(HumanBodyBones.RightLowerLeg).position) * 0.5f;   // between the knees
+                visible = 0.75f;                                                                                                                         // mid-thigh down to the ankles
+            }
+            else
+            {
+                target = (_eyeL.position + _eyeR.position) * 0.5f + Vector3.down * 0.02f;
+                visible = 0.30f;
+            }
+            float dist = visible / (2f * Mathf.Tan(Fov * 0.5f * Mathf.Deg2Rad));
+            tr.position = target - tr.forward * dist;
+        }
+
+        void SkinShot(string name)
+        {
+            var prev = RenderTexture.active;
+            RenderTexture.active = _rt;
+            _tex.ReadPixels(new Rect(0, 0, W, H), 0, 0);
+            _tex.Apply();
+            RenderTexture.active = prev;
+            File.WriteAllBytes(Path.Combine(SkinRawDir, name + ".png"), _tex.EncodeToPNG());
+        }
+
+        void SkinUpdate()
+        {
+            int k = _frame;
+            _frame++;
+            try
+            {
+                SkinPose();
+                if (k == -1) SkinCaptureMats();
+                if (k < 4) return;
+                int s = k - 4, job = s / 3, ph = s % 3, jobs = SkinLooks.Length * SkinViews.Length;
+                if (job >= jobs)
+                {
+                    _done = true;
+                    Debug.Log("ROOMTEST_DONE skin " + jobs + " stills in " + SkinRawDir.Replace("\\", "/"));
+                    _cam.targetTexture = null;
+                    RoomTest.End(0);
+                    return;
+                }
+                string look = SkinLooks[job / SkinViews.Length], view = SkinViews[job % SkinViews.Length];
+                if (ph == 0)
+                {
+                    if (job == 0) SkinBuildPaint();
+                    SkinApply(look);
+                    SkinCamera(view);
+                }
+                else if (ph == 2) SkinShot(look + "_" + view);   // the picture of the state set at ph 0 (drawn at the end of the frames in between)
+            }
+            catch (Exception e) { _done = true; Fail(e.ToString()); }
+        }
+
+        // after the clip is evaluated: feet on the floor, the held smile
+        void SkinLate(Transform root)
+        {
+            root.position = Vector3.zero;
+            if (_soleSamples.Count > 0) root.position = new Vector3(0f, FloorGap - LowestSole(true), 0f);
+            if (_shadow != null) _shadow.position = new Vector3(0f, 0.004f, 0.02f);
+            var rt = _vrm != null ? _vrm.Runtime : null;
+            if (rt == null) return;
+            float smile = Env("ODDITY_SMILE", 0.7f);
+            rt.Expression.SetWeight(ExpressionKey.Relaxed, smile);
         }
 
         // ------------------------------------------------------------------ filming
