@@ -126,6 +126,19 @@ namespace Oddity.Tests
         }
 
         [Test]
+        public void Day1_MorningPathsReachSeoyunReply()
+        {
+            DayScript script = Load();
+            Scene seoyun = script.Get("d1_morning_seoyun");
+            Assert.IsNotNull(seoyun, "d1_morning_seoyun");
+            Assert.AreEqual(3, seoyun.Choices.Count, "send, send, or leave it unsent");
+            foreach (Choice choice in script.EntryFor(Slot.Morning).Choices)
+            {
+                Assert.AreEqual(seoyun.Id, script.Get(choice.Next).Next, choice.Text);
+            }
+        }
+
+        [Test]
         public void Day1_AfterIsNotNightEntry()
         {
             DayScript script = Load();
