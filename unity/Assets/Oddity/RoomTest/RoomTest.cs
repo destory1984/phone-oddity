@@ -99,8 +99,8 @@ namespace Oddity.RoomTest
         // ---- camera and figure
         const float Fov = 20f;              // vertical, a long lens
         const float PitchDeg = 17f;         // camera looks down at the floor a little
-        const float FigureFrac = 0.60f;     // her height / frame height
-        const float FeetX = 0.50f, FeetY = 0.85f; // feet position in the frame (from the left, from the top)
+        static readonly float FigureFrac = Env("ODDITY_FIGURE", 0.60f);     // her height / frame height
+        const float FeetX = 0.50f; static readonly float FeetY = Env("ODDITY_FEETY", 0.85f); // feet position in the frame (from the left, from the top)
         const float RoomCropTopPx = 60f;    // room_clean.png is 1536x1024: the 16:9 window starts 100 px down
 
         // ---- timeline
@@ -145,6 +145,16 @@ namespace Oddity.RoomTest
         readonly Vector3[] _ofsH = new Vector3[2], _ofsB = new Vector3[2], _fvLocal = new Vector3[2];
         readonly float[] _ang0 = new float[2], _toeP0i = new float[2], _rH = { 0.03f, 0.03f };
 
+        static float[] EnvList(string k, float[] d)
+        {
+            var v = Environment.GetEnvironmentVariable(k);
+            if (string.IsNullOrEmpty(v)) return d;
+            var p = v.Split(',');
+            var r = (float[])d.Clone();
+            for (int i = 0; i < p.Length && i < r.Length; i++) float.TryParse(p[i], NumberStyles.Float, CultureInfo.InvariantCulture, out r[i]);
+            return r;
+        }
+
         static float Env(string k, float d)
         {
             var v = Environment.GetEnvironmentVariable(k);
@@ -167,6 +177,10 @@ namespace Oddity.RoomTest
                 _rootPos = _front ? new Vector3(0f, 0f, FrontStart) : new Vector3(WalkXFar, 0f, 0f);
             }
             _skin = Environment.GetEnvironmentVariable("ODDITY_SKINTEST") == "1" && RoomTest.DebugClip == null;
+            _expr = Environment.GetEnvironmentVariable("ODDITY_EXPRTEST") == "1" && RoomTest.DebugClip == null && !_skin;
+            _pose = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ODDITY_POSETEST")) && RoomTest.DebugClip == null && !_skin && !_expr;
+            _sleep = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ODDITY_SLEEPVIDEO")) && RoomTest.DebugClip == null && !_skin && !_expr && !_pose;
+            _sleepStillT = Env("ODDITY_SLEEPSTILL", -1f); _sleepStill = _sleep && _sleepStillT >= 0f;
             Time.captureDeltaTime = 1f / Fps;
             UnityEngine.Random.InitState(54);
             try { Build(); }
@@ -196,7 +210,7 @@ namespace Oddity.RoomTest
             key.color = new Color(1f, 0.94f, 0.84f);
             key.intensity = 0.55f;
             key.shadows = LightShadows.None;
-            lightGo.transform.rotation = Quaternion.Euler(35f, 150f, 0f);
+            lightGo.transform.rotation = Quaternion.Euler(35f, Env("ODDITY_KEYYAW", 150f), 0f);
             _keyLight = key;
 
             // Harin, built inactive so HarinPuppet's Awake sees the Vrm10Instance before it runs
@@ -214,6 +228,7 @@ namespace Oddity.RoomTest
             go.SetActive(true);
             _anim = go.GetComponent<Animator>();
             _head = _anim.GetBoneTransform(HumanBodyBones.Head);
+            if (_head != null) { _headFwdLocal = Quaternion.Inverse(_head.rotation) * go.transform.forward; _headUpLocal = Quaternion.Inverse(_head.rotation) * Vector3.up; }   // bind pose at yaw 0: the face looks along the model's forward
             _hips = _anim.GetBoneTransform(HumanBodyBones.Hips);
             _spine = _anim.GetBoneTransform(HumanBodyBones.Spine);
             _upper = _anim.GetBoneTransform(HumanBodyBones.RightUpperArm);
@@ -285,19 +300,31 @@ namespace Oddity.RoomTest
             _chest0 = (_anim.GetBoneTransform(HumanBodyBones.UpperChest) ?? _anim.GetBoneTransform(HumanBodyBones.Chest)).rotation;
             if (Environment.GetEnvironmentVariable("ODDITY_BONES") == "1") BuildMannequin();
             FitCamera();
+            if (Environment.GetEnvironmentVariable("ODDITY_SKINLOOK") == "BC") ApplyVideoSkinLook();
             BuildMotion();
-            if (_rawMode) _harin.enabled = false;   // raw: the puppet's own LateUpdate (breath, lean, head, arms) writes no bone
+            if (_rawMode || _pose || _sleep) _harin.enabled = false;   // raw: the puppet's own LateUpdate (breath, lean, head, arms) writes no bone
             if (RoomTest.DebugClip != null) Diagnose(go);
 
+            if (_pose) { PoseBuild(); return; }   // pose stills: plain grey and a floor, no backdrop, shadow or cut-ins
+
+            if (_sleep) SleepCamera();
             // painted backdrop (cover-fit, cropped to 16:9 from RoomCropTopPx), the blob shadow, the two cut-ins
             _frameH = 2f * _cutDist * Mathf.Tan(Fov * 0.5f * Mathf.Deg2Rad);
             MakeBackdrop();
             MakeShadow();
-            _cutBored = MakeCut("cut_bored.png");
-            _cutSmug = MakeCut("cut_smug.png");
+            if (_sleep) SleepBuild();
+            else { _cutBored = MakeCut("cut_bored.png"); _cutSmug = MakeCut("cut_smug.png"); }
 
             if (RoomTest.DebugClip != null) { Directory.CreateDirectory(RoomTest.DebugShots); return; }
             if (_skin) { Directory.CreateDirectory(SkinRawDir); return; }   // skin compare: stills only, no ffmpeg
+            if (_expr)
+            {
+                Directory.CreateDirectory(ExprRawDir);
+                foreach (var old in Directory.GetFiles(ExprRawDir, "*.png")) File.Delete(old);
+                _cam.nearClipPlane = 0.05f;   // the 0.09 m detail sits 0.255 m from the lens; the default 0.3 would cut it
+                return;
+            }
+            if (_sleepStill) { Directory.CreateDirectory(SleepDir); return; }   // sleep fit: one still, no ffmpeg
             string video = Path.Combine(RoomTest.OutDir, "room_test.silent.mp4");
             File.Delete(video);
             var psi = new ProcessStartInfo
@@ -418,11 +445,22 @@ namespace Oddity.RoomTest
 
         void MakeBackdrop()
         {
-            var tex = Load("room_clean.png");
+            var tex = Load(Environment.GetEnvironmentVariable("ODDITY_BG") is string bg && bg.Length > 0 ? bg : "room_clean.png");
             var q = MakeQuad("Backdrop", tex, "Unlit/Texture");
             const float dist = 40f;
-            float frameH = 2f * dist * Mathf.Tan(Fov * 0.5f * Mathf.Deg2Rad);
+            float frameH = 2f * dist * Mathf.Tan((_sleep ? _cam.fieldOfView : Fov) * 0.5f * Mathf.Deg2Rad);
             float frameW = frameH * W / H;
+            if (_sleep)
+            {
+                // sleep video: a 16:9 window of the painting (x0, y0, width in 1536-wide image pixels), never stretched
+                var c = EnvList("ODDITY_SLEEPCROP", new[] { 0f, 0f, 1536f });
+                float k = tex.width / 1536f, cw = c[2] * k, cx = c[0] * k + cw * 0.5f, cy = c[1] * k + cw * 9f / 16f * 0.5f;
+                float qw = frameW * tex.width / cw, qh = qw * tex.height / tex.width;
+                q.SetParent(_cam.transform, false);
+                q.localPosition = new Vector3(-(cx - tex.width * 0.5f) / tex.width * qw, (cy - tex.height * 0.5f) / tex.height * qh, dist);
+                q.localScale = new Vector3(qw, qh, 1f);
+                return;
+            }
             float quadW = frameW, quadH = frameW * tex.height / tex.width; // cover: the image is 3:2, taller than 16:9
             // the visible window's centre sits at pixel row RoomCropTopPx + (frame height in image rows) / 2
             float rowsShown = tex.height * (frameH / quadH);
@@ -1237,7 +1275,17 @@ namespace Oddity.RoomTest
             if (_fixSpine != 0f)
             {
                 var spine = _anim.GetBoneTransform(HumanBodyBones.Spine);
-                spine.rotation = Quaternion.AngleAxis(_fixSpine * sp, side) * spine.rotation;   // side = up x dir tips the head forward, always
+                if (Env("ODDITY_SPINEPARTS", 0f) == 3f)
+                {
+                    // the same lean split over three bones, lowest first: each turn carries the bones above it, so the angles add up to _fixSpine at the head
+                    var parts = new List<Transform> { spine, _anim.GetBoneTransform(HumanBodyBones.Chest) };
+                    var upper = _anim.GetBoneTransform(HumanBodyBones.UpperChest);
+                    if (upper != null) parts.Add(upper);
+                    foreach (var b in parts)
+                        if (b != null) b.rotation = Quaternion.AngleAxis(_fixSpine * sp / parts.Count, side) * b.rotation;
+                }
+                else
+                    spine.rotation = Quaternion.AngleAxis(_fixSpine * sp, side) * spine.rotation;   // side = up x dir tips the head forward, always
             }
             for (int i = 0; i < 2; i++)
             {
@@ -1700,6 +1748,9 @@ namespace Oddity.RoomTest
         {
             if (_harin == null || _done) return;
             if (_skin) { SkinUpdate(); return; }
+            if (_expr) { ExprUpdate(); return; }
+            if (_pose) { PoseUpdate(); return; }
+            if (_sleep) { SleepUpdate(); return; }
             int total = Mathf.RoundToInt((RoomTest.DebugClip != null ? DebugLength : Length) * Fps);
             int k = _frame;                            // the state set now is frame k (negative while warming up)
             try
@@ -2101,6 +2152,77 @@ namespace Oddity.RoomTest
             Debug.Log(sb.ToString());
         }
 
+        // ODDITY_FACECAM=1: while she holds at a runway end (the body turned towards the camera) the head levels out and faces the camera,
+        // then the eyes take what is left. Weight w follows the body yaw (90 -> 0 gives 0 -> 1), so walking is untouched.
+        Vector3 _headFwdLocal = Vector3.forward, _headUpLocal = Vector3.up;
+        bool _faceEyesOn;
+        const float FaceCamMax = 30f;
+        void FaceCam(Transform root)
+        {
+            if (_head == null || _cam == null) return;
+            float w = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(1f - Mathf.Abs(Mathf.DeltaAngle(_rootYaw, 0f)) / 90f));
+            if (w <= 0f) { if (_faceEyesOn) { _harin.SetEyeAngles(0f, 0f); _faceEyesOn = false; } return; }
+            var neck = _anim.GetBoneTransform(HumanBodyBones.Neck);
+            Vector3 camPos = _cam.transform.position;
+            // head turn: from the animated face frame (forward, up) to (towards the camera, world up), capped at 30 degrees
+            Quaternion rh = _head.rotation;
+            Vector3 fwdH = rh * _headFwdLocal, upH = rh * _headUpLocal;
+            Vector3 d = (camPos - _head.position).normalized;
+            Quaternion delta = Quaternion.LookRotation(d, Vector3.up) * Quaternion.Inverse(Quaternion.LookRotation(fwdH, upH));
+            delta.ToAngleAxis(out float ang, out Vector3 axis);
+            if (ang > 180f) ang -= 360f;
+            if (Mathf.Abs(ang) > FaceCamMax) delta = Quaternion.AngleAxis(Mathf.Sign(ang) * FaceCamMax, axis);
+            if (neck != null) neck.rotation = Quaternion.Slerp(Quaternion.identity, delta, 0.4f * w) * neck.rotation;
+            _head.rotation = Quaternion.Slerp(Quaternion.identity, delta, (neck != null ? 0.6f : 1f) * w) * _head.rotation;
+            // eyes: only the angle the head did not cover
+            var eyePos = (_eyeL != null && _eyeR != null) ? (_eyeL.position + _eyeR.position) * 0.5f : _head.position;
+            rh = _head.rotation;
+            fwdH = rh * _headFwdLocal; upH = rh * _headUpLocal;
+            Vector3 rightH = Vector3.Cross(upH, fwdH);
+            d = (camPos - eyePos).normalized;
+            float x = Vector3.Dot(d, rightH), y = Vector3.Dot(d, upH), z = Vector3.Dot(d, fwdH);
+            float yawRight = Mathf.Atan2(x, z) * Mathf.Rad2Deg, pitchUp = Mathf.Atan2(y, Mathf.Sqrt(x * x + z * z)) * Mathf.Rad2Deg;
+            float sign = Environment.GetEnvironmentVariable("ODDITY_FACEEYESIGN") == "-1" ? -1f : 1f;
+            _harin.SetEyeAngles(-yawRight * w * sign, -pitchUp * w);
+            _faceEyesOn = true;
+        }
+
+        // ODDITY_ARMSPREAD=deg: both upper arms turn about root.forward by this many degrees, away from the body, in walk and in hold alike.
+        // The sign is found on the first frame by measuring the horizontal hand-to-hips distance (it must grow); unset or 0 changes nothing.
+        float _armSign;
+        bool _armLogged;
+        float HandHipsDist(HumanBodyBones hand)
+        {
+            var d = _anim.GetBoneTransform(hand).position - _hips.position; d.y = 0f; return d.magnitude;
+        }
+        void ArmSpread(Transform root)
+        {
+            if (!float.TryParse(Environment.GetEnvironmentVariable("ODDITY_ARMSPREAD"), NumberStyles.Float, CultureInfo.InvariantCulture, out float deg) || deg == 0f) return;
+            var lu = _anim.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+            var ru = _anim.GetBoneTransform(HumanBodyBones.RightUpperArm);
+            if (lu == null || ru == null || _hips == null) return;
+            Func<float, float, Quaternion[]> rot = (s, d) => new[] { Quaternion.AngleAxis(d * s, root.forward), Quaternion.AngleAxis(-d * s, root.forward) };
+            if (_armSign == 0f)
+            {
+                float l0 = HandHipsDist(HumanBodyBones.LeftHand), r0 = HandHipsDist(HumanBodyBones.RightHand);
+                var q0l = lu.rotation; var q0r = ru.rotation;
+                var q = rot(1f, deg); lu.rotation = q[0] * q0l; ru.rotation = q[1] * q0r;
+                float l1 = HandHipsDist(HumanBodyBones.LeftHand), r1 = HandHipsDist(HumanBodyBones.RightHand);
+                _armSign = (l1 + r1 > l0 + r0) ? 1f : -1f;
+                lu.rotation = q0l; ru.rotation = q0r;
+                Debug.Log("ROOMTEST armspread sign " + _armSign + " start hand-hips L " + l0.ToString("0.000", CultureInfo.InvariantCulture) + " R " + r0.ToString("0.000", CultureInfo.InvariantCulture)
+                    + " -> with +" + deg + " deg L " + l1.ToString("0.000", CultureInfo.InvariantCulture) + " R " + r1.ToString("0.000", CultureInfo.InvariantCulture));
+            }
+            var qq = rot(_armSign, deg);
+            lu.rotation = qq[0] * lu.rotation; ru.rotation = qq[1] * ru.rotation;
+            if (!_armLogged && _t >= 3.4f)
+            {
+                _armLogged = true;
+                Debug.Log("ROOMTEST armspread t=" + _t.ToString("0.00", CultureInfo.InvariantCulture) + " hand-hips horizontal L " + HandHipsDist(HumanBodyBones.LeftHand).ToString("0.000", CultureInfo.InvariantCulture)
+                    + " R " + HandHipsDist(HumanBodyBones.RightHand).ToString("0.000", CultureInfo.InvariantCulture) + " (deg " + deg + ")");
+            }
+        }
+
         void LateUpdate()
         {
             if (_harin == null) return;
@@ -2110,6 +2232,9 @@ namespace Oddity.RoomTest
             root.rotation = Quaternion.Euler(0f, _rootYaw, 0f);
             root.position = new Vector3(_rootPos.x, root.position.y, _rootPos.z);
             if (_skin) { SkinLate(root); return; }
+            if (_expr) { ExprLate(root); return; }
+            if (_pose) { PoseLate(root); return; }
+            if (_sleep) { SleepLate(root); return; }
             if (_rawMode) { /* nothing of ours writes a bone, and the root keeps y 0: the clip's own hip height decides */ if (_walkOnly) Fix65(); }
             else
             {
@@ -2182,6 +2307,8 @@ namespace Oddity.RoomTest
                     _head.rotation = Quaternion.AngleAxis(-chin * 0.5f, across) * _head.rotation;
                 }
             }
+            if (_rawMode) ArmSpread(root);
+            if (Environment.GetEnvironmentVariable("ODDITY_FACECAM") == "1") FaceCam(root);
             // ODDITY_SMILE=0.6: a held smile on the face only, no bones. Raw mode has no HarinPuppet to drive the face.
             if (rt != null && float.TryParse(Environment.GetEnvironmentVariable("ODDITY_SMILE"), NumberStyles.Float, CultureInfo.InvariantCulture, out float smile))
                 rt.Expression.SetWeight(ExpressionKey.Relaxed, smile);
@@ -2253,6 +2380,21 @@ namespace Oddity.RoomTest
                 }
             }
             Debug.Log("ROOMTEST skin materials found " + _skinMats.Count + ", ambient " + Col(_skinAmbient0) + ", key " + Fl(_skinKey0));
+        }
+
+        // ODDITY_SKINLOOK=BC: looks B (softer) and C (light) for the video too
+        void ApplyVideoSkinLook()
+        {
+            SkinCaptureMats();
+            foreach (var s in _skinMats)
+            {
+                s.M.SetColor("_ShadeColor", new Color(0.95f, 0.76f, 0.69f, 1f));
+                s.M.SetFloat("_ShadingShiftFactor", s.Face ? -0.35f : -0.15f);
+                s.M.SetFloat("_ShadingToonyFactor", s.Face ? 0.70f : 0.80f);
+            }
+            RenderSettings.ambientLight = new Color(0.50f, 0.50f, 0.53f);
+            _keyLight.intensity = 0.95f;
+            _keyLight.color = new Color(1f, 0.95f, 0.87f);
         }
 
         void SkinRestore()
@@ -2500,6 +2642,464 @@ namespace Oddity.RoomTest
             if (rt == null) return;
             float smile = Env("ODDITY_SMILE", 0.7f);
             rt.Expression.SetWeight(ExpressionKey.Relaxed, smile);
+        }
+
+        // ------------------------------------------------------------------ expression stills (ODDITY_EXPRTEST=1)
+
+        // Same frozen frame as the skin test; every expression cell is shot from two head-aimed cameras, plus two detail stills.
+        // Raw 1920x1080 stills go to OutDir/expr/raw/<view>_<cell>.png; tools/dev.py crops and tiles them.
+        bool _expr;
+        static string ExprRawDir => Path.Combine(RoomTest.OutDir, "expr", "raw");
+        struct ExprCell { public string Name; public ExpressionKey[] Keys; public float[] W; public float Yaw, Pitch; }
+        static ExprCell XC(string n, ExpressionKey k, float w) => new ExprCell { Name = n, Keys = new[] { k }, W = new[] { w } };
+        static ExprCell XG(string n, float yaw, float pitch) => new ExprCell { Name = n, Keys = new ExpressionKey[0], W = new float[0], Yaw = yaw, Pitch = pitch };
+        // gaze: SetEyeAngles yaw > 0 is her left (screen right), pitch > 0 down; 60 of the ranges' 90 degree input gives 2/3 of the model's 12/8/10 degree output
+        static readonly ExprCell[] ExprCells =
+        {
+            XG("neutral", 0f, 0f),
+            XC("relaxed07", ExpressionKey.Relaxed, 0.7f), XC("relaxed10", ExpressionKey.Relaxed, 1f), XC("happy", ExpressionKey.Happy, 1f),
+            XC("angry", ExpressionKey.Angry, 1f), XC("sad", ExpressionKey.Sad, 1f), XC("surprised", ExpressionKey.Surprised, 1f),
+            XC("blink", ExpressionKey.Blink, 1f), XC("blink05", ExpressionKey.Blink, 0.5f), XC("blinkL", ExpressionKey.BlinkLeft, 1f), XC("blinkR", ExpressionKey.BlinkRight, 1f),
+            XC("aa", ExpressionKey.Aa, 1f), XC("ih", ExpressionKey.Ih, 1f), XC("ou", ExpressionKey.Ou, 1f), XC("ee", ExpressionKey.Ee, 1f), XC("oh", ExpressionKey.Oh, 1f),
+            XG("lookL", -60f, 0f), XG("lookR", 60f, 0f), XG("lookU", 0f, -60f), XG("lookD", 0f, 60f),
+        };
+        static readonly string[] ExprDetails = { "jaw_relaxed07", "eye_happy" };
+        int _exprCell; string _exprView = "front"; float _exprVisible = 0.30f; int _exprMode;   // mode 0 head cam, 1 jaw, 2 eye
+        bool _exprAngleLogged, _exprHooked;
+        Quaternion _exprEyeL = Quaternion.identity, _exprEyeR = Quaternion.identity;
+        void ExprPreCull(Camera c) { if (c == _cam && _eyeL != null) { _exprEyeL = _eyeL.localRotation; _exprEyeR = _eyeR.localRotation; } }
+
+        void ExprSet(int job)
+        {
+            int n = ExprCells.Length;
+            if (job < n) { _exprCell = job; _exprView = "front"; _exprMode = 0; _exprVisible = 0.30f; }
+            else if (job < 2 * n) { _exprCell = job - n; _exprView = "q45"; _exprMode = 0; _exprVisible = 0.30f; }
+            else if (job == 2 * n) { _exprCell = 1; _exprView = "front"; _exprMode = 1; _exprVisible = 0.11f; }
+            else { _exprCell = 3; _exprView = "front"; _exprMode = 2; _exprVisible = 0.09f; }
+        }
+
+        string ExprName(int job) => job < 2 * ExprCells.Length ? _exprView + "_" + ExprCells[_exprCell].Name : ExprDetails[job - 2 * ExprCells.Length];
+
+        void ExprUpdate()
+        {
+            int k = _frame;
+            _frame++;
+            try
+            {
+                SkinPose();
+                if (k < 4) return;
+                int s = k - 4, job = s / 3, ph = s % 3, jobs = 2 * ExprCells.Length + ExprDetails.Length;
+                if (job >= jobs)
+                {
+                    _done = true;
+                    Debug.Log("ROOMTEST_DONE expr " + jobs + " stills in " + ExprRawDir.Replace("\\", "/"));
+                    _cam.targetTexture = null;
+                    RoomTest.End(0);
+                    return;
+                }
+                if (ph == 0) ExprSet(job);   // expression and camera are applied in LateUpdate from these fields
+                else if (ph == 2)
+                {
+                    var c = ExprCells[_exprCell];
+                    if ((c.Yaw != 0f || c.Pitch != 0f) && job < ExprCells.Length)
+                    {
+                        Vector3 el = _exprEyeL.eulerAngles, er = _exprEyeR.eulerAngles;   // as drawn: sampled at the last pre-cull, after the VRM look-at ran
+                        Debug.Log("ROOMTEST gaze " + c.Name + " set yaw " + Fl(c.Yaw) + " pitch " + Fl(c.Pitch) + ", eyeL local euler (" + Fl(Mathf.DeltaAngle(0f, el.x)) + "," + Fl(Mathf.DeltaAngle(0f, el.y)) + "," + Fl(Mathf.DeltaAngle(0f, el.z)) + "), eyeR (" + Fl(Mathf.DeltaAngle(0f, er.x)) + "," + Fl(Mathf.DeltaAngle(0f, er.y)) + "," + Fl(Mathf.DeltaAngle(0f, er.z)) + ")");
+                    }
+                    var prev = RenderTexture.active;
+                    RenderTexture.active = _rt;
+                    _tex.ReadPixels(new Rect(0, 0, W, H), 0, 0);
+                    _tex.Apply();
+                    RenderTexture.active = prev;
+                    File.WriteAllBytes(Path.Combine(ExprRawDir, ExprName(job) + ".png"), _tex.EncodeToPNG());
+                }
+            }
+            catch (Exception e) { _done = true; Fail(e.ToString()); }
+        }
+
+        void ExprLate(Transform root)
+        {
+            root.position = Vector3.zero;
+            if (_soleSamples.Count > 0) root.position = new Vector3(0f, FloorGap - LowestSole(true), 0f);
+            if (_shadow != null) _shadow.position = new Vector3(0f, 0.004f, 0.02f);
+            var rt = _vrm != null ? _vrm.Runtime : null;
+            if (rt == null || _frame < 5) return;
+            if (!_exprHooked) { _exprHooked = true; Camera.onPreCull += ExprPreCull; UnityEngine.Rendering.RenderPipelineManager.beginCameraRendering += (ctx, c2) => ExprPreCull(c2); }
+            var c = ExprCells[_exprCell];
+            foreach (var key in rt.Expression.ExpressionKeys) rt.Expression.SetWeight(key, 0f);
+            for (int i = 0; i < c.Keys.Length; i++) rt.Expression.SetWeight(c.Keys[i], c.W[i]);
+            _harin.SetEyeAngles(c.Yaw, c.Pitch);
+            // camera aimed from the head itself, not from the world
+            var fwd = _head.rotation * _headFwdLocal; var up = _head.rotation * _headUpLocal;
+            var mid = (_eyeL.position + _eyeR.position) * 0.5f - up * 0.02f;
+            if (!_exprAngleLogged)
+            {
+                _exprAngleLogged = true;
+                Debug.Log("ROOMTEST head forward vs root forward " + Fl(Vector3.Angle(fwd, root.forward)) + " deg, head up vs world up " + Fl(Vector3.Angle(up, Vector3.up)) + " deg");
+            }
+            Vector3 dir = fwd, target = mid;
+            if (_exprView == "q45")
+            {
+                var right0 = _skinCamRot * Vector3.right;
+                var d1 = Quaternion.AngleAxis(45f, up) * fwd;
+                var d2 = Quaternion.AngleAxis(-45f, up) * fwd;
+                dir = Vector3.Dot(d1, right0) > Vector3.Dot(d2, right0) ? d1 : d2;   // towards her left = screen right
+            }
+            if (_exprMode == 1) target = mid - up * 0.075f;
+            else if (_exprMode == 2) target = _eyeR.position;
+            float dist = _exprVisible / (2f * Mathf.Tan(Fov * 0.5f * Mathf.Deg2Rad));
+            _cam.transform.position = target + dir * dist;
+            _cam.transform.rotation = Quaternion.LookRotation(target - _cam.transform.position, up);
+        }
+
+        // ------------------------------------------------------------------ pose stills (ODDITY_POSETEST=clip,clip,...)
+
+        // Each clip is sampled raw (same humanoid path as ODDITY_RAW, nothing of ours writes a bone) at 50% of its length and frozen; the whole
+        // body is lifted so the lowest skinned vertex rests on Y=0. Four cameras per clip, stills only: OutDir/pose/raw/<clip>_<view>.png.
+        // The pose is re-evaluated every frame for PoseSettle frames before the first still, so the VRM spring bones (hair, skirt) settle.
+        bool _pose;
+        static string PoseRawDir => Path.Combine(RoomTest.OutDir, "pose", "raw");
+        static readonly string[] PoseViews = { "top", "side", "feet", "face" };
+        const int PoseSettle = 60, PoseBlock = PoseSettle + 3 * 4;
+        string[] _poseClips; AnimationClip[] _poseAc; int _poseIdx = -1;
+        PlayableGraph _poseG; AnimationClipPlayable _poseP;
+        string _poseView = "side";
+        SkinnedMeshRenderer[] _poseR; Mesh[] _poseM; readonly List<Vector3> _poseV = new List<Vector3>();
+        float _poseLift, _poseLowest, _poseHipsY, _poseHeadY, _poseTopY, _poseDrift; string _poseSideInfo = "";
+        Vector3 _poseBMinPrev, _poseBMaxPrev;
+
+        void PoseBuild()
+        {
+            _poseClips = Environment.GetEnvironmentVariable("ODDITY_POSETEST").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToArray();
+            _poseAc = _poseClips.Select(Clip).ToArray();
+            Directory.CreateDirectory(PoseRawDir);
+            foreach (var old in Directory.GetFiles(PoseRawDir, "*.png")) File.Delete(old);
+            if (_graph.IsValid()) _graph.Destroy();   // the walk graph is never played here
+            _cam.nearClipPlane = 0.05f;               // the face view sits 0.5 m from the lens
+            _cam.backgroundColor = new Color(0.42f, 0.42f, 0.42f);
+            var fl = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            fl.name = "PoseFloor";
+            Destroy(fl.GetComponent<Collider>());
+            fl.GetComponent<MeshRenderer>().sharedMaterial = new Material(Shader.Find("Unlit/Color")) { color = new Color(0.54f, 0.54f, 0.54f) };
+            fl.transform.rotation = Quaternion.Euler(90f, 0f, 0f);   // lying on the floor, facing up
+            fl.transform.localScale = new Vector3(60f, 60f, 1f);
+            _poseR = _harin.GetComponentsInChildren<SkinnedMeshRenderer>().Where(r => r.sharedMesh != null && r.enabled && r.gameObject.activeInHierarchy).ToArray();
+            _poseM = _poseR.Select(r => new Mesh()).ToArray();
+        }
+
+        void PoseSet(int ci)
+        {
+            if (_poseG.IsValid()) _poseG.Destroy();
+            _poseG = PlayableGraph.Create("RoomTestPose" + ci);
+            _poseG.SetTimeUpdateMode(DirectorUpdateMode.Manual);
+            var o = AnimationPlayableOutput.Create(_poseG, "pose", _anim);
+            _poseP = AnimationClipPlayable.Create(_poseG, _poseAc[ci]);
+            _poseP.SetApplyFootIK(false);
+            o.SetSourcePlayable(_poseP);
+            _poseIdx = ci;
+            Debug.Log("ROOMTEST pose clip " + _poseClips[ci] + " " + Fl(_poseAc[ci].length) + " s, sampled at " + Fl(_poseAc[ci].length * 0.5f) + " s");
+        }
+
+        void PoseUpdate()
+        {
+            int k = _frame;
+            _frame++;
+            try
+            {
+                int s = k - 4, ci = s < 0 ? 0 : s / PoseBlock;
+                if (ci >= _poseClips.Length)
+                {
+                    _done = true;
+                    Debug.Log("ROOMTEST_DONE pose " + _poseClips.Length * PoseViews.Length + " stills in " + PoseRawDir.Replace("\\", "/"));
+                    _cam.targetTexture = null;
+                    RoomTest.End(0);
+                    return;
+                }
+                if (ci != _poseIdx) PoseSet(ci);
+                _poseP.SetTime(_poseAc[ci].length * 0.5f);
+                _poseG.Evaluate(0f);
+                if (s < 0) return;
+                int local = s % PoseBlock;
+                if (local < PoseSettle)
+                {
+                    _poseView = "side";
+                    if (local == PoseSettle - 1)
+                        Debug.Log("ROOMTEST pose " + _poseClips[ci] + " lowest skinned vertex " + Fl(_poseLowest * 100f) + " cm (before lift), lift " + Fl(_poseLift * 100f) + " cm, hips " + Fl(_poseHipsY * 100f) + " cm, head bone " + Fl(_poseHeadY * 100f) +
+                                  " cm, top vertex " + Fl(_poseTopY * 100f) + " cm above the floor; body bounds drift last frame " + Fl(_poseDrift * 1000f) + " mm; " + _poseSideInfo);
+                    return;
+                }
+                int v = (local - PoseSettle) / 3, ph = (local - PoseSettle) % 3;
+                if (ph == 0) _poseView = PoseViews[v];   // camera is applied in LateUpdate from this field
+                else if (ph == 2)
+                {
+                    var prev = RenderTexture.active;
+                    RenderTexture.active = _rt;
+                    _tex.ReadPixels(new Rect(0, 0, W, H), 0, 0);
+                    _tex.Apply();
+                    RenderTexture.active = prev;
+                    File.WriteAllBytes(Path.Combine(PoseRawDir, _poseClips[ci] + "_" + _poseView + ".png"), _tex.EncodeToPNG());
+                }
+            }
+            catch (Exception e) { _done = true; Fail(e.ToString()); }
+        }
+
+        // world bounds of every skinned vertex, as drawn this frame (root as it is now)
+        void PoseMeasure(out Vector3 bmin, out Vector3 bmax)
+        {
+            bmin = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue); bmax = -bmin;
+            for (int i = 0; i < _poseR.Length; i++)
+            {
+                _poseR[i].BakeMesh(_poseM[i], false);
+                _poseM[i].GetVertices(_poseV);
+                var m = _poseR[i].transform.localToWorldMatrix;
+                foreach (var v in _poseV) { var w = m.MultiplyPoint3x4(v); bmin = Vector3.Min(bmin, w); bmax = Vector3.Max(bmax, w); }
+            }
+        }
+
+        static Vector3 Flat(Vector3 v) { v.y = 0f; return v; }
+
+        void PoseLate(Transform root)
+        {
+            root.position = Vector3.zero;
+            PoseMeasure(out var bmin, out var bmax);
+            _poseLowest = bmin.y; _poseLift = -bmin.y;
+            root.position = new Vector3(0f, _poseLift, 0f);
+            bmin.y += _poseLift; bmax.y += _poseLift;
+            _poseDrift = Mathf.Max((bmin - _poseBMinPrev).magnitude, (bmax - _poseBMaxPrev).magnitude);
+            _poseBMinPrev = bmin; _poseBMaxPrev = bmax;
+            var rt = _vrm != null ? _vrm.Runtime : null;
+            if (rt != null)
+            {
+                foreach (var key in rt.Expression.ExpressionKeys) rt.Expression.SetWeight(key, 0f);
+                rt.Expression.SetWeight(ExpressionKey.Blink, 1f);   // blink only, every shot
+            }
+            Vector3 hp = _hips.position, hd = _head.position;
+            var feet = (_anim.GetBoneTransform(HumanBodyBones.LeftFoot).position + _anim.GetBoneTransform(HumanBodyBones.RightFoot).position) * 0.5f;
+            _poseHipsY = hp.y; _poseHeadY = hd.y; _poseTopY = bmax.y;
+            var fwd = _head.rotation * _headFwdLocal; var hup = _head.rotation * _headUpLocal;
+            var wu = Vector3.up;
+            // head-to-feet axis on the floor; the face side (her right when the face points up or down)
+            var ah = Flat(hd - feet); bool axisOk = ah.magnitude >= 0.3f;
+            var fh = Flat(fwd); bool faceFlat = fh.magnitude >= 0.5f;
+            var sFace = faceFlat ? fh.normalized : Flat(Vector3.Cross(hup, fwd)).normalized;
+            var aHat = axisOk ? ah.normalized : Vector3.Cross(wu, sFace).normalized;
+            var sPerp = Flat(sFace - aHat * Vector3.Dot(sFace, aHat));
+            if (sPerp.magnitude < 0.3f) { sPerp = Vector3.Cross(wu, aHat); if (Vector3.Dot(sPerp, sFace) < 0f) sPerp = -sPerp; }
+            sPerp.Normalize();
+            _poseSideInfo = "face " + (faceFlat ? "points sideways, camera on the face side" : "points up/down, camera on her right") + ", axis " + (axisOk ? "horizontal" : "near vertical (fallback)") +
+                            ", face-to-up angle " + Fl(Vector3.Angle(fwd, wu)) + " deg, head-to-feet tilt from floor " + Fl(90f - Vector3.Angle(hd - feet, wu)) + " deg";
+            Vector3 target, dir; float dist = 0f;
+            var eyes = (_eyeL.position + _eyeR.position) * 0.5f - hup * 0.02f;
+            switch (_poseView)
+            {
+                case "top": target = (hp + hd) * 0.5f; dir = sFace * Mathf.Cos(55f * Mathf.Deg2Rad) + wu * Mathf.Sin(55f * Mathf.Deg2Rad); break;
+                case "feet": target = (hp + hd) * 0.5f; dir = -aHat * Mathf.Cos(25f * Mathf.Deg2Rad) + wu * Mathf.Sin(25f * Mathf.Deg2Rad); break;
+                case "face": target = eyes; dir = sFace * Mathf.Cos(20f * Mathf.Deg2Rad) + wu * Mathf.Sin(20f * Mathf.Deg2Rad); dist = 0.45f / (2f * Mathf.Tan(Fov * 0.5f * Mathf.Deg2Rad)); break;
+                default: target = (hp + hd) * 0.5f; dir = sPerp * Mathf.Cos(8f * Mathf.Deg2Rad) + wu * Mathf.Sin(8f * Mathf.Deg2Rad); break;
+            }
+            var tr = _cam.transform;
+            if (dist > 0f) { tr.position = target + dir * dist; tr.rotation = Quaternion.LookRotation(target - tr.position, wu); return; }
+            // whole body in the centre square (the crop dev.py keeps): back off until the 8 bound corners fit
+            const float half = 0.5f * (float)H / W;   // half width of the centre square in viewport x
+            float d = 6f;
+            for (int i = 0; i < 14; i++)
+            {
+                tr.position = target + dir * d; tr.rotation = Quaternion.LookRotation(target - tr.position, wu);
+                float m = 0.01f;
+                for (int c = 0; c < 8; c++)
+                {
+                    var p = _cam.WorldToViewportPoint(new Vector3((c & 1) != 0 ? bmax.x : bmin.x, (c & 2) != 0 ? bmax.y : bmin.y, (c & 4) != 0 ? bmax.z : bmin.z));
+                    m = Mathf.Max(m, Mathf.Abs(p.x - 0.5f) / half, Mathf.Abs(p.y - 0.5f) / 0.5f);
+                }
+                d = Mathf.Max(1.5f, d * m / 0.9f);
+            }
+            tr.position = target + dir * d; tr.rotation = Quaternion.LookRotation(target - tr.position, wu);
+        }
+
+        // ------------------------------------------------------------------ sleep video (ODDITY_SLEEPVIDEO=clip)
+
+        // The clip is played once from start to end, raw (same graph as the pose stills, nothing of ours writes a bone), on the painted single bed.
+        // The painting (bed_side.png) shows the bed from its long side, pillow at the image right, and fills the frame. The camera looks along +Z, her head-to-feet line runs along X
+        // (head at +X, image right), her face side towards the camera. Perspective is ignored: a long lens, 8 deg elevation.
+        // ODDITY_SLEEPPPM=810 pixels per metre, ODDITY_SLEEPRIGHT=1600 pixel of her head end, ODDITY_SLEEPY=590 pixel row of her lowest point, ODDITY_SLEEPYAW=extra yaw,
+        // ODDITY_SLEEPSCALE, ODDITY_SLEEPSTILL=seconds (one still -> sleep/fit.png, no video), ODDITY_SLEEPCROP=x0,y0,w (painting pixels, default the whole image).
+        bool _sleep, _sleepStill, _sleepPlaced;
+        readonly bool _sleepStand = Environment.GetEnvironmentVariable("ODDITY_SLEEPSTAND") == "1";
+        float _sleepStillT, _sleepYaw, _sleepLen, _sleepScale = 1f;
+        int _sleepTotal;
+        Vector3 _sleepPos;
+        float _sleepLift = float.NaN, _sleepLiftV;
+        static string SleepDir => Path.Combine(RoomTest.OutDir, "sleep");
+
+        void SleepCamera()
+        {
+            // a long lens at ODDITY_SLEEPPITCH degrees elevation (default 3: the painting's mattress band is 40 px for a 1 m deep bed) looking along +Z; SleepPlace puts it where she lands on the painting
+            _cam.fieldOfView = Env("ODDITY_SLEEPFOV", 15f);
+            _cam.nearClipPlane = 0.05f;
+            _keyLight.color = Color.white;   // neutral daylight, no warm tint
+            _cam.transform.rotation = Quaternion.Euler(Env("ODDITY_SLEEPPITCH", 3f), 0f, 0f);
+        }
+
+        void SleepBuild()
+        {
+            _poseClips = new[] { Environment.GetEnvironmentVariable("ODDITY_SLEEPVIDEO").Trim() };
+            _poseAc = _poseClips.Select(Clip).ToArray();
+            if (_graph.IsValid()) _graph.Destroy();   // the walk graph is never played here
+            _poseR = _harin.GetComponentsInChildren<SkinnedMeshRenderer>().Where(r => r.sharedMesh != null && r.enabled && r.gameObject.activeInHierarchy).ToArray();
+            _poseM = _poseR.Select(r => new Mesh()).ToArray();
+            PoseSet(0);
+            _sleepLen = _poseAc[0].length;
+            _sleepTotal = Mathf.RoundToInt(_sleepLen * Fps);
+            Length = _sleepTotal / (float)Fps;
+            _sleepScale = Env("ODDITY_SLEEPSCALE", 1f);
+            _harin.transform.localScale = Vector3.one * _sleepScale;
+            if (Environment.GetEnvironmentVariable("ODDITY_SLEEPDEBUG") == "1")
+                for (int i = 0; i < 4; i++)
+                {
+                    var b = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    Destroy(b.GetComponent<Collider>());
+                    b.GetComponent<MeshRenderer>().sharedMaterial = new Material(Shader.Find("Unlit/Color")) { color = Color.magenta };
+                    bool alongZ = i < 2;
+                    b.transform.position = alongZ ? new Vector3(i == 0 ? -0.5f : 0.5f, 0.005f, 0f) : new Vector3(0f, 0.005f, i == 2 ? -1f : 1f);
+                    b.transform.localScale = alongZ ? new Vector3(0.012f, 0.01f, 2f) : new Vector3(1f, 0.01f, 0.012f);
+                }
+        }
+
+        // the lowest skinned vertex as drawn now (world)
+        Vector3 SleepLowest()
+        {
+            var best = new Vector3(0f, 1e9f, 0f);
+            for (int i = 0; i < _poseR.Length; i++)
+            {
+                _poseR[i].BakeMesh(_poseM[i], false);
+                _poseM[i].GetVertices(_poseV);
+                var m = _poseR[i].transform.localToWorldMatrix;
+                foreach (var v in _poseV) { var w = m.MultiplyPoint3x4(v); if (w.y < best.y) best = w; }
+            }
+            return best;
+        }
+
+        void SleepSample(float t, out Vector3 bmin, out Vector3 bmax)
+        {
+            _poseP.SetTime(t);
+            _poseG.Evaluate(0f);
+            PoseMeasure(out bmin, out bmax);
+        }
+
+        // Once, on the first frame: yaw so the head-to-feet line runs along the bed, the body centred on the mattress and its lowest point on Y=0.
+        void SleepPlace()
+        {
+            _sleepPlaced = true;
+            var root = _harin.transform;
+            const int n = 12;
+            var axis = Vector3.zero; var face = Vector3.zero;
+            root.rotation = Quaternion.identity; root.position = Vector3.zero;
+            for (int i = 0; i < n; i++)
+            {
+                SleepSample(_sleepLen * i / n, out _, out _);
+                var feet = (_anim.GetBoneTransform(HumanBodyBones.LeftFoot).position + _anim.GetBoneTransform(HumanBodyBones.RightFoot).position) * 0.5f;
+                axis += Flat(_head.position - feet).normalized;
+                face += _head.rotation * _headFwdLocal;
+            }
+            // ODDITY_SLEEPSTAND=1: the same film path for a standing clip, no bed axis, centred, feet on row SLEEPY, a held smile instead of closed eyes
+            float ang = _sleepStand ? 0f : Vector3.SignedAngle(Flat(axis).normalized, Vector3.right, Vector3.up);
+            float extra = Env("ODDITY_SLEEPYAW", 0f);
+            _sleepYaw = ang + extra;
+            var fy = Quaternion.Euler(0f, _sleepYaw, 0f) * face.normalized;
+            var toCam = -Vector3.forward;
+            Debug.Log("ROOMTEST sleep axis yaw " + Fl(ang) + " + extra " + Fl(extra) + "; face (mean head forward) after yaw " + V(fy) + ", towards camera dot " + Fl(Vector3.Dot(Flat(fy).normalized, toCam)));
+            root.rotation = Quaternion.Euler(0f, _sleepYaw, 0f);
+            var mn = new Vector3(1e9f, 1e9f, 1e9f); var mx = -mn; float lowZ = 0f; var lowList = new List<float>(); float low = 1e9f, lowSum = 0f, cxs = 0f, czs = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                SleepSample(_sleepLen * i / n, out var bmin, out var bmax);
+                mn = Vector3.Min(mn, bmin); mx = Vector3.Max(mx, bmax); lowList.Add(bmin.y); lowZ += SleepLowest().z; lowSum += bmin.y; low = Mathf.Min(low, bmin.y);
+                cxs += (bmin.x + bmax.x) * 0.5f; czs += (bmin.z + bmax.z) * 0.5f;
+            }
+            Debug.Log("ROOMTEST sleep lowest vertex at 12 clip times (cm, root at origin): " + string.Join(" ", lowList.Select(x => Fl(Mathf.Round(x * 1000f) / 10f))));
+            _sleepPos = new Vector3(-cxs / n, -lowSum / n, -czs / n);   // the mean lowest point over the clip rests on the mattress (the body breathes a few cm)
+            mn += _sleepPos; mx += _sleepPos;
+            // camera: 810 px per metre; the contact point (0,0,0) lands at her head end SLEEPRIGHT, row SLEEPY
+            float fovv = _cam.fieldOfView, bodyL = mx.x - mn.x;
+            var tr = _cam.transform;
+            float ppm = Env("ODDITY_SLEEPPPM", 810f);   // pixels per metre at her depth
+            float dist = (W / ppm) / (2f * Mathf.Tan(fovv * 0.5f * Mathf.Deg2Rad) * W / H);
+            float wx = _sleepStand ? 0.5f : (Env("ODDITY_SLEEPRIGHT", 1600f) - bodyL * ppm * 0.5f) / W, wy = 1f - Env("ODDITY_SLEEPY", 590f) / H;
+            tr.position = Vector3.zero - tr.forward * dist;
+            float worldH = 2f * dist * Mathf.Tan(fovv * 0.5f * Mathf.Deg2Rad), worldW = worldH * W / H;
+            for (int i = 0; i < 6; i++)
+            {
+                // x: the body centre, y: the lowest vertex's depth (the far side of the mattress) at height 0
+                var vp = _cam.WorldToViewportPoint(Vector3.zero);
+                var vq = _cam.WorldToViewportPoint(new Vector3(0f, 0f, lowZ / n + _sleepPos.z));
+                tr.position += tr.right * ((vp.x - wx) * worldW) + tr.up * ((vq.y - wy) * worldH);
+            }
+            Debug.Log("ROOMTEST sleep camera pos " + V(tr.position) + " pitch " + Fl(tr.eulerAngles.x) + " fov " + Fl(fovv) + " dist " + Fl(dist) + " body length " + Fl(bodyL) + " m");
+            Debug.Log("ROOMTEST sleep model height " + Fl(_heightM * _sleepScale) + " m, body bounds over the clip x " + Fl(mn.x) + ".." + Fl(mx.x) + " z " + Fl(mn.z) + ".." + Fl(mx.z) + " y " + Fl(mn.y) + ".." + Fl(mx.y) +
+                      " (m, root at origin); root placed at " + V(_sleepPos));
+            if (_shadow != null)
+            {
+                _shadow.position = new Vector3((mn.x + mx.x) * 0.5f, 0.004f, (mn.z + mx.z) * 0.5f);
+                _shadow.localScale = new Vector3((mx.x - mn.x) * 1.25f + 0.1f, (mx.z - mn.z) * 1.15f + 0.1f, 1f);
+            }
+        }
+
+        void SleepUpdate()
+        {
+            int k = _frame;
+            try
+            {
+                const int settle = 60;   // still: the spring bones settle for 60 frames, then the picture of that state is read
+                if (_sleepStill)
+                {
+                    if (k == settle + 1)
+                    {
+                        var prev = RenderTexture.active;
+                        RenderTexture.active = _rt;
+                        _tex.ReadPixels(new Rect(0, 0, W, H), 0, 0);
+                        _tex.Apply();
+                        RenderTexture.active = prev;
+                        Directory.CreateDirectory(SleepDir);
+                        string f = Path.Combine(SleepDir, "fit.png");
+                        File.WriteAllBytes(f, _tex.EncodeToPNG());
+                        _done = true;
+                        Debug.Log("ROOMTEST_DONE sleepstill " + f.Replace("\\", "/"));
+                        _cam.targetTexture = null;
+                        RoomTest.End(0);
+                        return;
+                    }
+                }
+                else
+                {
+                    if (k >= 1) Capture();                       // the picture of state k - 1
+                    if (k >= _sleepTotal) { _done = true; Finish(); return; }
+                }
+                _frame++;
+                if (k % 60 == 0) Debug.Log("ROOMTEST frame " + k);
+                if (!_sleepPlaced) SleepPlace();
+                float t = _sleepStill ? _sleepStillT : Mathf.Max(0, k) / (float)Fps;   // negative k: the first frame repeats, the spring bones settle
+                _poseP.SetTime(t);
+                _poseG.Evaluate(0f);
+            }
+            catch (Exception e) { _done = true; Fail(e.ToString()); }
+        }
+
+        void SleepLate(Transform root)
+        {
+            if (!_sleepPlaced) return;
+            root.rotation = Quaternion.Euler(0f, _sleepYaw, 0f);
+            root.position = new Vector3(_sleepPos.x, 0f, _sleepPos.z);
+            // her lowest vertex rests on the mattress in every frame (the clip moves her up to 8 cm); the lift follows over 0.1 s
+            float want = -SleepLowest().y;
+            _sleepLift = float.IsNaN(_sleepLift) ? want : Mathf.SmoothDamp(_sleepLift, want, ref _sleepLiftV, 0.1f, Mathf.Infinity, 1f / Fps);
+            root.position = new Vector3(_sleepPos.x, _sleepLift, _sleepPos.z);
+            var rt = _vrm != null ? _vrm.Runtime : null;
+            if (rt != null)
+            {
+                foreach (var key in rt.Expression.ExpressionKeys) rt.Expression.SetWeight(key, 0f);
+                if (_sleepStand) rt.Expression.SetWeight(ExpressionKey.Relaxed, 0.7f);
+                else rt.Expression.SetWeight(ExpressionKey.Blink, 1f);   // blink only, every frame
+            }
         }
 
         // ------------------------------------------------------------------ filming

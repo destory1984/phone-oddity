@@ -16,7 +16,10 @@ namespace Oddity.EditorTools
         const string SkinFile = Folder + "Resources/Motion/WalkStandardSkin.fbx";
         static readonly string[] UseSkinAvatar = { "WalkStandard" };
 
-        public override uint GetVersion() => 6;
+        // KAWAII ANIMATIONS clips ship without a mesh and take their T-pose Avatar from the pack's DummyDoll
+        const string KawaiiDoll = Folder + "Resources/Motion/KaDummyDoll.fbx";
+
+        public override uint GetVersion() => 7;
 
         void OnPreprocessModel()
         {
@@ -31,6 +34,13 @@ namespace Oddity.EditorTools
                 if (skin == null) foreach (var o in AssetDatabase.LoadAllAssetsAtPath(SkinFile)) if (o is Avatar av) skin = av;
                 if (skin != null) { importer.avatarSetup = ModelImporterAvatarSetup.CopyFromOther; importer.sourceAvatar = skin; }
                 else UnityEngine.Debug.LogWarning("MotionImport: no skinned Avatar yet for " + assetPath);
+            }
+            if (stem.StartsWith("Ka") && stem != "KaDummyDoll")
+            {
+                Avatar doll = null;
+                foreach (var o in AssetDatabase.LoadAllAssetsAtPath(KawaiiDoll)) if (o is Avatar av) doll = av;
+                if (doll != null) { importer.avatarSetup = ModelImporterAvatarSetup.CopyFromOther; importer.sourceAvatar = doll; }
+                else UnityEngine.Debug.LogWarning("MotionImport: no KaDummyDoll Avatar yet for " + assetPath);
             }
             importer.importAnimation = true;
             importer.importBlendShapes = false;

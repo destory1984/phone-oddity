@@ -438,7 +438,7 @@ def roomtest():
     if not ffmpeg:
         print("ROOMTEST FAILED: ffmpeg is not on PATH")
         return 1
-    for art in ("room_clean.png", "cut_bored.png", "cut_smug.png"):
+    for art in ("room_clean.png", "cut_bored.png", "cut_smug.png", os.environ.get("ODDITY_BG") or "room_clean.png"):
         src = ROOMTEST_OUT / art
         dst = UNITY_PROJECT / "Assets" / "Oddity" / "RoomTest" / "Art" / art
         if src.exists():
@@ -459,6 +459,20 @@ def roomtest():
             print("ROOMTEST FAILED; see unity/Logs/roomtest.log")
             return 1
         return skin_compare()
+    if os.environ.get("ODDITY_EXPRTEST") == "1":
+        # expression stills: no video, tile the stills
+        if code is None or "ROOMTEST_DONE expr" not in text:
+            print("ROOMTEST FAILED; see unity/Logs/roomtest.log")
+            return 1
+        return expr_sheet()
+    if os.environ.get("ODDITY_POSETEST"):
+        # pose stills: no video, tile the stills
+        if code is None or "ROOMTEST_DONE pose" not in text:
+            print("ROOMTEST FAILED; see unity/Logs/roomtest.log")
+            return 1
+        return pose_sheet()
+    if os.environ.get("ODDITY_SLEEPVIDEO"):
+        return sleep_finish(code, text, ffmpeg, t0)
     silent = ROOMTEST_OUT / "room_test.silent.mp4"
     if code is None or "ROOMTEST_DONE" not in text or not silent.exists():
         print("ROOMTEST FAILED; see unity/Logs/roomtest.log")
@@ -474,6 +488,36 @@ def roomtest():
         print("ROOMTEST sheet failed: " + r.stderr[-500:])
         return 1
     print(f"ROOMTEST {video.relative_to(ROOT).as_posix()} {video.stat().st_size / 1048576:.1f} MB, {sheet.relative_to(ROOT).as_posix()}, {time.time() - t0:.0f}s")
+    return 0
+
+
+def sleep_finish(code, text, ffmpeg, t0):
+    """ODDITY_SLEEPVIDEO: move the film to sleep/sleep_test.mp4 and cut a 3x2 sheet of six evenly spaced frames (ODDITY_SLEEPSTILL: only the fit still)."""
+    out = ROOMTEST_OUT / "sleep"
+    if os.environ.get("ODDITY_SLEEPSTILL"):
+        if code is None or "ROOMTEST_DONE sleepstill" not in text:
+            print("ROOMTEST FAILED; see unity/Logs/roomtest.log")
+            return 1
+        print(f"ROOMTEST {(out / 'fit.png').relative_to(ROOT).as_posix()}, {time.time() - t0:.0f}s")
+        return 0
+    silent = ROOMTEST_OUT / "room_test.silent.mp4"
+    m = re.search(r"ROOMTEST_DONE frames=(\d+)", text)
+    if code is None or not m or not silent.exists():
+        print("ROOMTEST FAILED; see unity/Logs/roomtest.log")
+        return 1
+    frames = int(m.group(1))
+    out.mkdir(parents=True, exist_ok=True)
+    video = out / "sleep_test.mp4"
+    video.unlink(missing_ok=True)
+    silent.replace(video)
+    sel = "+".join(f"eq(n,{round(i * (frames - 1) / 5)})" for i in range(6))
+    sheet = out / "sheet.png"
+    sheet.unlink(missing_ok=True)
+    r = run([ffmpeg, "-y", "-loglevel", "error", "-i", video, "-vf", f"select='{sel}',scale=960:540,tile=3x2", "-frames:v", "1", sheet])
+    if r.returncode or not sheet.exists():
+        print("ROOMTEST sheet failed: " + r.stderr[-500:])
+        return 1
+    print(f"ROOMTEST {video.relative_to(ROOT).as_posix()} {video.stat().st_size / 1048576:.1f} MB, {frames} frames ({frames / 30:.1f} s), {sheet.relative_to(ROOT).as_posix()}, {time.time() - t0:.0f}s")
     return 0
 
 
@@ -527,6 +571,93 @@ def skin_compare():
     dst = out / "compare.png"
     sheet.save(dst)
     print(f"SKIN compare {dst.relative_to(ROOT).as_posix()} {sheet.size[0]}x{sheet.size[1]}")
+    return 0
+
+
+EXPR_CELLS = ["neutral", "relaxed07", "relaxed10", "happy", "angry", "sad", "surprised", "blink", "blink05", "blinkL", "blinkR",
+              "aa", "ih", "ou", "ee", "oh", "lookL", "lookR", "lookU", "lookD"]
+
+
+def expr_sheet():
+    """ODDITY_EXPRTEST: tile the raw stills into sheet_front.png, sheet_q45.png (5x4, 400px cells) and detail.png (two 900px cells)."""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        print("EXPR sheet skipped: Pillow is not installed")
+        return 1
+    out = ROOMTEST_OUT / "expr"
+    raw = out / "raw"
+    need = [f"{v}_{c}.png" for v in ("front", "q45") for c in EXPR_CELLS] + ["jaw_relaxed07.png", "eye_happy.png"]
+    missing = [n for n in need if not (raw / n).exists()]
+    if missing:
+        print("EXPR missing " + ", ".join(missing))
+        return 1
+    font = None
+    for cand in ("C:/Windows/Fonts/arialbd.ttf", "C:/Windows/Fonts/arial.ttf"):
+        if Path(cand).exists():
+            font = ImageFont.truetype(cand, 26)
+            break
+
+    def square(path, size):
+        im = Image.open(path).convert("RGB")
+        w, h = im.size
+        return im.crop((w // 2 - h // 2, 0, w // 2 + h // 2, h)).resize((size, size), Image.LANCZOS)
+
+    def tile(items, cols, cell, name):
+        label_h = 36
+        rows = (len(items) + cols - 1) // cols
+        sheet = Image.new("RGB", (cols * cell, rows * (cell + label_h)), (20, 20, 20))
+        draw = ImageDraw.Draw(sheet)
+        for i, (label, path) in enumerate(items):
+            x, y = (i % cols) * cell, (i // cols) * (cell + label_h)
+            draw.text((x + 10, y + 4), label, fill=(255, 255, 255), font=font)
+            sheet.paste(square(path, cell), (x, y + label_h))
+        dst = out / name
+        sheet.save(dst)
+        print(f"EXPR sheet {dst.relative_to(ROOT).as_posix()} {sheet.size[0]}x{sheet.size[1]}")
+
+    for view in ("front", "q45"):
+        tile([(c, raw / f"{view}_{c}.png") for c in EXPR_CELLS], 5, 400, f"sheet_{view}.png")
+    tile([("jaw relaxed 0.7", raw / "jaw_relaxed07.png"), ("eye happy 1.0", raw / "eye_happy.png")], 2, 900, "detail.png")
+    return 0
+
+
+POSE_VIEWS = ["top", "side", "feet", "face"]
+
+
+def pose_sheet():
+    """ODDITY_POSETEST: one row per clip, one column per view, centre-square crops, 480px cells, label bar like skin_compare."""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        print("POSE sheet skipped: Pillow is not installed")
+        return 1
+    clips = [c.strip() for c in os.environ.get("ODDITY_POSETEST", "").split(",") if c.strip()]
+    out = ROOMTEST_OUT / "pose"
+    raw = out / "raw"
+    missing = [f"{c}_{v}.png" for c in clips for v in POSE_VIEWS if not (raw / f"{c}_{v}.png").exists()]
+    if missing:
+        print("POSE missing " + ", ".join(missing))
+        return 1
+    font = None
+    for cand in ("C:/Windows/Fonts/arialbd.ttf", "C:/Windows/Fonts/arial.ttf"):
+        if Path(cand).exists():
+            font = ImageFont.truetype(cand, 26)
+            break
+    cell, label_h = 480, 36
+    sheet = Image.new("RGB", (cell * len(POSE_VIEWS), (cell + label_h) * len(clips)), (20, 20, 20))
+    draw = ImageDraw.Draw(sheet)
+    for r, c in enumerate(clips):
+        for col, v in enumerate(POSE_VIEWS):
+            im = Image.open(raw / f"{c}_{v}.png").convert("RGB")
+            w, h = im.size
+            im = im.crop((w // 2 - h // 2, 0, w // 2 + h // 2, h)).resize((cell, cell), Image.LANCZOS)
+            x, y = col * cell, r * (cell + label_h)
+            draw.text((x + 10, y + 4), f"{c} {v}", fill=(255, 255, 255), font=font)
+            sheet.paste(im, (x, y + label_h))
+    dst = out / "sheet.png"
+    sheet.save(dst)
+    print(f"POSE sheet {dst.relative_to(ROOT).as_posix()} {sheet.size[0]}x{sheet.size[1]}")
     return 0
 
 
