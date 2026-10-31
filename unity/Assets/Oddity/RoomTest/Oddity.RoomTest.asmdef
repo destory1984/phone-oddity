@@ -1,0 +1,7 @@
+{
+  "name": "Oddity.RoomTest",
+  "rootNamespace": "Oddity.RoomTest",
+  "references": ["Oddity.Game", "VRM10", "UniGLTF", "Unity.RenderPipelines.Universal.Runtime"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": false
+}

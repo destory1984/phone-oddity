@@ -9,6 +9,7 @@
     python tools/dev.py kill                   close the Unity editor that has this project open (not the Hub)
     python tools/dev.py previs SCENE [--level 1,2,3,4] [--day] [--motion]   low-quality mp4 with voice and sounds -> shots/previs/SCENE_L{level}.mp4 (needs ffmpeg on PATH)
                                                (--day: night look off, file SCENE_L{level}_day.mp4)
+    python tools/dev.py roomtest               18 s look test of a painted room with a distant 3D Harin -> shots/room_test/room_test.mp4 (1920x1080, 30 fps) + sheet.png
     python tools/dev.py ship -m "msg" [--quick a,b]   check, test (only a,b with --quick), commit here. Never pushes.
     python tools/dev.py build --pc [--demo-voice]   Windows dev exe -> unity/Build/pc/oddity-proto.exe (Mono, 540x960 window)
     python tools/dev.py build [--demo-voice]   Android dev apk -> unity/Build/oddity-proto.apk, then active target back to Windows
@@ -427,6 +428,49 @@ def previs(names, levels, day=False, motion=False):
     return 1 if failed else 0
 
 
+ROOMTEST_OUT = SHOTS / "room_test"
+ROOMTEST_SHEET_TIMES = [2, 5, 8, 10.8, 13.8, 15]
+
+
+def roomtest():
+    """Task 54: film the room test in batchmode, then cut a 3x2 contact sheet from the video."""
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        print("ROOMTEST FAILED: ffmpeg is not on PATH")
+        return 1
+    for art in ("room_clean.png", "cut_bored.png", "cut_smug.png"):
+        src = ROOMTEST_OUT / art
+        dst = UNITY_PROJECT / "Assets" / "Oddity" / "RoomTest" / "Art" / art
+        if src.exists():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            if not dst.exists() or src.stat().st_mtime > dst.stat().st_mtime:
+                shutil.copy2(src, dst)
+    ROOMTEST_OUT.mkdir(parents=True, exist_ok=True)
+    t0 = time.time()
+    # no -nographics: the camera has to draw
+    code, text = unity(["-executeMethod", "Oddity.RoomTest.RoomTest.Run", "-roomDir", ROOMTEST_OUT.resolve(), "-roomFfmpeg", ffmpeg],
+                       "roomtest.log", timeout=1800)
+    for line in text.splitlines():
+        if line.startswith("ROOMTEST"):
+            print(line.strip().replace(str(ROOMTEST_OUT.as_posix()) + "/", ""))
+    silent = ROOMTEST_OUT / "room_test.silent.mp4"
+    if code is None or "ROOMTEST_DONE" not in text or not silent.exists():
+        print("ROOMTEST FAILED; see unity/Logs/roomtest.log")
+        return 1
+    video = ROOMTEST_OUT / "room_test.mp4"
+    video.unlink(missing_ok=True)
+    silent.replace(video)
+    sel = "+".join(f"eq(n,{round(t * 30)})" for t in ROOMTEST_SHEET_TIMES)
+    sheet = ROOMTEST_OUT / "sheet.png"
+    sheet.unlink(missing_ok=True)
+    r = run([ffmpeg, "-y", "-loglevel", "error", "-i", video, "-vf", f"select='{sel}',scale=640:360,tile=3x2", "-frames:v", "1", sheet])
+    if r.returncode or not sheet.exists():
+        print("ROOMTEST sheet failed: " + r.stderr[-500:])
+        return 1
+    print(f"ROOMTEST {video.relative_to(ROOT).as_posix()} {video.stat().st_size / 1048576:.1f} MB, {sheet.relative_to(ROOT).as_posix()}, {time.time() - t0:.0f}s")
+    return 0
+
+
 def baseline(names):
     BASE.mkdir(parents=True, exist_ok=True)
     files = [SHOTS / f"{n}.png" for n in names] if names else SHOTS.glob("*.png")
@@ -487,7 +531,7 @@ def ship(message, quick=None):
 def main():
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", choices=["check", "test", "shot", "scenes", "baseline", "kill", "ship", "build", "previs"])
+    ap.add_argument("cmd", choices=["check", "test", "shot", "scenes", "baseline", "kill", "ship", "build", "previs", "roomtest"])
     ap.add_argument("names", nargs="*")
     ap.add_argument("-m", "--message")
     ap.add_argument("--quick", help="ship: run only these tests (comma list)")
@@ -515,6 +559,8 @@ def main():
         return baseline(names)
     if a.cmd == "previs":
         return previs(names, a.level, a.day, a.motion)
+    if a.cmd == "roomtest":
+        return roomtest()
     if a.cmd == "build":
         return build_pc(a.demo_voice) if a.pc else build(a.demo_voice)
     if a.cmd == "ship":

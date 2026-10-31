@@ -28,6 +28,7 @@
 | `shot [장면 ...]` | `shots/장면.png` (폭 800). baseline 이 있으면 `SHOT 장면 diff n.n%` |
 | `scenes`, `baseline`, `kill` | 장면 목록, 기준 그림 저장, 이 프로젝트의 Unity 닫기 |
 | `previs 장면 [--level 1,2,3,4] [--day]` | 장면을 사람처럼 자동으로 넘겨 음성과 효과음이 든 540x960 24fps mp4 로 뽑는다 → `shots/previs/장면_L2.mp4` (`--day` 는 밤 조명을 끄고 `장면_L2_day.mp4`). 지금은 `d3_night` 만 된다. 실시간으로 찍어서 한 벌에 약 50초, 셋이면 약 3분 걸린다. ffmpeg 가 PATH 에 있어야 한다 |
+| `roomtest` | 그림 방 배경에 멀리 선 3D 하린(C48)을 얹은 약 23초 느낌 시험(작업 54 → 56, 버릴 시험, Mixamo FemaleIdle 위에 절차 동작, 끝에 WalkStandard 걷기(뼈대 포함 파일의 Avatar 공유), `ODDITY_WALKONLY=1` 이면 걷기만). 1920x1080 30fps → `shots/room_test/room_test.mp4` 와 `sheet.png`(3x2). 그림 3장은 `shots/room_test/` 에 둔다. 약 2분, ffmpeg 필요 |
 | `ship -m "메시지" [--quick a,b]` | check, test 통과 뒤 커밋. push 는 절대 안 한다 |
 | `build [--pc] [--demo-voice]` | 안드로이드 개발 APK → `unity/Build/oddity-proto.apk` (IL2CPP 라 길다), `--pc` 이면 Windows 개발 exe → `unity/Build/pc/oddity-proto.exe` (Mono, 540x960 창, 약 5분). 크기와 시간을 찍고 활성 대상을 Windows 로 되돌린다. karina 음성 파일이 있으면 멈추고, `--demo-voice` 일 때만 개인용으로 짓는다 (`oddity-proto-DEMO-private.apk`, `pc-DEMO-private/`) |
 
