@@ -69,6 +69,14 @@ namespace Oddity.PlayTests
             else if (boot.PrologueAwaitingTap) boot.Subtitle.Tap();
         }
 
+        [Test]
+        public void Babble_OffByDefault()
+        {
+            PlayerPrefs.DeleteKey(PlayerBabble.SettingPref);
+            PlayerBabble.ClearSettingCache();
+            Assert.IsFalse(PlayerBabble.Enabled);
+        }
+
         [UnityTest]
         public IEnumerator Babble_PlayerLinePlays()
         {

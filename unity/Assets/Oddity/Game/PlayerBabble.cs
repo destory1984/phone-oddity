@@ -13,14 +13,14 @@ namespace Oddity.Game
     public class PlayerBabble : MonoBehaviour
     {
         public const float VolumeRatio = 0.5f;
-        public const string SettingPref = "oddity.babble.v1";
-        public const string DefaultSetting = "mid";
+        public const string SettingPref = "oddity.babble.v2";
+        public const string DefaultSetting = "off";
         /// <summary>Choices of the dev panel button, in order.</summary>
         public static readonly string[] Settings = { "low", "mid", "high", "off" };
 
         static string _setting;
 
-        /// <summary>"low", "mid", "high" or "off", remembered in PlayerPrefs (default "mid").</summary>
+        /// <summary>"low", "mid", "high" or "off", remembered in PlayerPrefs (default "off": player lines are text only).</summary>
         public static string Setting
         {
             get
