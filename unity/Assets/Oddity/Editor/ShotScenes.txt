@@ -39,3 +39,9 @@ chat_conti_near_H2
 chat_conti_near_M
 chat_conti_near_C
 chat_conti_near_end
+chat_face_neutral
+chat_face_happy
+chat_face_sad
+chat_face_angry
+chat_face_surprised
+chat_face_relaxed

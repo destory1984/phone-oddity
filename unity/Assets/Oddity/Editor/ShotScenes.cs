@@ -88,6 +88,13 @@ namespace Oddity.EditorTools
             boot.Stage.Force(shot);
         }
 
+        // One face held on the close shot of the morning chat, to check a new model's expressions.
+        static void FaceShot(string face)
+        {
+            CamShot("E");
+            HarinWardrobe.ActivePuppet().SetFace(face);
+        }
+
         static void FitPhoneCamera()
         {
             var cam = GameObject.Find("MainCamera").GetComponent<Camera>();
@@ -236,6 +243,12 @@ namespace Oddity.EditorTools
             new ShotScene { Name = "chat_conti_near_M", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 60, Setup = () => ContiShot(SceneConti.Night, 7, 4, false, true) },
             new ShotScene { Name = "chat_conti_near_C", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 60, Setup = () => ContiShot(SceneConti.NightEnd, 4, 4, true, true) },
             new ShotScene { Name = "chat_conti_near_end", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 60, Setup = () => ContiShot(SceneConti.NightEnd, 7, 4, true, true) },
+            new ShotScene { Name = "chat_face_neutral", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 120, Setup = () => FaceShot("neutral") },
+            new ShotScene { Name = "chat_face_happy", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 120, Setup = () => FaceShot("happy") },
+            new ShotScene { Name = "chat_face_sad", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 120, Setup = () => FaceShot("sad") },
+            new ShotScene { Name = "chat_face_angry", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 120, Setup = () => FaceShot("angry") },
+            new ShotScene { Name = "chat_face_surprised", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 120, Setup = () => FaceShot("surprised") },
+            new ShotScene { Name = "chat_face_relaxed", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 120, Setup = () => FaceShot("relaxed") },
             new ShotScene { Name = "chat_cam_M", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 600, Setup = () => CamShot("M") },
             new ShotScene { Name = "chat_cam_S", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 600, Setup = () => CamShot("S") },
             new ShotScene { Name = "chat_cam_E", ScenePath = PrototypeScene, CameraName = "MainCamera", SettleFrames = 600, Setup = () => CamShot("E") },
