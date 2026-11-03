@@ -48,3 +48,11 @@ shots/sprite_test2/
 shots/see_through/
 shots/mix_test/
 shots/walk_test/
+
+# Unity crash recovery scenes
+unity/Assets/_Recovery/
+unity/Assets/_Recovery.meta
+
+# Harin's recorded meow, a voice take like shots/voice_test (no longer played)
+unity/Assets/Oddity/RoomTest/Meow.wav
+unity/Assets/Oddity/RoomTest/Meow.wav.meta

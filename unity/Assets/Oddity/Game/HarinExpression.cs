@@ -95,6 +95,8 @@ namespace Oddity.Game
         const float MouthCloseFadeAt = 0.15f; // lip-sync weight at which the extra morphs are gone
 
         SkinnedMeshRenderer _mouthRenderer;
+        // The Meshy models split the face: the lower face is a second mesh with the same morph names, so it follows.
+        readonly List<SkinnedMeshRenderer> _mouthFollowers = new List<SkinnedMeshRenderer>();
         int _closeIndex = -2, _smileIndex = -1; // -2 not looked up yet, -1 the model has no such morph
         float _mouthCloseTarget, _mouthSmileTarget;
 
@@ -272,13 +274,13 @@ namespace Oddity.Game
                     if (r.sharedMesh == null) continue;
                     int i = r.sharedMesh.GetBlendShapeIndex(MouthCloseShape);
                     if (i < 0) continue;
+                    if (_mouthRenderer != null) { _mouthFollowers.Add(r); continue; }
                     _mouthRenderer = r;
                     _closeIndex = i;
                     _smileIndex = r.sharedMesh.GetBlendShapeIndex(MouthSmileShape);
                     _eyeJoyIndex = r.sharedMesh.GetBlendShapeIndex(EyeJoyShape);
                     _mouthJoyIndex = r.sharedMesh.GetBlendShapeIndex(MouthJoyShape);
                     _browJoyIndex = r.sharedMesh.GetBlendShapeIndex(BrowJoyShape);
-                    break;
                 }
             }
             float talk = Mathf.Max(_mouthAa, Mathf.Max(_mouthIh, _mouthOu));
@@ -292,6 +294,20 @@ namespace Oddity.Game
             if (_eyeJoyIndex >= 0) _mouthRenderer.SetBlendShapeWeight(_eyeJoyIndex, _eyeJoy * 100f);
             if (_mouthJoyIndex >= 0) _mouthRenderer.SetBlendShapeWeight(_mouthJoyIndex, MouthJoyWeight * 100f);
             if (_browJoyIndex >= 0) _mouthRenderer.SetBlendShapeWeight(_browJoyIndex, _browJoy * 100f);
+            foreach (var r in _mouthFollowers)
+            {
+                SetShape(r, MouthCloseShape, MouthCloseWeight);
+                SetShape(r, MouthSmileShape, MouthSmileWeight);
+                SetShape(r, EyeJoyShape, _eyeJoy);
+                SetShape(r, MouthJoyShape, MouthJoyWeight);
+                SetShape(r, BrowJoyShape, _browJoy);
+            }
+        }
+
+        static void SetShape(SkinnedMeshRenderer r, string shape, float weight)
+        {
+            int i = r.sharedMesh.GetBlendShapeIndex(shape);
+            if (i >= 0) r.SetBlendShapeWeight(i, weight * 100f);
         }
 
         void CaptureLeanBones()

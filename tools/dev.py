@@ -9,6 +9,7 @@
     python tools/dev.py kill                   close the Unity editor that has this project open (not the Hub)
     python tools/dev.py previs SCENE [--level 1,2,3,4] [--day] [--motion]   low-quality mp4 with voice and sounds -> shots/previs/SCENE_L{level}.mp4 (needs ffmpeg on PATH)
                                                (--day: night look off, file SCENE_L{level}_day.mp4)
+    python tools/dev.py play                   interactive Harin viewer; leaves Unity running
     python tools/dev.py roomtest               18 s look test of a painted room with a distant 3D Harin -> shots/room_test/room_test.mp4 (1920x1080, 30 fps) + sheet.png
     python tools/dev.py ship -m "msg" [--quick a,b]   check, test (only a,b with --quick), commit here. Never pushes.
     python tools/dev.py build --pc [--demo-voice]   Windows dev exe -> unity/Build/pc/oddity-proto.exe (Mono, 540x960 window)
@@ -432,6 +433,49 @@ ROOMTEST_OUT = SHOTS / "room_test"
 ROOMTEST_SHEET_TIMES = [2, 5, 8, 10.8, 13.8, 15]
 
 
+def play():
+    """Start the interactive editor and return when it is ready."""
+    kill()
+    if not ensure_license():
+        return 1
+    LOGS.mkdir(parents=True, exist_ok=True)
+    env = os.environ.copy()
+    env.setdefault("ODDITY_BG", "bg6_stone_dusk.png")
+    env.setdefault("ODDITY_MODEL", "Assets/Models/test/harin-6T-I1-30.vrm")
+    src = Path(env["ODDITY_BG"])
+    if not src.is_absolute() and not src.exists():
+        src = ROOMTEST_OUT / src
+    dst = UNITY_PROJECT / "Assets/Oddity/RoomTest/Art" / src.name
+    if src.exists() and (not dst.exists() or src.stat().st_mtime > dst.stat().st_mtime):
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+    env["ODDITY_BG"] = src.name
+    log = LOGS / "roomplay.log"
+    for _ in range(20):  # the editor kill() just closed can hold the log for a few seconds
+        try:
+            log.unlink(missing_ok=True)
+            break
+        except PermissionError:
+            time.sleep(0.5)
+    proc = subprocess.Popen([str(UNITY_EXE), "-projectPath", str(UNITY_PROJECT),
+                             "-logFile", str(log), "-executeMethod", "Oddity.RoomTest.RoomPlay.Run"],
+                            cwd=ROOT, env=env)
+    end = time.time() + STEP_TIMEOUT
+    while time.time() < end:
+        text = log.read_text(encoding="utf-8", errors="replace") if log.exists() else ""
+        if "ROOMPLAY_READY" in text:
+            print("ROOMPLAY ready; Unity left running; log: unity/Logs/roomplay.log")
+            return 0
+        if proc.poll() is not None or cs_errors(text) or "ROOMPLAY_FAIL" in text:
+            print("ROOMPLAY FAILED; see unity/Logs/roomplay.log")
+            kill()
+            return 1
+        time.sleep(1)
+    print("ROOMPLAY timed out; see unity/Logs/roomplay.log")
+    kill()
+    return 1
+
+
 def roomtest():
     """Task 54: film the room test in batchmode, then cut a 3x2 contact sheet from the video."""
     ffmpeg = shutil.which("ffmpeg")
@@ -721,7 +765,7 @@ def ship(message, quick=None):
 def main():
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", choices=["check", "test", "shot", "scenes", "baseline", "kill", "ship", "build", "previs", "roomtest"])
+    ap.add_argument("cmd", choices=["check", "test", "shot", "scenes", "baseline", "kill", "ship", "build", "previs", "roomtest", "play"])
     ap.add_argument("names", nargs="*")
     ap.add_argument("-m", "--message")
     ap.add_argument("--quick", help="ship: run only these tests (comma list)")
@@ -749,6 +793,8 @@ def main():
         return baseline(names)
     if a.cmd == "previs":
         return previs(names, a.level, a.day, a.motion)
+    if a.cmd == "play":
+        return play()
     if a.cmd == "roomtest":
         return roomtest()
     if a.cmd == "build":

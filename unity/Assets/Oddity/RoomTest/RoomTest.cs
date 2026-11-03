@@ -300,7 +300,8 @@ namespace Oddity.RoomTest
             _chest0 = (_anim.GetBoneTransform(HumanBodyBones.UpperChest) ?? _anim.GetBoneTransform(HumanBodyBones.Chest)).rotation;
             if (Environment.GetEnvironmentVariable("ODDITY_BONES") == "1") BuildMannequin();
             FitCamera();
-            if (Environment.GetEnvironmentVariable("ODDITY_SKINLOOK") == "BC") ApplyVideoSkinLook();
+            var skinLook = Environment.GetEnvironmentVariable("ODDITY_SKINLOOK");
+            if (skinLook == "BC" || skinLook == "LIGHT" || skinLook == "MAT") ApplyVideoSkinLook(skinLook != "MAT", skinLook != "LIGHT");
             BuildMotion();
             if (_rawMode || _pose || _sleep) _harin.enabled = false;   // raw: the puppet's own LateUpdate (breath, lean, head, arms) writes no bone
             if (RoomTest.DebugClip != null) Diagnose(go);
@@ -424,7 +425,7 @@ namespace Oddity.RoomTest
                       ", figure " + (t.y - f.y).ToString("0.000", CultureInfo.InvariantCulture) + " of the frame");
         }
 
-        static Texture2D Load(string file)
+        internal static Texture2D Load(string file)
         {
             var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false, false);
             if (!tex.LoadImage(File.ReadAllBytes(Path.Combine(Application.dataPath, "Oddity/RoomTest/Art", file)))) throw new Exception("cannot load " + file);
@@ -433,7 +434,7 @@ namespace Oddity.RoomTest
             return tex;
         }
 
-        Transform MakeQuad(string name, Texture2D tex, string shader)
+        internal static Transform MakeQuad(string name, Texture2D tex, string shader)
         {
             var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
             q.name = name;
@@ -471,7 +472,9 @@ namespace Oddity.RoomTest
             q.localScale = new Vector3(quadW, quadH, 1f);
         }
 
-        void MakeShadow()
+        void MakeShadow() { _shadow = MakeBlob(); }
+
+        internal static Transform MakeBlob()
         {
             const int n = 128;
             var tex = new Texture2D(n, n, TextureFormat.RGBA32, false, false);
@@ -489,7 +492,7 @@ namespace Oddity.RoomTest
             q.rotation = Quaternion.Euler(90f, 0f, 0f); // lying on the floor, facing up
             q.position = new Vector3(0f, 0.004f, 0.02f);
             q.localScale = new Vector3(0.95f, 0.5f, 1f);
-            _shadow = q;
+            return q;
         }
 
         Transform MakeCut(string file)
@@ -530,10 +533,12 @@ namespace Oddity.RoomTest
         Vector3 _rootPos;
         Transform _shadow;
 
-        static AnimationClip Clip(string name)
+        // "file#clip" picks one clip of a pack that keeps all its clips in one file
+        internal static AnimationClip Clip(string name)
         {
-            foreach (var o in AssetDatabase.LoadAllAssetsAtPath("Assets/Oddity/DevMotion/Resources/Motion/" + name + ".fbx"))
-                if (o is AnimationClip c && !c.name.StartsWith("__preview__")) return c;
+            var parts = name.Split('#');
+            foreach (var o in AssetDatabase.LoadAllAssetsAtPath("Assets/Oddity/DevMotion/Resources/Motion/" + parts[0] + ".fbx"))
+                if (o is AnimationClip c && !c.name.StartsWith("__preview__") && (parts.Length < 2 || c.name.EndsWith(parts[1]))) return c;
             throw new Exception("no clip in Assets/Oddity/DevMotion/Resources/Motion/" + name + ".fbx");
         }
 
@@ -2360,10 +2365,10 @@ namespace Oddity.RoomTest
                 for (int i = 0; i < ms.Length; i++)
                 {
                     var m = ms[i];
-                    if (m == null || !m.name.Contains("SKIN") || !m.HasProperty("_ShadeColor")) continue;
+                    if (m == null || !(m.name.Contains("SKIN") || m.name.Contains("tripo_BODY")) || !m.HasProperty("_ShadeColor")) continue;
                     var sm = new SkinMat
                     {
-                        M = m, R = r, Sub = i, Face = r.name == "Face",
+                        M = m, R = r, Sub = i, Face = r.name == "Face" || r.name == "HeadSkin",
                         Shade = m.GetColor("_ShadeColor"),
                         Shift = m.GetFloat("_ShadingShiftFactor"), Toony = m.GetFloat("_ShadingToonyFactor"),
                         Rim = m.HasProperty("_RimColor") ? m.GetColor("_RimColor") : Color.black,
@@ -2382,16 +2387,18 @@ namespace Oddity.RoomTest
             Debug.Log("ROOMTEST skin materials found " + _skinMats.Count + ", ambient " + Col(_skinAmbient0) + ", key " + Fl(_skinKey0));
         }
 
-        // ODDITY_SKINLOOK=BC: looks B (softer) and C (light) for the video too
-        void ApplyVideoSkinLook()
+        // ODDITY_SKINLOOK=BC: looks B (softer) and C (light) for the video too; LIGHT or MAT applies only that half
+        void ApplyVideoSkinLook(bool light, bool mat)
         {
             SkinCaptureMats();
-            foreach (var s in _skinMats)
-            {
-                s.M.SetColor("_ShadeColor", new Color(0.95f, 0.76f, 0.69f, 1f));
-                s.M.SetFloat("_ShadingShiftFactor", s.Face ? -0.35f : -0.15f);
-                s.M.SetFloat("_ShadingToonyFactor", s.Face ? 0.70f : 0.80f);
-            }
+            if (mat)
+                foreach (var s in _skinMats)
+                {
+                    s.M.SetColor("_ShadeColor", new Color(0.95f, 0.76f, 0.69f, 1f));
+                    s.M.SetFloat("_ShadingShiftFactor", s.Face ? -0.35f : -0.15f);
+                    s.M.SetFloat("_ShadingToonyFactor", s.Face ? 0.70f : 0.80f);
+                }
+            if (!light) return;
             RenderSettings.ambientLight = new Color(0.50f, 0.50f, 0.53f);
             _keyLight.intensity = 0.95f;
             _keyLight.color = new Color(1f, 0.95f, 0.87f);
@@ -2949,7 +2956,8 @@ namespace Oddity.RoomTest
             _poseM = _poseR.Select(r => new Mesh()).ToArray();
             PoseSet(0);
             _sleepLen = _poseAc[0].length;
-            _sleepTotal = Mathf.RoundToInt(_sleepLen * Fps);
+            float film = Env("ODDITY_SLEEPSECS", 0f);   // ODDITY_SLEEPSECS=10: a short clip loops for this long
+            _sleepTotal = Mathf.RoundToInt((film > 0f ? film : _sleepLen) * Fps);
             Length = _sleepTotal / (float)Fps;
             _sleepScale = Env("ODDITY_SLEEPSCALE", 1f);
             _harin.transform.localScale = Vector3.one * _sleepScale;
@@ -3078,7 +3086,7 @@ namespace Oddity.RoomTest
                 if (k % 60 == 0) Debug.Log("ROOMTEST frame " + k);
                 if (!_sleepPlaced) SleepPlace();
                 float t = _sleepStill ? _sleepStillT : Mathf.Max(0, k) / (float)Fps;   // negative k: the first frame repeats, the spring bones settle
-                _poseP.SetTime(t);
+                _poseP.SetTime(_sleepStill ? t : Mathf.Repeat(t, _sleepLen));
                 _poseG.Evaluate(0f);
             }
             catch (Exception e) { _done = true; Fail(e.ToString()); }
@@ -3097,8 +3105,21 @@ namespace Oddity.RoomTest
             if (rt != null)
             {
                 foreach (var key in rt.Expression.ExpressionKeys) rt.Expression.SetWeight(key, 0f);
-                if (_sleepStand) rt.Expression.SetWeight(ExpressionKey.Relaxed, 0.7f);
+                if (_sleepStand) rt.Expression.SetWeight(ExpressionKey.Relaxed, Env("ODDITY_SMILE", 0.7f));
                 else rt.Expression.SetWeight(ExpressionKey.Blink, 1f);   // blink only, every frame
+            }
+            float blush = Env("ODDITY_BLUSH", 0f);   // ODDITY_BLUSH=1: the cheek blush held on, to see the face texture blit
+            if (blush > 0f) _harin.SetBlush(blush);
+            // ODDITY_HEADLEVEL=1: the clip's nod is taken out, neck and head half each, so the face points level; the nod in degrees is logged either way
+            var fwd = _head.rotation * _headFwdLocal;
+            var flat = Flat(fwd).normalized;
+            if (_frame == 60) Debug.Log("ROOMTEST sleep head pitch " + Fl(Mathf.Asin(Mathf.Clamp(fwd.normalized.y, -1f, 1f)) * Mathf.Rad2Deg) + " deg (down is negative)");
+            if (Environment.GetEnvironmentVariable("ODDITY_HEADLEVEL") == "1")
+            {
+                var level = Quaternion.AngleAxis(Vector3.Angle(fwd, flat) * 0.5f, Vector3.Cross(fwd, flat).normalized);
+                var neckBone = _anim.GetBoneTransform(HumanBodyBones.Neck);
+                if (neckBone != null) neckBone.rotation = level * neckBone.rotation;
+                _head.rotation = level * _head.rotation;
             }
         }
 
