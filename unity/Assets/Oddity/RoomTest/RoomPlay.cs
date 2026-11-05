@@ -298,9 +298,27 @@ namespace Oddity.RoomTest
             if(seats.Count==0 || clips[index]==null){Notice("앉을 자리가 없거나 앉기 클립이 없음");return;}
             var pool=sofaOnly?seats.Where(t=>t.mark.root==sofa && t.mark.name=="SeatC").ToList():seats;if(pool.Count==0)pool=seats;
             var seat=pool.OrderBy(t=>new Vector2(t.mark.position.x-x,t.mark.position.z-z).sqrMagnitude).First();seatAt=seat.mark.position;
+            seatFront=seat.front;seatEdge=seat.mark.root==sofa?.36f:.30f; // seat mark to the cushion's front edge: sofa-1 0.36 m, chair-1 0.21 + 0.09 m
             var stand=seatAt+seat.front*seat.off;x=Mathf.Clamp(stand.x,-Limit,Limit);z=Mathf.Clamp(stand.z,ZNear,ZFar);
             yaw=heading=targetYaw=turnStart=Mathf.Atan2(seat.front.x,seat.front.z)*Mathf.Rad2Deg+(index==NapIndex?NapTurn:0);turnTime=1;
             Select(index);Notice("앉기 "+seat.mark.root.name+" "+Keys[index].clip);
+        }
+        // a seated foot that has gone back into the seat (a folded leg) or under the floor is brought out in front of the seat edge with leg IK, knee forward
+        Vector3 seatFront;float seatEdge;
+        void FeetClear()
+        {
+            float w=weights[SitIndex]+weights[NapIndex]+(onFloor?0:weights[CurlIndex]);if(w<=0 || sofa==null || weights[NapIndex]>.5f)return;
+            for(int side=0;side<2;side++){
+                var upper=anim.GetBoneTransform(side==0?HumanBodyBones.LeftUpperLeg:HumanBodyBones.RightUpperLeg);
+                var lower=anim.GetBoneTransform(side==0?HumanBodyBones.LeftLowerLeg:HumanBodyBones.RightLowerLeg);
+                var foot=anim.GetBoneTransform(side==0?HumanBodyBones.LeftFoot:HumanBodyBones.RightFoot);
+                if(upper==null || lower==null || foot==null)continue;
+                var f=foot.position;float ahead=Vector3.Dot(f-seatAt,seatFront);
+                bool inSeat=f.y<seatAt.y-.04f && ahead<seatEdge+.05f;bool sunk=f.y<.07f;
+                if(!inSeat && !sunk)continue;
+                var target=f;if(inSeat)target+=seatFront*(seatEdge+.07f-ahead);target.y=Mathf.Max(target.y,.08f);
+                TwoBone(upper,lower,foot,target,lower.position+seatFront*.4f,w);
+            }
         }
         // pulls her so the hips meet the seat mark, by the sit clip's weight so standing up blends back
         void PinToSeat()
@@ -689,6 +707,7 @@ namespace Oddity.RoomTest
             Smile(dt);
             Ground(dt);
             PinToSeat();
+            FeetClear();
             ChinRest(dt);
             LookAtPlayer(dt);
             if(sword!=null){sword.SetActive(current==12);shield.SetActive(current==12);if(current==12)PlaceShield();}
