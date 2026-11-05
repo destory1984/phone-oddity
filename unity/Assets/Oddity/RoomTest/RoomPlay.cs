@@ -307,7 +307,8 @@ namespace Oddity.RoomTest
         Vector3 seatFront;float seatEdge;
         void FeetClear()
         {
-            float w=weights[SitIndex]+weights[NapIndex]+(onFloor?0:weights[CurlIndex]);if(w<=0 || sofa==null || weights[NapIndex]>.5f)return;
+            float w=weights[SitIndex]+weights[NapIndex]+(onFloor?0:weights[CurlIndex]);if(w<=0 || sofa==null)return;
+            if(weights[NapIndex]>.5f){NapFeet(weights[NapIndex]);return;}
             for(int side=0;side<2;side++){
                 var upper=anim.GetBoneTransform(side==0?HumanBodyBones.LeftUpperLeg:HumanBodyBones.RightUpperLeg);
                 var lower=anim.GetBoneTransform(side==0?HumanBodyBones.LeftLowerLeg:HumanBodyBones.RightLowerLeg);
@@ -318,6 +319,21 @@ namespace Oddity.RoomTest
                 if(!inSeat && !sunk)continue;
                 var target=f;if(inSeat)target+=seatFront*(seatEdge+.07f-ahead);target.y=Mathf.Max(target.y,.08f);
                 TwoBone(upper,lower,foot,target,lower.position+seatFront*.4f,w);
+            }
+        }
+        // lying on the sofa her stretched legs reach past the armrest: a foot further than SofaInner from the middle seat bends its knee to come back in
+        const float SofaInner=.56f; // half of sofa-1's 1.30 m between the armrests, less a little
+        void NapFeet(float w)
+        {
+            var along=Vector3.Cross(Vector3.up,seatFront).normalized;
+            for(int side=0;side<2;side++){
+                var upper=anim.GetBoneTransform(side==0?HumanBodyBones.LeftUpperLeg:HumanBodyBones.RightUpperLeg);
+                var lower=anim.GetBoneTransform(side==0?HumanBodyBones.LeftLowerLeg:HumanBodyBones.RightLowerLeg);
+                var foot=anim.GetBoneTransform(side==0?HumanBodyBones.LeftFoot:HumanBodyBones.RightFoot);
+                if(upper==null || lower==null || foot==null)continue;
+                float a=Vector3.Dot(foot.position-seatAt,along);if(Mathf.Abs(a)<=SofaInner)continue;
+                var target=foot.position-along*(a-Mathf.Sign(a)*SofaInner);target.y=Mathf.Max(target.y,seatAt.y-.02f);
+                TwoBone(upper,lower,foot,target,lower.position+seatFront*.3f+Vector3.up*.1f,w);
             }
         }
         // pulls her so the hips meet the seat mark, by the sit clip's weight so standing up blends back
