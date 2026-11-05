@@ -1,0 +1,7 @@
+{
+  "name": "Oddity.RoomTest.Tests",
+  "references": ["Oddity.RoomTest"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "autoReferenced": false
+}
