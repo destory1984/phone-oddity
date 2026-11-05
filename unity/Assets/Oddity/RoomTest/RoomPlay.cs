@@ -129,7 +129,7 @@ namespace Oddity.RoomTest
                 var text=Environment.GetEnvironmentVariable("ODDITY_PLAYKEYS");scripted=!string.IsNullOrWhiteSpace(text);
                 if(scripted)foreach(var part in text.Split(',')){
                     var pair=part.Split(':');
-                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
+                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0]=="wait" || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
                     script.Add((pair[0],seconds));
                 }
                 Debug.Log("ROOMPLAY_READY model="+modelName);
@@ -298,7 +298,11 @@ namespace Oddity.RoomTest
             onFloor=false;
             if(seats.Count==0 || clips[index]==null){Notice("앉을 자리가 없거나 앉기 클립이 없음");return;}
             var pool=sofaOnly?seats.Where(t=>t.mark.root==sofa && t.mark.name=="SeatC").ToList():seats;if(pool.Count==0)pool=seats;
-            var seat=pool.OrderBy(t=>new Vector2(t.mark.position.x-x,t.mark.position.z-z).sqrMagnitude).First();seatAt=seat.mark.position;
+            var seat=pool.OrderBy(t=>new Vector2(t.mark.position.x-x,t.mark.position.z-z).sqrMagnitude).First();
+            if(chairJob!=null)return;
+            if(chairSat!=null){if(seat.mark==chairSat.mark){SelectRaw(index);Notice("앉기 "+chairSat.chair.name+" "+Keys[index].clip);}else StartChairStand(-1);return;} // another seat: get up first
+            if(seat.mark.root!=sofa){StartChairSit(seat.mark,seat.front,index);return;}
+            seatAt=seat.mark.position;
             seatFront=seat.front;seatEdge=seat.mark.root==sofa?.36f:.30f; // seat mark to the cushion's front edge: sofa-1 0.36 m, chair-1 0.21 + 0.09 m
             var stand=seatAt+seat.front*seat.off;x=Mathf.Clamp(stand.x,-Limit,Limit);z=Mathf.Clamp(stand.z,ZNear,ZFar);
             yaw=heading=targetYaw=turnStart=Mathf.Atan2(seat.front.x,seat.front.z)*Mathf.Rad2Deg+(index==NapIndex?NapTurn:0);turnTime=1;
@@ -360,6 +364,85 @@ namespace Oddity.RoomTest
                 var target=foot.position-along*(a-Mathf.Sign(a)*SofaInner);target.y=Mathf.Max(target.y,seatAt.y-.02f);
                 TwoBone(upper,lower,foot,target,lower.position+seatFront*.3f+Vector3.up*.1f,w);
             }
+        }
+        // a dining chair is tucked under the table: she walks beside it, pulls it out by the backrest, steps in front of it, sits and draws it in;
+        // getting up pushes it back with her on it, she stands, steps aside and pushes it under the table again
+        class Chair{public Transform chair,mark;public Vector3 home,front,side,backOff;}
+        class ChairWork{public Chair c;public bool sitting;public int phase,clip,hand=-1,leg;public float t,stuck;}
+        Chair chairSat;ChairWork chairJob;float blendTime=.25f,chairHandW;
+        const float ChairPull=.4f,ChairSlide=.8f,ChairBeside=.45f,ChairBehind=.35f,ChairStep=.42f,ChairFace=.35f,SitBlend=.6f;
+        // beside the chair's tucked-in place, a little behind its seat
+        static Vector3 ChairSide(Chair c)=>c.home+(c.mark.position-c.chair.position)-c.front*ChairBehind+c.side*ChairBeside;
+        static Vector3 ChairFrontSpot(Chair c)=>c.mark.position+c.front*ChairStep; // her calves just clear the seat's front edge (0.30 m)
+        static Vector3 ChairFrontSide(Chair c)=>ChairFrontSpot(c)+c.side*ChairBeside; // she walks along the chair's side to here, then steps across in front of it
+        static float YawOf(Vector3 d)=>Mathf.Atan2(d.x,d.z)*Mathf.Rad2Deg;
+        void StartChairSit(Transform mark,Vector3 front,int clip)
+        {
+            var root=mark.root;var c=new Chair{chair=root,mark=mark,home=root.position,front=front};
+            c.side=Vector3.Cross(Vector3.up,front).normalized;if(Vector3.Dot(new Vector3(x,0,z)-mark.position,c.side)<0)c.side=-c.side; // the side she comes from
+            var rs=root.GetComponentsInChildren<Renderer>();var b=rs[0].bounds;foreach(var r in rs)b.Encapsulate(r.bounds);
+            float depth=Mathf.Abs(front.x)*b.extents.x+Mathf.Abs(front.z)*b.extents.z;
+            var top=b.center-front*(depth-.03f);top.y=b.max.y-.03f;c.backOff=top-root.position;
+            onFloor=false;chairJob=new ChairWork{c=c,sitting=true,clip=clip};Notice("의자로 "+root.name+" "+Keys[clip].clip);
+        }
+        void StartChairStand(int then)
+        {
+            if(chairSat==null)return;
+            chairJob=new ChairWork{c=chairSat,sitting=false,clip=then};chairSat=null;Notice("의자에서 일어나기");
+        }
+        void NextChairPhase(){chairJob.phase++;chairJob.t=0;chairJob.stuck=0;chairJob.leg=0;}
+        // walks toward a floor spot; true on arrival. collide keeps her out of the furniture until she has been stuck for half a second
+        bool WalkTo(Vector3 target,float dt,bool collide)
+        {
+            var p=new Vector2(x,z);var d=new Vector2(target.x,target.z)-p;
+            if(d.magnitude<.03f){if(current==10){direction=0;SelectRaw(9);}return true;}
+            var next=p+d.normalized*Mathf.Min(speed*dt,d.magnitude);
+            if(collide && chairJob.stuck<.5f){var c=Collide(p,next);if((c-p).sqrMagnitude<1e-8f)chairJob.stuck+=dt;else next=c;}
+            if(current!=10){direction=1;SelectRaw(10);}
+            Turn(YawOf(new Vector3(next.x-p.x,0,next.y-p.y)));x=next.x;z=next.y;return false;
+        }
+        // moves the chair to k (0 tucked in, 1 pulled out); she moves with it when she sits on it
+        void SlideChair(float k,bool carry)
+        {
+            var c=chairJob.c;var was=c.chair.position;c.chair.position=c.home-c.front*ChairPull*k;
+            if(carry){var dlt=c.chair.position-was;x+=dlt.x;z+=dlt.z;}
+            seatAt=c.mark.position;
+        }
+        void ChairTick(float dt)
+        {
+            var j=chairJob;var c=j.c;bool first=j.t==0;j.t+=dt;float k=Mathf.SmoothStep(0,1,j.t/ChairSlide);
+            if(j.sitting)switch(j.phase){
+                case 0:if(WalkTo(ChairSide(c),dt,true))NextChairPhase();break;
+                case 1:direction=0;SelectRaw(9);Turn(YawOf(-c.side));if(j.t>ChairFace)NextChairPhase();break; // turns to the chair, the hand goes to the backrest
+                case 2:SlideChair(k,false);if(j.t>=ChairSlide)NextChairPhase();break;
+                case 3:if(j.leg==0){if(WalkTo(ChairFrontSide(c),dt,false))j.leg=1;}else if(WalkTo(ChairFrontSpot(c),dt,false))NextChairPhase();break;
+                case 4:Turn(YawOf(c.front));if(j.t>ChairFace)NextChairPhase();break; // back to the seat
+                case 5:if(first){seatAt=c.mark.position;seatFront=c.front;seatEdge=.30f;blendTime=SitBlend;SelectRaw(j.clip);}
+                    if(j.t>SitBlend+.1f){blendTime=.25f;NextChairPhase();}break;
+                case 6:SlideChair(1-k,true);if(j.t>=ChairSlide){chairSat=c;chairJob=null;Notice("앉기 "+c.chair.name+" "+Keys[current].clip);}break;
+            }
+            else switch(j.phase){
+                case 0:SlideChair(k,true);if(j.t>=ChairSlide)NextChairPhase();break;
+                case 1:if(first){blendTime=SitBlend;SelectRaw(9);}if(j.t>SitBlend+.1f){blendTime=.25f;NextChairPhase();}break;
+                case 2:if(j.leg==0){if(WalkTo(ChairFrontSide(c),dt,false))j.leg=1;}else if(WalkTo(ChairSide(c),dt,false))NextChairPhase();break;
+                case 3:direction=0;SelectRaw(9);Turn(YawOf(-c.side));if(j.t>ChairFace)NextChairPhase();break;
+                case 4:SlideChair(1-k,false);if(j.t>=ChairSlide){chairJob=null;if(j.clip>=0)SelectRaw(j.clip);Notice("의자 넣기 끝");}break;
+            }
+        }
+        // while she pulls or pushes a chair standing, the hand nearer its backrest holds the top of it
+        void ChairHand(float dt)
+        {
+            var j=chairJob;bool on=j!=null && (j.sitting?j.phase==1 || j.phase==2:j.phase==3 || j.phase==4);
+            chairHandW=Mathf.MoveTowards(chairHandW,on?1:0,dt/.3f);
+            if(j==null)return;if(chairHandW<=0){j.hand=-1;return;}
+            var c=j.c;var target=c.chair.position+c.backOff+c.side*.12f;
+            if(j.hand<0){var l=anim.GetBoneTransform(HumanBodyBones.LeftHand);var r=anim.GetBoneTransform(HumanBodyBones.RightHand);if(l==null || r==null)return;j.hand=(l.position-target).sqrMagnitude<(r.position-target).sqrMagnitude?0:1;}
+            var upper=anim.GetBoneTransform(j.hand==0?HumanBodyBones.LeftUpperArm:HumanBodyBones.RightUpperArm);
+            var lower=anim.GetBoneTransform(j.hand==0?HumanBodyBones.LeftLowerArm:HumanBodyBones.RightLowerArm);
+            var hand=anim.GetBoneTransform(j.hand==0?HumanBodyBones.LeftHand:HumanBodyBones.RightHand);
+            if(upper==null || lower==null || hand==null)return;
+            var outward=Vector3.ProjectOnPlane(upper.position-new Vector3(x,upper.position.y,z),Vector3.up).normalized;
+            TwoBone(upper,lower,hand,target,upper.position+outward*.3f+Vector3.down*.3f,Mathf.SmoothStep(0,1,chairHandW));
         }
         // pulls her so the hips meet the seat mark, by the sit clip's weight so standing up blends back
         void PinToSeat()
@@ -559,7 +642,14 @@ namespace Oddity.RoomTest
             mixer.SetInputWeight(c,0);
             return result;
         }
+        // getting off a dining chair goes through the chair steps first; index is played when she is clear of it
         void Select(int index)
+        {
+            if(chairJob!=null)return; // the chair steps play out first
+            if(chairSat!=null && index!=SitIndex && index!=CurlIndex){StartChairStand(index);return;}
+            SelectRaw(index);
+        }
+        void SelectRaw(int index)
         {
             if(clips[index]==null || current==index)return;
             Array.Copy(weights,from,weights.Length);current=index;blend=0;plays[index].SetTime(0);
@@ -654,6 +744,8 @@ namespace Oddity.RoomTest
             }
             if(busy)return;
             zeroTwoInputReady=true;
+            if(chairJob==null && chairSat!=null && input!=Vector2.zero)StartChairStand(-1); // walking off a dining chair
+            if(chairJob!=null){ChairTick(dt);turnTime+=dt/.2f;yaw=Mathf.LerpAngle(turnStart,targetYaw,Mathf.SmoothStep(0,1,turnTime));heading=targetYaw;Evaluate(dt);Frame(dt,zoomKey);return;}
             run=run && clips[11]!=null;float pace=run?runSpeed:speed;
             var wish=input.normalized;if(room && wish!=Vector2.zero){var fw=Vector3.ProjectOnPlane(cameraView.transform.forward,Vector3.up).normalized;var rt=new Vector3(fw.z,0,-fw.x);var w3=rt*wish.x+fw*wish.y;wish=new Vector2(w3.x,w3.z);} // W walks away from the camera
             var next=new Vector2(Mathf.Clamp(x+wish.x*pace*dt,-Limit,Limit),Mathf.Clamp(z+wish.y*pace*dt,ZNear,ZFar));
@@ -752,7 +844,7 @@ namespace Oddity.RoomTest
         void Evaluate(float dt)
         {
             if(Frozen(current))dt=0;
-            blend=Mathf.Min(1,blend+dt/.25f);Vector3 baseHip=Vector3.zero, drift=Vector3.zero;float sum=0;
+            blend=Mathf.Min(1,blend+dt/blendTime);Vector3 baseHip=Vector3.zero, drift=Vector3.zero;float sum=0;
             bool musicAdvancing=current==ZeroTwoIndex && !busy && (zeroTwoInputReady || reviewing) && !Frozen(ZeroTwoIndex);
             if(musicAdvancing && dt>0){zeroTwoPhase=Mathf.Repeat(zeroTwoPhase+ZeroTwoDance.MotionSecondsBetween(zeroTwoAudioSeconds,dt),ZeroTwoMusic.Duration);zeroTwoAudioSeconds+=dt;}
             else if(current!=ZeroTwoIndex && dt>0)zeroTwoPhase=Mathf.Repeat(zeroTwoPhase+dt,ZeroTwoMusic.Duration);
@@ -776,6 +868,7 @@ namespace Oddity.RoomTest
             PinToSeat();
             FeetClear();
             ChinRest(dt);
+            ChairHand(dt);
             LookAtPlayer(dt);
             if(sword!=null){sword.SetActive(current==12);shield.SetActive(current==12);if(current==12)PlaceShield();}
             if(blob!=null)blob.position=new Vector3(x,.004f,z+.02f);
