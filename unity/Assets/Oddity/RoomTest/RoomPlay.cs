@@ -249,6 +249,7 @@ namespace Oddity.RoomTest
                     var seat=Mark(chair.transform,"Seat");if(seat!=null)seats.Add((seat,Facing(chair.transform),-StandOff)); // a chair is left from behind, the table is in front
                 }}
             if(sofa==null && seats.Count>0)sofa=seats[0].mark.root;
+            propHits.Clear();foreach(var root in seats.Select(t=>t.mark.root).Distinct())foreach(var mf in root.GetComponentsInChildren<MeshFilter>())if(mf.sharedMesh!=null){var c=mf.gameObject.AddComponent<MeshCollider>();c.sharedMesh=mf.sharedMesh;propHits.Add(c);} // only for PropTop's rays
             Blockers();
             Debug.Log("ROOMPLAY_PROPS seats="+string.Join(" ",seats.Select(t=>t.mark.root.name+"/"+t.mark.name+"("+F(t.mark.position.x)+","+F(t.mark.position.y)+","+F(t.mark.position.z)+" face "+F(t.front.x)+","+F(t.front.z)+")")));
         }
@@ -309,6 +310,7 @@ namespace Oddity.RoomTest
         {
             float w=weights[SitIndex]+weights[NapIndex]+(onFloor?0:weights[CurlIndex]);if(w<=0 || sofa==null)return;
             if(weights[NapIndex]>.5f){NapFeet(weights[NapIndex]);return;}
+            if(!onFloor && weights[CurlIndex]>.5f){CurlFeet(weights[CurlIndex]);return;}
             for(int side=0;side<2;side++){
                 var upper=anim.GetBoneTransform(side==0?HumanBodyBones.LeftUpperLeg:HumanBodyBones.RightUpperLeg);
                 var lower=anim.GetBoneTransform(side==0?HumanBodyBones.LeftLowerLeg:HumanBodyBones.RightLowerLeg);
@@ -319,6 +321,29 @@ namespace Oddity.RoomTest
                 if(!inSeat && !sunk)continue;
                 var target=f;if(inSeat)target+=seatFront*(seatEdge+.07f-ahead);target.y=Mathf.Max(target.y,.08f);
                 TwoBone(upper,lower,foot,target,lower.position+seatFront*.4f,w);
+            }
+        }
+        // the knee hug (V) is a floor pose: on a seat her feet come up onto the cushion, a little behind its front edge, instead of hanging in front of it
+        readonly List<MeshCollider> propHits=new List<MeshCollider>();
+        const float AnkleUp=.075f, EdgeIn=.07f; // foot bone above the sole; how far behind the cushion's front edge the heel stays
+        float PropTop(Vector3 p)
+        {
+            var ray=new Ray(new Vector3(p.x,seatAt.y+.3f,p.z),Vector3.down);float top=float.NaN;
+            foreach(var c in propHits)if(c!=null && c.Raycast(ray,out var hit,1f) && !(hit.point.y<=top))top=hit.point.y;
+            return top;
+        }
+        void CurlFeet(float w)
+        {
+            for(int side=0;side<2;side++){
+                var upper=anim.GetBoneTransform(side==0?HumanBodyBones.LeftUpperLeg:HumanBodyBones.RightUpperLeg);
+                var lower=anim.GetBoneTransform(side==0?HumanBodyBones.LeftLowerLeg:HumanBodyBones.RightLowerLeg);
+                var foot=anim.GetBoneTransform(side==0?HumanBodyBones.LeftFoot:HumanBodyBones.RightFoot);
+                if(upper==null || lower==null || foot==null)continue;
+                var target=foot.position;float ahead=Vector3.Dot(target-seatAt,seatFront);
+                if(ahead>seatEdge-EdgeIn)target-=seatFront*(ahead-(seatEdge-EdgeIn));
+                float top=PropTop(target);if(float.IsNaN(top))continue;
+                target.y=top+AnkleUp;
+                TwoBone(upper,lower,foot,target,lower.position+seatFront*.4f+Vector3.up*.2f,w);
             }
         }
         // lying on the sofa her stretched legs reach past the armrest: a foot further than SofaInner from the middle seat bends its knee to come back in
