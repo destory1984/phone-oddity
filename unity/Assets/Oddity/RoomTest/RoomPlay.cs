@@ -368,7 +368,33 @@ namespace Oddity.RoomTest
             var hips=anim.GetBoneTransform(HumanBodyBones.Hips);
             var aim=seatAt+(weights[NapIndex]>0?Vector3.up*NapLift:Vector3.zero);
             model.transform.position+=(aim-hips.position)*w;
+            if(weights[NapIndex]<.5f)OffBackrest(w);
         }
+        // a sit clip that leans back puts her back and shoulders into the backrest: the deepest bone is measured against the backrest with a ray from the front and she is moved forward by that much
+        // segments of her back and arms with the body's thickness behind each bone; each is sampled at both ends and the middle
+        static readonly (HumanBodyBones from,HumanBodyBones to,float radius)[] BackParts={
+            (HumanBodyBones.Hips,HumanBodyBones.Spine,.13f),(HumanBodyBones.Spine,HumanBodyBones.Chest,.14f),(HumanBodyBones.Chest,HumanBodyBones.UpperChest,.15f),(HumanBodyBones.UpperChest,HumanBodyBones.Neck,.13f),(HumanBodyBones.Neck,HumanBodyBones.Head,.07f),
+            (HumanBodyBones.LeftUpperArm,HumanBodyBones.LeftLowerArm,.05f),(HumanBodyBones.RightUpperArm,HumanBodyBones.RightLowerArm,.05f),
+            (HumanBodyBones.LeftUpperLeg,HumanBodyBones.LeftLowerLeg,.08f),(HumanBodyBones.RightUpperLeg,HumanBodyBones.RightLowerLeg,.08f)};
+        const float BackPushMost=.25f;
+        float BackGap(Vector3 p)
+        {
+            var ray=new Ray(p+seatFront*.6f,-seatFront);float near=float.PositiveInfinity;
+            foreach(var c in propHits)if(c!=null && c.Raycast(ray,out var hit,1.2f) && hit.distance<near && Vector3.Dot(hit.point-seatAt,seatFront)<0)near=hit.distance; // behind the seat mark: the backrest, not an armrest's front
+            return near-.6f; // how far in front of the backrest p is; infinite above or beside it
+        }
+        void OffBackrest(float w)
+        {
+            float push=0;
+            foreach(var (from,to,radius) in BackParts){
+                var a=anim.GetBoneTransform(from);var b=anim.GetBoneTransform(to);if(a==null || b==null)continue;
+                for(int k=0;k<3;k++){float gap=BackGap(Vector3.Lerp(a.position,b.position,k*.5f));if(!float.IsInfinity(gap))push=Mathf.Max(push,radius-gap);}
+            }
+            push=Mathf.Min(push,BackPushMost);if(push<=0)return;
+            if(push>backMax+.01f){backMax=push;Debug.Log("ROOMPLAY_BACKREST push="+F(push)+" clip="+Keys[current].clip);}
+            model.transform.position+=seatFront*push*w;
+        }
+        float backMax;
         // ODDITY_ROOM (default on; 0 is the old painted dusk): a 4 x 4 m room seen from high in the front right corner, looking down like a doll house
         bool room;float roomZoom;
         static readonly Vector3 RoomEye=new Vector3(2.35f,2.9f,-2.55f), RoomAim=new Vector3(-.25f,.35f,.45f);
