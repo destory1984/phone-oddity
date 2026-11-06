@@ -29,7 +29,7 @@ namespace Oddity.RoomTest
             ("5", "KaIdle24Dance04"), ("6", "KaIdle89CheekPointPose"),
             ("7", "KaIdle41CuteShyPose"), ("8", "KaIdle44GreetingBow"),
             ("9", "BlowKissSkin"), ("space", "CatwalkIdleSkin"),
-            ("a", "CatwalkSkin"), ("shift", "KaRun01"), ("f", "UAL1Standard#Sword_Attack"), ("z", "ZeroTwoDance"), ("0", "KaIdle73IdolPose"), ("c", "KaSitPutHandBetweensLoop"), ("v", "KaSitWithBothLegsUpLoop"), ("y", "MxYawn"), ("k", "KaSleepTurnToTheSideLoop"), ("d", "CatwalkSkin"), ("w", "CatwalkSkin"), ("s", "CatwalkSkin"), ("left", "누르는 동안 시계 방향 회전"), ("right", "누르는 동안 반시계 회전"), ("n", "다음 모델, Shift+N 이전 모델"),("r", "현재 모델 다시 불러오기"), ("l", "주인공(카메라) 바라보기 켜고 끄기"), ("h", "식탁 의자에서 턱 괴기 켜고 끄기"), ("g", "다음 걷기"), ("escape", "재생 끝내기"), ("i", "줌 인"), ("o", "줌 아웃")
+            ("a", "CatwalkSkin"), ("shift", "KaRun01"), ("f", "UAL1Standard#Sword_Attack"), ("z", "ZeroTwoDance"), ("0", "KaIdle73IdolPose"), ("c", "KaSitPutHandBetweensLoop"), ("v", "KaSitWithBothLegsUpLoop"), ("y", "MxYawn"), ("k", "KaSleepTurnToTheSideLoop"), ("d", "CatwalkSkin"), ("w", "CatwalkSkin"), ("s", "CatwalkSkin"), ("left", "누르는 동안 시계 방향 회전"), ("right", "누르는 동안 반시계 회전"), ("n", "다음 모델, Shift+N 이전 모델"),("r", "현재 모델 다시 불러오기"), ("l", "주인공(카메라) 바라보기 켜고 끄기"), ("h", "식탁 의자에서 턱 괴기 켜고 끄기"), ("g", "다음 걷기"), ("escape", "재생 끝내기"), ("up", "줌 인"), ("down", "줌 아웃")
         };
         // G cycles the walk; ODDITY_PLAYWALK picks the first one
         static readonly string[] Walks={"CatwalkSkin","KaWalk01","KaWalk02","KaWalk03","KaWalk04","KaWalk05","KaWalk06","KaWalk07","WalkFemale","WalkFeminine","WalkStandardSkin"};
@@ -180,7 +180,7 @@ namespace Oddity.RoomTest
             oldDance?.Dispose();if(oldGraph.IsValid())oldGraph.Destroy();if(oldClips!=null && oldClips[ZeroTwoIndex]!=null)Destroy(oldClips[ZeroTwoIndex]);if(oldModel!=null)Destroy(oldModel);
         }
         // a mesh without a Humanoid Avatar (a fresh Tripo glb): no motion, it stands on the floor at its own size (scaled to 1.6 m when it is far off),
-        // left and right arrows turn it, I and O zoom, N, Shift+N and R still step through the lines, Esc ends
+        // left and right arrows turn it, up and down arrows zoom, N, Shift+N and R still step through the lines, Esc ends
         GameObject statue;const float StatueFlip=180; // a glTF mesh comes in facing away from the VRM front
         void ShowStatue(GameObject candidate,string path)
         {
@@ -202,7 +202,7 @@ namespace Oddity.RoomTest
             candidate.transform.localPosition=new Vector3(-b.center.x,-b.min.y,-b.center.z)*scale;
             statue=holder;statue.transform.SetPositionAndRotation(new Vector3(x,0,z),Quaternion.Euler(0,yaw+StatueFlip,0));
             modelName=Path.GetFileNameWithoutExtension(path);modelPath=path;
-            Notice("맨 메시(뼈대 없음): ← → 돌리기, I O 줌, N 다음 모델");
+            Notice("맨 메시(뼈대 없음): ← → 돌리기, ↑ ↓ 줌, N 다음 모델");
             Debug.Log("ROOMPLAY_STATUE model="+modelName+" height="+F(b.size.y)+" scale="+F(scale)+" renderers="+renderers.Length+" grey="+(grey!=null));
         }
         void StatueUpdate(float dt)
@@ -212,7 +212,7 @@ namespace Oddity.RoomTest
             if(statue==null)return;
             yaw+=((kb.leftArrowKey.isPressed?1:0)-(kb.rightArrowKey.isPressed?1:0))*TurnRate*dt;heading=targetYaw=turnStart=yaw;
             statue.transform.rotation=Quaternion.Euler(0,yaw+StatueFlip,0);
-            Frame(dt,(kb.oKey.isPressed?1:0)-(kb.iKey.isPressed?1:0));
+            Frame(dt,(kb.downArrowKey.isPressed?1:0)-(kb.upArrowKey.isPressed?1:0));
         }
         // C (hands between the knees) and V (knees hugged, curled like a cat): she sits on the nearest seat (sofa, or a chair at the dining table), her hips pinned to its seat mark
         // while the sit clip plays; walking or space gets her up (in front of the sofa, behind a chair). Props come from hari/gpt/props via Assets/Models/props
@@ -530,7 +530,7 @@ namespace Oddity.RoomTest
             keyLight.shadows=LightShadows.Soft;keyLight.shadowStrength=.92f;keyLight.shadowBias=.03f;keyLight.shadowNormalBias=.3f;
             RenderSettings.ambientLight=new Color(.46f,.45f,.43f);
         }
-        // I closes in on her (narrower lens, aim moves to her chest and up to her face at the closest), O goes back to the whole room.
+        // the up arrow closes in on her (narrower lens, aim moves to her chest and up to her face at the closest), the down arrow goes back to the whole room.
         // the aim has slack: it only moves when she leaves a circle around it (RoomSlack of the half frame), so sway and breathing do not shake the view
         Vector3 roomFocus,lastWant;bool roomFocusSet;float wantPath,focusPath; // paths are logged per script step: how far the body point and the aim moved
         const float RoomFovNear=5f, RoomSlack=.3f, RoomFollow=5f;
@@ -743,10 +743,10 @@ namespace Oddity.RoomTest
                     if(direction!=0 && !Walk(script[step].key)){direction=0;Select(9);Turn(heading);}
                     if(!Walk(script[step].key))Command(script[step].key);
                 }
-                input=WalkDir(script[step].key);run=script[step].key.StartsWith("shift");zoomKey=script[step].key=="i"?-1:script[step].key=="o"?1:0;
+                input=WalkDir(script[step].key);run=script[step].key.StartsWith("shift");zoomKey=script[step].key=="up"?-1:script[step].key=="down"?1:0;
             }else{
                 var kb=Keyboard.current;if(kb==null){zeroTwoInputReady=false;zeroTwoAudio?.SetState(current==ZeroTwoIndex,false,zeroTwoAudioSeconds);return;}
-                input=new Vector2((kb.dKey.isPressed?1:0)-(kb.aKey.isPressed?1:0),(kb.wKey.isPressed?1:0)-(kb.sKey.isPressed?1:0));run=kb.shiftKey.isPressed;zoomKey=(kb.oKey.isPressed?1:0)-(kb.iKey.isPressed?1:0);
+                input=new Vector2((kb.dKey.isPressed?1:0)-(kb.aKey.isPressed?1:0),(kb.wKey.isPressed?1:0)-(kb.sKey.isPressed?1:0));run=kb.shiftKey.isPressed;zoomKey=(kb.downArrowKey.isPressed?1:0)-(kb.upArrowKey.isPressed?1:0);
                 turning=(kb.leftArrowKey.isPressed?1:0)-(kb.rightArrowKey.isPressed?1:0);
                 foreach(var entry in Keys)if(!Walk(entry.key) && entry.key!="left" && entry.key!="right"){
                     if(kb[KeyOf(entry.key)].wasPressedThisFrame && (input==Vector2.zero || !char.IsDigit(entry.key[0])))Command(entry.key);
@@ -1041,7 +1041,7 @@ namespace Oddity.RoomTest
             model.transform.position=new Vector3(x,lift,z);
             floorError=Mathf.Max(floorError,Mathf.Abs(lift+lowest));
         }
-        // the camera stays put on the wide ground; O dollies out to see her, I dollies in and centres on her
+        // the camera stays put on the wide ground; the down arrow dollies out to see her, the up arrow dollies in and centres on her
         void Frame(float dt,float zoomKey)
         {
             if(room){RoomFrame(dt,zoomKey);return;}
