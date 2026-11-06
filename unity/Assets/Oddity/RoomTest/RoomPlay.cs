@@ -411,6 +411,20 @@ namespace Oddity.RoomTest
                 var target=f;if(inSeat)target+=seatFront*(seatEdge+.07f-ahead);target.y=Mathf.Max(target.y,.08f);
                 TwoBone(upper,lower,foot,target,lower.position+seatFront*.4f,w);
             }
+            SeatToes(weights[SitIndex]);
+        }
+        // the sit clips point the toes down; with shoes on, the toe cap went into the floor while the ankle stayed clear.
+        // a seated foot whose toe bone is lower than ToeClear tips up at the ankle until it is not (the shoe's front reaches about 4 cm past the toe bone)
+        const float ToeClear=.05f;float toeLow=float.PositiveInfinity;
+        void SeatToes(float w)
+        {
+            if(w<=0 || toes[0]==null || toes[1]==null)return;
+            for(int i=0;i<2;i++){
+                if(feet[i]==null)continue;float len=(toes[i].position-feet[i].position).magnitude;if(len<1e-4f)continue;
+                float lack=(ToeClear-toes[i].position.y)*w;
+                for(int k=0;k<3 && lack>.002f;k++){TurnPitch(i,-Mathf.Asin(Mathf.Clamp01(lack/len))*Mathf.Rad2Deg*w);lack=ToeClear-toes[i].position.y;} // the arc is not a straight lift, three passes close the gap
+                if(w>.9f)toeLow=Mathf.Min(toeLow,toes[i].position.y);
+            }
         }
         // the knee hug (V) is a floor pose: on a seat her feet come up onto the cushion, a little behind its front edge, instead of hanging in front of it
         readonly List<MeshCollider> propHits=new List<MeshCollider>();
@@ -899,7 +913,7 @@ namespace Oddity.RoomTest
                 stepTime-=dt;
                 if(step<0 || stepTime<=0){
                     Snap();
-                    step++;if(step>=script.Count){Debug.Log("ROOMPLAY_ROLL planted foot tilt most raw="+F(rollRaw)+" kept="+F(rollKept)+" deg");Debug.Log("ROOMPLAY_DONE");EditorApplication.ExitPlaymode();enabled=false;return;}
+                    step++;if(step>=script.Count){Debug.Log("ROOMPLAY_ROLL planted foot tilt most raw="+F(rollRaw)+" kept="+F(rollKept)+" deg seated toe lowest="+F(toeLow));Debug.Log("ROOMPLAY_DONE");EditorApplication.ExitPlaymode();enabled=false;return;}
                     stepTime=script[step].seconds;
                     if(direction!=0 && !Walk(script[step].key)){direction=0;Select(9);Turn(heading);}
                     if(!Walk(script[step].key))Command(script[step].key);
