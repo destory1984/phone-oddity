@@ -530,13 +530,26 @@ namespace Oddity.RoomTest
             keyLight.shadows=LightShadows.Soft;keyLight.shadowStrength=.92f;keyLight.shadowBias=.03f;keyLight.shadowNormalBias=.3f;
             RenderSettings.ambientLight=new Color(.46f,.45f,.43f);
         }
-        // I closes in on her (narrower lens, aim moves to her chest), O goes back to the whole room
+        // I closes in on her (narrower lens, aim moves to her chest and up to her face at the closest), O goes back to the whole room.
+        // the aim has slack: it only moves when she leaves a circle around it (RoomSlack of the half frame), so sway and breathing do not shake the view
+        Vector3 roomFocus,lastWant;bool roomFocusSet;float wantPath,focusPath; // paths are logged per script step: how far the body point and the aim moved
+        const float RoomFovNear=5f, RoomSlack=.3f, RoomFollow=5f;
         void RoomFrame(float dt,float zoomKey)
         {
-            roomZoom=Mathf.Clamp01(roomZoom-zoomKey*dt*.7f);
-            Transform chest=null;if(anim!=null)chest=anim.GetBoneTransform(HumanBodyBones.Chest)??anim.GetBoneTransform(HumanBodyBones.Hips);
-            var aim=chest!=null?Vector3.Lerp(RoomAim,chest.position,Mathf.SmoothStep(0,1,roomZoom)):RoomAim;
-            cameraView.fieldOfView=Mathf.Lerp(RoomFov,14,roomZoom);cameraView.transform.position=RoomEye;cameraView.transform.LookAt(aim);
+            roomZoom=Mathf.Clamp01(roomZoom-zoomKey*dt*.55f);
+            float fov=RoomFov*Mathf.Pow(RoomFovNear/RoomFov,roomZoom); // even steps from 46 to 5 degrees
+            Transform chest=null,neck=null;if(anim!=null){chest=anim.GetBoneTransform(HumanBodyBones.Chest)??anim.GetBoneTransform(HumanBodyBones.Hips);neck=anim.GetBoneTransform(HumanBodyBones.Head);}
+            if(chest!=null){
+                var want=neck!=null?Vector3.Lerp(chest.position,neck.position,Mathf.InverseLerp(14,RoomFovNear,fov)):chest.position;
+                if(!roomFocusSet){roomFocus=want;roomFocusSet=true;lastWant=want;}
+                wantPath+=Vector3.Distance(want,lastWant);lastWant=want;var wasFocus=roomFocus;
+                float slack=Vector3.Distance(RoomEye,roomFocus)*Mathf.Tan(fov*.5f*Mathf.Deg2Rad)*RoomSlack;
+                var off=want-roomFocus;float m=off.magnitude;
+                if(m>slack)roomFocus=Vector3.Lerp(roomFocus,roomFocus+off*(1-slack/m),1-Mathf.Exp(-RoomFollow*dt));
+                focusPath+=Vector3.Distance(roomFocus,wasFocus);
+            }
+            var aim=chest!=null?Vector3.Lerp(RoomAim,roomFocus,Mathf.SmoothStep(0,1,Mathf.Min(1,roomZoom*2.5f))):RoomAim;
+            cameraView.fieldOfView=fov;cameraView.transform.position=RoomEye;cameraView.transform.LookAt(aim);
         }
         // L: head and eyes turn to the camera (the player), up to 70 degrees, blended over 0.3 s
         bool lookOn;float lookW;
@@ -676,7 +689,7 @@ namespace Oddity.RoomTest
             else if(direction==0){int i=Array.FindIndex(Keys,k=>k.key==key);if(i>=0 && (i<9 || key=="f" || key=="z" || key=="0" || key=="y"))Select(i);}
             Log(key);
         }
-        void Log(string key)=>Debug.Log("ROOMPLAY key="+key+" clip="+Keys[current].clip+" x="+F(x)+" z="+F(z)+" yaw="+F(yaw)+" heading="+F(heading)+" zoom="+F(zoom)+" floor="+F(floorError));
+        void Log(string key){Debug.Log("ROOMPLAY key="+key+" clip="+Keys[current].clip+" x="+F(x)+" z="+F(z)+" yaw="+F(yaw)+" heading="+F(heading)+" zoom="+F(zoom)+" floor="+F(floorError)+(room?" fov="+F(cameraView.fieldOfView)+" bodyPath="+F(wantPath)+" aimPath="+F(focusPath):""));wantPath=focusPath=0;}
         // N / Shift+N walk round every line (6T-I1 -> 6T-O1 -> 6T-O2 -> ... -> 6T-I1), each at its newest build; 0 stays on the current line
         string StepLine(int step)
         {
