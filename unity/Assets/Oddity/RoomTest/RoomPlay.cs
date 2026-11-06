@@ -284,7 +284,7 @@ namespace Oddity.RoomTest
         // on the floor she walks there. any walk key cancels. scripts: clicksofa, clicktable, clickfloor (a fixed point in the open)
         Transform tableRoot;readonly List<MeshCollider> clickHits=new List<MeshCollider>();
         Vector2? clickGoal;Transform clickSeat;float clickStuck;bool clickWindow;
-        // a click on the window walks her to the floor in front of it (between the bed and the sofa) and she looks out
+        // a click on the window walks her to the floor in front of it (between the bedroom door and the sofa) and she looks out
         static readonly Vector2 WindowSpot=new Vector2(-1.45f,.55f);
         static bool InWindow(Vector3 p)=>p.z>WinZ.x-.06f && p.z<WinZ.y+.06f && p.y>WinY.x-.06f && p.y<WinY.y+.06f;
         const float ClickArrive=.05f, ClickGiveUp=.6f;
@@ -560,8 +560,8 @@ namespace Oddity.RoomTest
             x=-.6f;z=-.3f; // she starts on the open floor between the table and the window
             cam.transform.position=RoomEye;cam.transform.LookAt(RoomAim);
         }
-        // a Korean one-room flat (원룸, about 5 pyeong): the entrance and shoe cabinet in the front right corner (the camera side), the kitchen run along the back wall
-        // beside the sofa (sink, cooktop, built-in washer, upper cabinets, fridge in the corner), the bed in the front left corner as far from the kitchen as it gets,
+        // the living room and kitchen of a small Korean flat (the bed is in the bedroom behind the door in the left wall): the entrance and shoe cabinet in the front right corner (the camera side), the kitchen run along the back wall
+        // beside the sofa (sink, cooktop, built-in washer, upper cabinets, fridge in the corner), the bedroom door in the left wall,
         // a low TV stand on the front wall facing the sofa, a dresser beside it, the desk on the right wall, a rug in front of the sofa. plain boxes; furniture footprints block walking
         readonly List<Rect> furniture=new List<Rect>();
         void Furnish(Transform root)
@@ -589,16 +589,14 @@ namespace Oddity.RoomTest
             // entrance: grey tiles a step down and a shoe cabinet against the front wall
             Box(1.05f,2f,-.005f,.003f,-2f,-1.05f,new Color(.58f,.58f,.57f));
             Box(1.10f,2f,0,1.05f,-2f,-1.65f,oak,true);
-            // bed (super single 1.1 x 2.0 m) along the left wall, head at the front wall
-            Box(-2f,-.90f,0,.30f,-2f,0,oak,true);                                      // frame
-            Box(-1.97f,-.93f,.30f,.48f,-1.97f,-.03f,new Color(.95f,.95f,.96f));        // mattress
-            Box(-1.98f,-.92f,.48f,.53f,-1.30f,-.02f,new Color(.55f,.66f,.78f));        // blanket
-            Box(-1.85f,-1.05f,.48f,.60f,-1.92f,-1.55f,white);                          // pillow
-            Box(-2f,-.90f,0,.95f,-2f,-1.95f,oak);                                      // headboard
-            // a low TV stand against the front wall across from the sofa, the TV facing it; low and small so it does not hide the bed from the camera
-            Box(-.70f,.40f,0,.40f,-2f,-1.62f,oak,true);
-            Box(-.62f,.32f,.44f,.96f,-1.84f,-1.81f,dark);                              // TV
-            Box(-.20f,-.10f,.40f,.44f,-1.88f,-1.76f,dark);                             // stand
+            // the bedroom door in the left wall near the front corner (the bed is in that room): frame, closed door, handle
+            Box(-2f,-1.96f,0,2.10f,-1.86f,-.84f,oak);                                  // frame
+            Box(-1.985f,-1.95f,0,2.04f,-1.80f,-.90f,new Color(.86f,.82f,.74f));       // door
+            Box(-1.95f,-1.90f,.95f,1.00f,-1.02f,-.94f,steel);                          // handle
+            // a low TV stand against the front wall across from the sofa, the TV facing it; low and small so it hides little of the room from the camera
+            Box(-1.30f,-.20f,0,.40f,-2f,-1.62f,oak,true);                              // centred on the sofa (x -0.75)
+            Box(-1.22f,-.28f,.44f,.96f,-1.84f,-1.81f,dark);                            // TV
+            Box(-.80f,-.70f,.40f,.44f,-1.88f,-1.76f,dark);                             // stand
             // a dresser between the TV stand and the shoe cabinet
             Box(.50f,1.05f,0,.80f,-2f,-1.60f,white,true);
             // the desk on the right wall, monitor against the wall
