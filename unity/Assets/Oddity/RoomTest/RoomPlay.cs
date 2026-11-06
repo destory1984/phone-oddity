@@ -124,7 +124,7 @@ namespace Oddity.RoomTest
                 var sitClip=Environment.GetEnvironmentVariable("ODDITY_PLAYSIT");if(!string.IsNullOrWhiteSpace(sitClip))Keys[SitIndex].clip=sitClip; // which clip C sits with
                 var curlClip=Environment.GetEnvironmentVariable("ODDITY_PLAYCURL");if(!string.IsNullOrWhiteSpace(curlClip))Keys[CurlIndex].clip=curlClip; // and V
                 var napClip=Environment.GetEnvironmentVariable("ODDITY_PLAYNAP");if(!string.IsNullOrWhiteSpace(napClip))Keys[NapIndex].clip=napClip; // and K
-                LoadModel(Environment.GetEnvironmentVariable("ODDITY_MODEL")??"Assets/Models/test/harin-6T-I1-30.vrm");
+                LoadModel(Environment.GetEnvironmentVariable("ODDITY_MODEL")??NewestInTest(DefaultLine)??"Assets/Models/test/harin-6T-I1-30.vrm"); // the newest N1 build by default
                 PlaceSofa();
                 var text=Environment.GetEnvironmentVariable("ODDITY_PLAYKEYS");scripted=!string.IsNullOrWhiteSpace(text);
                 if(scripted)foreach(var part in text.Split(',')){
@@ -690,13 +690,20 @@ namespace Oddity.RoomTest
             Log(key);
         }
         void Log(string key){Debug.Log("ROOMPLAY key="+key+" clip="+Keys[current].clip+" x="+F(x)+" z="+F(z)+" yaw="+F(yaw)+" heading="+F(heading)+" zoom="+F(zoom)+" floor="+F(floorError)+(room?" fov="+F(cameraView.fieldOfView)+" bodyPath="+F(wantPath)+" aimPath="+F(focusPath):""));wantPath=focusPath=0;}
+        const string DefaultLine="6T-N1";
+        // the newest imported vrm of a line in Assets/Models/test, as an asset path
+        static string NewestInTest(string line)
+        {
+            var f=Directory.GetFiles(Path.Combine(Application.dataPath,"Models/test"),"harin-"+line+"-*.vrm").OrderByDescending(p=>int.TryParse(Path.GetFileNameWithoutExtension(p).Split('-').Last(),out var n)?n:-1).FirstOrDefault();
+            return f==null?null:"Assets/Models/test/"+Path.GetFileName(f);
+        }
         // N / Shift+N walk round every line (6T-I1 -> 6T-O1 -> 6T-O2 -> ... -> 6T-I1), each at its newest build; 0 stays on the current line
         string StepLine(int step)
         {
             var dir=Path.GetFullPath(Path.Combine(Application.dataPath,"../../hari/gpt"));
             var lines=Directory.GetFiles(dir,"harin-6T-*-*.vrm").Concat(Directory.GetFiles(Path.Combine(Application.dataPath,"Models/test"),"harin-6T-*-*.glb")).Select(p=>Path.GetFileNameWithoutExtension(p).Split('-')).Where(a=>a.Length==4).Select(a=>a[1]+"-"+a[2]).Distinct()
                 .OrderBy(l=>l[3]=='I'?0:l[3]=='O'?1:2).ThenBy(l=>int.TryParse(l.Substring(4),out var n)?n:0).ToList();
-            var parts=(modelName??"").Split('-');string here=parts.Length==4?parts[1]+"-"+parts[2]:"6T-I1";
+            var parts=(modelName??"").Split('-');string here=parts.Length==4?parts[1]+"-"+parts[2]:DefaultLine;
             if(lines.Count==0)return here;
             int at=lines.IndexOf(here);if(at<0)return lines[0];
             return lines[((at+step)%lines.Count+lines.Count)%lines.Count];

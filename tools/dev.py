@@ -441,7 +441,6 @@ def play():
     LOGS.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env.setdefault("ODDITY_BG", "bg6_stone_dusk.png")
-    env.setdefault("ODDITY_MODEL", "Assets/Models/test/harin-6T-I1-30.vrm")
     src = Path(env["ODDITY_BG"])
     if not src.is_absolute() and not src.exists():
         src = ROOMTEST_OUT / src
