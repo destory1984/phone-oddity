@@ -528,7 +528,18 @@ namespace Oddity.RoomTest
             var through=new Vector3(-RoomHalf,(WinY.x+WinY.y)/2,(WinZ.x+WinZ.y)/2);var onto=new Vector3(-.75f,.45f,1.55f); // the window middle to the sofa seat
             keyLight.transform.rotation=Quaternion.LookRotation(onto-through);keyLight.color=new Color(1f,.9f,.72f);keyLight.intensity=1.9f;
             keyLight.shadows=LightShadows.Soft;keyLight.shadowStrength=.92f;keyLight.shadowBias=.03f;keyLight.shadowNormalBias=.3f;
-            RenderSettings.ambientLight=new Color(.46f,.45f,.43f);
+            RenderSettings.ambientLight=new Color(.30f,.30f,.31f); // the ceiling lamp does most of the fill now
+            CeilingLamp();
+        }
+        // a fluorescent tube on the ceiling: two cool white point lights along its length light the room from above, no shadows
+        static readonly Vector3 LampAt=new Vector3(-.2f,2.42f,.3f);
+        const float LampHalf=.6f, LampPower=1.2f, LampRange=5f;
+        static readonly Color LampColor=new Color(.92f,.97f,1f);
+        void CeilingLamp()
+        {
+            foreach(var dz in new[]{-LampHalf,LampHalf}){
+                var l=new GameObject("CeilingLamp").AddComponent<Light>();l.type=LightType.Point;l.color=LampColor;l.intensity=LampPower;l.range=LampRange;l.shadows=LightShadows.None;
+                l.transform.position=LampAt+new Vector3(0,0,dz);}
         }
         // the up arrow closes in on her (narrower lens, aim moves to her chest and up to her face at the closest), the down arrow goes back to the whole room.
         // the aim has slack: it only moves when she leaves a circle around it (RoomSlack of the half frame), so sway and breathing do not shake the view
