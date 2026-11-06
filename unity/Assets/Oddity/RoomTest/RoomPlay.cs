@@ -562,7 +562,7 @@ namespace Oddity.RoomTest
         }
         // a Korean one-room flat (원룸, about 5 pyeong): the entrance and shoe cabinet in the front right corner (the camera side), the kitchen run along the back wall
         // beside the sofa (sink, cooktop, built-in washer, upper cabinets, fridge in the corner), the bed in the front left corner as far from the kitchen as it gets,
-        // a desk next to it, a low dresser with a small TV on the right wall, a rug in front of the sofa. plain boxes; furniture footprints block walking
+        // a low TV stand on the front wall facing the sofa, a dresser beside it, the desk on the right wall, a rug in front of the sofa. plain boxes; furniture footprints block walking
         readonly List<Rect> furniture=new List<Rect>();
         void Furnish(Transform root)
         {
@@ -595,14 +595,16 @@ namespace Oddity.RoomTest
             Box(-1.98f,-.92f,.48f,.53f,-1.30f,-.02f,new Color(.55f,.66f,.78f));        // blanket
             Box(-1.85f,-1.05f,.48f,.60f,-1.92f,-1.55f,white);                          // pillow
             Box(-2f,-.90f,0,.95f,-2f,-1.95f,oak);                                      // headboard
-            // desk beside the bed, against the front wall
-            Box(-.80f,.10f,.70f,.74f,-2f,-1.45f,oak,true);
-            foreach(var lx in new[]{-.78f,.06f})foreach(var lz in new[]{-1.98f,-1.49f})Box(lx,lx+.04f,0,.70f,lz,lz+.04f,dark);
-            Box(-.45f,-.10f,.74f,.97f,-1.92f,-1.89f,dark);                             // monitor
-            // low dresser against the right wall between the entrance and the fridge, a small TV on it facing the bed
-            Box(1.60f,2f,0,.72f,-.05f,.95f,white,true);
-            Box(1.82f,1.85f,.76f,1.12f,.12f,.78f,dark);                                // TV
-            Box(1.78f,1.90f,.72f,.76f,.40f,.50f,dark);                                 // stand
+            // a low TV stand against the front wall across from the sofa, the TV facing it; low and small so it does not hide the bed from the camera
+            Box(-.70f,.40f,0,.40f,-2f,-1.62f,oak,true);
+            Box(-.62f,.32f,.44f,.96f,-1.84f,-1.81f,dark);                              // TV
+            Box(-.20f,-.10f,.40f,.44f,-1.88f,-1.76f,dark);                             // stand
+            // a dresser between the TV stand and the shoe cabinet
+            Box(.50f,1.05f,0,.80f,-2f,-1.60f,white,true);
+            // the desk on the right wall, monitor against the wall
+            Box(1.45f,2f,.70f,.74f,-.05f,.95f,oak,true);
+            foreach(var lx in new[]{1.47f,1.94f})foreach(var lz in new[]{-.03f,.89f})Box(lx,lx+.04f,0,.70f,lz,lz+.04f,dark);
+            Box(1.88f,1.91f,.74f,.97f,.25f,.65f,dark);                                 // monitor
             // rug in front of the sofa
             Box(-1.30f,-.20f,0,.006f,.35f,1.05f,new Color(.82f,.76f,.66f));
         }
