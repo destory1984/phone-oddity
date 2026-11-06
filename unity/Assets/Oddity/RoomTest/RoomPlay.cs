@@ -256,7 +256,7 @@ namespace Oddity.RoomTest
                 foreach(var t in sofa.GetComponentsInChildren<Transform>().Where(t=>t.name.StartsWith("Seat")).OrderBy(t=>t.position.x))seats.Add((t,Facing(sofa),StandOff+.2f));} // the sofa seat is deep, she gets up clear of it
             var table=LoadProp("table");
             tableRoot=table!=null?table.transform:null;
-            if(table!=null){table.transform.position=room?new Vector3(.55f,0,-.45f):new Vector3(0,0,TableZ);Face(table.transform,Vector3.right);
+            if(table!=null){table.transform.position=room?new Vector3(.70f,0,-.45f):new Vector3(0,0,TableZ);Face(table.transform,Vector3.right);
                 foreach(var spot in table.GetComponentsInChildren<Transform>().Where(t=>t.name.StartsWith("Chair")).OrderBy(t=>t.name).ToList()){
                     var chair=LoadProp("chair");if(chair==null)break;
                     chair.transform.SetPositionAndRotation(spot.position,spot.rotation);chair.name=spot.name;
@@ -575,7 +575,9 @@ namespace Oddity.RoomTest
         }
         // the living room and kitchen of a small Korean flat (the bed is in the bedroom behind the door in the left wall): the entrance and shoe cabinet in the front right corner (the camera side), the kitchen run along the back wall
         // beside the sofa (sink, cooktop, built-in washer, upper cabinets, fridge in the corner), the bedroom door in the left wall,
-        // a low TV stand on the front wall facing the sofa, a dresser beside it, a laptop on the dining table, a rug in front of the sofa. plain boxes; furniture footprints block walking
+        // a low TV stand on the front wall facing the sofa (sofa and TV on the two walls at right angles to the window, as Korean living rooms do,
+        // so the sun never lands on the screen), the dining table between the entrance and the living area, clear of the sofa front, a laptop on it,
+        // a floor lamp between the sofa and the counter, a plant in the corner by the window, a rug in front of the sofa. plain boxes; furniture footprints block walking
         readonly List<Rect> furniture=new List<Rect>();
         void Furnish(Transform root)
         {
@@ -610,8 +612,13 @@ namespace Oddity.RoomTest
             Box(-1.30f,-.20f,0,.40f,-2f,-1.62f,oak,true);                              // centred on the sofa (x -0.75)
             Box(-1.22f,-.28f,.44f,.96f,-1.84f,-1.81f,dark);                            // TV
             Box(-.80f,-.70f,.40f,.44f,-1.88f,-1.76f,dark);                             // stand
-            // a dresser between the TV stand and the shoe cabinet
-            Box(.50f,1.05f,0,.80f,-2f,-1.60f,white,true);
+            // a floor lamp in the gap between the sofa's right arm and the kitchen counter
+            Box(.12f,.32f,0,.03f,1.62f,1.82f,dark,true);
+            Box(.205f,.235f,.03f,1.45f,1.705f,1.735f,dark);
+            var shade=Part(PrimitiveType.Cylinder,f,new Vector3(.22f,1.52f,1.72f),new Vector3(.30f,.11f,.30f),new Color(.95f,.90f,.80f));
+            // a potted plant in the corner between the window and the bedroom door
+            var pot=Part(PrimitiveType.Cylinder,f,new Vector3(-1.78f,.17f,-.52f),new Vector3(.28f,.17f,.28f),new Color(.80f,.78f,.74f));furniture.Add(Rect.MinMaxRect(-1.92f,-.66f,-1.64f,-.38f));
+            foreach(var (dx,dy,dz,k) in new[]{(0f,.62f,0f,.46f),(.08f,.82f,-.06f,.34f),(-.07f,.76f,.07f,.32f)})Part(PrimitiveType.Sphere,f,new Vector3(-1.78f+dx,dy,-.52f+dz),Vector3.one*k,new Color(.30f,.48f,.28f));
             // rug in front of the sofa
             Box(-1.30f,-.20f,0,.006f,.35f,1.05f,new Color(.82f,.76f,.66f));
         }
