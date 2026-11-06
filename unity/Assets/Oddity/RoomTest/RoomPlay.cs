@@ -283,7 +283,10 @@ namespace Oddity.RoomTest
         // mouse: a click on the sofa walks her to the clicked seat and sits (C); on the table or a chair she goes to the chair nearer the click and sits;
         // on the floor she walks there. any walk key cancels. scripts: clicksofa, clicktable, clickfloor (a fixed point in the open)
         Transform tableRoot;readonly List<MeshCollider> clickHits=new List<MeshCollider>();
-        Vector2? clickGoal;Transform clickSeat;float clickStuck;
+        Vector2? clickGoal;Transform clickSeat;float clickStuck;bool clickWindow;
+        // a click on the window walks her to the floor in front of it (between the bed and the sofa) and she looks out
+        static readonly Vector2 WindowSpot=new Vector2(-1.45f,.55f);
+        static bool InWindow(Vector3 p)=>p.z>WinZ.x-.06f && p.z<WinZ.y+.06f && p.y>WinY.x-.06f && p.y<WinY.y+.06f;
         const float ClickArrive=.05f, ClickGiveUp=.6f;
         void ClickAt(Ray ray)
         {
@@ -296,11 +299,13 @@ namespace Oddity.RoomTest
                 if(root!=sofa && root!=tableRoot)pool=seats.Where(t=>t.mark.root==root);
                 var list=pool.ToList();if(list.Count==0)return;
                 var seat=list.OrderBy(t=>new Vector2(t.mark.position.x-at.x,t.mark.position.z-at.z).sqrMagnitude).First();
-                clickSeat=seat.mark;var stand=seat.mark.position+seat.front*seat.off;clickGoal=new Vector2(Mathf.Clamp(stand.x,-Limit,Limit),Mathf.Clamp(stand.z,ZNear,ZFar));
+                clickWindow=false;clickSeat=seat.mark;var stand=seat.mark.position+seat.front*seat.off;clickGoal=new Vector2(Mathf.Clamp(stand.x,-Limit,Limit),Mathf.Clamp(stand.z,ZNear,ZFar));
                 Notice("클릭 "+root.name+"/"+seat.mark.name);
+            }else if(new Plane(Vector3.right,new Vector3(-RoomHalf,0,0)).Raycast(ray,out var wd) && InWindow(ray.GetPoint(wd))){
+                clickSeat=null;clickWindow=true;clickGoal=new Vector2(WindowSpot.x,WindowSpot.y);Notice("클릭 창문");
             }else{
                 if(!new Plane(Vector3.up,Vector3.zero).Raycast(ray,out var d))return;var p=ray.GetPoint(d);
-                clickSeat=null;clickGoal=new Vector2(Mathf.Clamp(p.x,-Limit,Limit),Mathf.Clamp(p.z,ZNear,ZFar));Notice("클릭 바닥 "+F(p.x)+","+F(p.z));
+                clickWindow=false;clickSeat=null;clickGoal=new Vector2(Mathf.Clamp(p.x,-Limit,Limit),Mathf.Clamp(p.z,ZNear,ZFar));Notice("클릭 바닥 "+F(p.x)+","+F(p.z));
             }
             clickStuck=0;
         }
@@ -314,15 +319,17 @@ namespace Oddity.RoomTest
             var next=Collide(p,p+d.normalized*Mathf.Min(speed*dt,d.magnitude));
             if((next-p).sqrMagnitude<1e-10f)clickStuck+=dt;else clickStuck=0;
             if(d.magnitude<ClickArrive || clickStuck>ClickGiveUp){
-                var seat=clickSeat;clickGoal=null;clickSeat=null;direction=0;
-                if(seat!=null)Sit(SitIndex,false,seat);else{Select(9);heading=targetYaw;}
+                var seat=clickSeat;bool window=clickWindow;clickGoal=null;clickSeat=null;clickWindow=false;direction=0;
+                if(seat!=null)Sit(SitIndex,false,seat);
+                else if(window){Select(9);Turn(-90);heading=-90;Notice("창밖 바라보기");} // faces out of the window, the left wall
+                else{Select(9);heading=targetYaw;}
                 return Vector2.zero;
             }
             return d.normalized;
         }
         void ScriptClick(string key)
         {
-            Vector3 target=key=="clicksofa"&&sofa!=null?SeatOf("SeatL",sofa):key=="clicktable"&&tableRoot!=null?tableRoot.position+Vector3.up*.7f:new Vector3(.9f,0,.9f);
+            Vector3 target=key=="clickwindow"?new Vector3(-RoomHalf,(WinY.x+WinY.y)/2,(WinZ.x+WinZ.y)/2):key=="clicksofa"&&sofa!=null?SeatOf("SeatL",sofa):key=="clicktable"&&tableRoot!=null?tableRoot.position+Vector3.up*.7f:new Vector3(.9f,0,.9f);
             ClickAt(new Ray(cameraView.transform.position,target-cameraView.transform.position));
         }
         Vector3 SeatOf(string name,Transform root){var t=seats.FirstOrDefault(s=>s.mark.root==root && s.mark.name==name).mark;return t!=null?t.position:root.position;}
@@ -615,7 +622,24 @@ namespace Oddity.RoomTest
             Part(PrimitiveType.Cube,root,new Vector3(x,yc,zc),new Vector3(.04f,.03f,w),trim);
             var sky=GameObject.CreatePrimitive(PrimitiveType.Quad);Destroy(sky.GetComponent<Collider>());sky.name="Sky";sky.transform.SetParent(root,false);
             sky.transform.SetPositionAndRotation(new Vector3(-RoomHalf-1.2f,yc+.2f,zc),Quaternion.Euler(0,-90,0));sky.transform.localScale=new Vector3(w*2.2f,h*2.2f,1);
-            var r=sky.GetComponent<Renderer>();r.material=new Material(Shader.Find("Universal Render Pipeline/Unlit")){color=new Color(1f,.97f,.86f)};r.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;
+            var r=sky.GetComponent<Renderer>();r.material=new Material(Shader.Find("Universal Render Pipeline/Unlit")){color=Color.white,mainTexture=StreetView()};r.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+        // the view out of the window, painted on the card behind it (real buildings out there would show past the room's open sides): sky, a row of
+        // apartment blocks across the street with window rows and roof bands, tree tops below. the card sits close behind the window so it never shows outside it
+        static Texture2D StreetView()
+        {
+            const int W=512,H=384;var t=new Texture2D(W,H,TextureFormat.RGBA32,false){wrapMode=TextureWrapMode.Clamp};var px=new Color[W*H];
+            for(int y=0;y<H;y++){var sky=Color.Lerp(new Color(.86f,.92f,.97f),new Color(.55f,.74f,.92f),y/(float)H);for(int x=0;x<W;x++)px[y*W+x]=sky;}
+            void Rect(int x0,int y0,int x1,int y1,Color c){for(int y=Mathf.Max(0,y0);y<Mathf.Min(H,y1);y++)for(int x=Mathf.Max(0,x0);x<Mathf.Min(W,x1);x++)px[y*W+x]=c;}
+            int[] tops={300,330,290,345,310};
+            for(int b=0;b<5;b++){
+                int x0=b*104-6,x1=x0+92;var wall=b%2==0?new Color(.92f,.90f,.84f):new Color(.85f,.83f,.78f);
+                Rect(x0,0,x1,tops[b],wall);Rect(x0,tops[b]-10,x1,tops[b],new Color(.62f,.36f,.30f));
+                for(int y=40;y<tops[b]-22;y+=22)Rect(x0+8,y,x1-8,y+9,new Color(.45f,.56f,.64f));
+                Rect(x0+44,40,x0+48,tops[b]-16,wall*.9f); // the stair core line
+            }
+            Rect(0,0,W,70,new Color(.36f,.50f,.34f));for(int x=0;x<W;x+=18)Rect(x,60,x+12,78+(x*37%11),new Color(.30f,.45f,.30f)); // tree tops
+            t.SetPixels(px);t.Apply();return t;
         }
         // the sun comes in through the window and lands on the sofa seat; the walls cast shadows so only the window patch is bright
         Light keyLight;
