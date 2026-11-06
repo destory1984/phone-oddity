@@ -414,13 +414,15 @@ namespace Oddity.RoomTest
             SeatToes(weights[SitIndex]);
         }
         // the sit clips point the toes down; with shoes on, the toe cap went into the floor while the ankle stayed clear.
-        // a seated foot whose toe bone is lower than ToeClear tips up at the ankle until it is not (the shoe's front reaches about 4 cm past the toe bone)
+        // the toe joint is held straight (a rigid shoe), then a seated foot whose toe bone is lower than ToeClear tips up at the ankle until it is not (the shoe's front reaches about 4 cm past the toe bone)
         const float ToeClear=.05f;float toeLow=float.PositiveInfinity;
         void SeatToes(float w)
         {
             if(w<=0 || toes[0]==null || toes[1]==null)return;
             for(int i=0;i<2;i++){
-                if(feet[i]==null)continue;float len=(toes[i].position-feet[i].position).magnitude;if(len<1e-4f)continue;
+                if(feet[i]==null)continue;
+                toes[i].localRotation=Quaternion.Slerp(toes[i].localRotation,restToe[i],w); // a shoe does not bend at the toe joint: the clip's curled toes are straightened first
+                float len=(toes[i].position-feet[i].position).magnitude;if(len<1e-4f)continue;
                 float lack=(ToeClear-toes[i].position.y)*w;
                 for(int k=0;k<3 && lack>.002f;k++){TurnPitch(i,-Mathf.Asin(Mathf.Clamp01(lack/len))*Mathf.Rad2Deg*w);lack=ToeClear-toes[i].position.y;} // the arc is not a straight lift, three passes close the gap
                 if(w>.9f)toeLow=Mathf.Min(toeLow,toes[i].position.y);
