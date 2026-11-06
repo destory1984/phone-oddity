@@ -436,7 +436,7 @@ namespace Oddity.RoomTest
             chairHandW=Mathf.MoveTowards(chairHandW,on?1:0,dt/.3f);
             if(j==null)return;if(chairHandW<=0){j.hand=-1;return;}
             var c=j.c;var target=c.chair.position+c.backOff+c.side*.12f;
-            if(j.hand<0){var l=anim.GetBoneTransform(HumanBodyBones.LeftHand);var r=anim.GetBoneTransform(HumanBodyBones.RightHand);if(l==null || r==null)return;j.hand=(l.position-target).sqrMagnitude<(r.position-target).sqrMagnitude?0:1;}
+            if(j.hand<0){var right=Vector3.Cross(Vector3.up,-c.side);j.hand=Vector3.Dot(target-new Vector3(x,target.y,z),right)>0?1:0;} // the hand on the backrest's side once she faces the chair, never one reaching across her chest
             var upper=anim.GetBoneTransform(j.hand==0?HumanBodyBones.LeftUpperArm:HumanBodyBones.RightUpperArm);
             var lower=anim.GetBoneTransform(j.hand==0?HumanBodyBones.LeftLowerArm:HumanBodyBones.RightLowerArm);
             var hand=anim.GetBoneTransform(j.hand==0?HumanBodyBones.LeftHand:HumanBodyBones.RightHand);
