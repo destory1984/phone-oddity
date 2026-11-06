@@ -577,8 +577,10 @@ namespace Oddity.RoomTest
             var through=new Vector3(-RoomHalf,(WinY.x+WinY.y)/2,(WinZ.x+WinZ.y)/2);var onto=new Vector3(-.75f,.45f,1.55f); // the window middle to the sofa seat
             keyLight.transform.rotation=Quaternion.LookRotation(onto-through);keyLight.color=new Color(1f,.9f,.72f);keyLight.intensity=1.6f;
             keyLight.shadows=LightShadows.Soft;keyLight.shadowStrength=.92f;keyLight.shadowBias=.03f;keyLight.shadowNormalBias=.3f;
-            RenderSettings.ambientLight=new Color(.26f,.26f,.27f); // the ceiling lamp does most of the fill now
-            CeilingLamp();
+            // ODDITY_LAMP=1 turns the ceiling lamp on; by default only the window sun lights the room, with a brighter ambient fill
+            bool lamp=Environment.GetEnvironmentVariable("ODDITY_LAMP")=="1";
+            RenderSettings.ambientLight=lamp?new Color(.26f,.26f,.27f):new Color(.40f,.39f,.38f);
+            if(lamp)CeilingLamp();
         }
         // a fluorescent tube on the ceiling: two cool white point lights along its length light the room from above, no shadows
         static readonly Vector3 LampAt=new Vector3(-.2f,2.42f,.3f);
