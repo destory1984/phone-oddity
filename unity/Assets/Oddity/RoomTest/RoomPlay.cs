@@ -230,6 +230,18 @@ namespace Oddity.RoomTest
             if(prefab==null){Debug.LogWarning("ROOMPLAY prop missing "+asset);return null;}
             var go=Instantiate(prefab);go.name=Path.GetFileNameWithoutExtension(file);return go;
         }
+        // the sofa's two fabric colours (body and the darker trim) become one leather: the lighter blue grey, a smooth URP Lit surface with a soft sheen
+        static readonly Color LeatherColor=new Color(.30f,.40f,.47f).gamma; // the glb factor is linear
+        const float LeatherSmooth=.55f;
+        static void Leather(Transform sofa)
+        {
+            var mat=new Material(Shader.Find("Universal Render Pipeline/Lit")){name="SofaLeather"};
+            mat.SetColor("_BaseColor",LeatherColor);mat.SetFloat("_Smoothness",LeatherSmooth);mat.SetFloat("_Metallic",0);
+            foreach(var r in sofa.GetComponentsInChildren<Renderer>()){
+                var ms=r.sharedMaterials;bool hit=false;
+                for(int i=0;i<ms.Length;i++)if(ms[i]!=null && ms[i].name.StartsWith("SofaFabric")){ms[i]=mat;hit=true;}
+                if(hit)r.sharedMaterials=ms;}
+        }
         static Transform Mark(Transform root,string name)=>root.GetComponentsInChildren<Transform>().FirstOrDefault(t=>t.name==name);
         static Vector3 Facing(Transform root){var f=Mark(root,"Front");var d=f!=null?Vector3.ProjectOnPlane(f.position-root.position,Vector3.up):Vector3.forward;return d.sqrMagnitude>1e-6f?d.normalized:Vector3.forward;}
         // turns a prop about its origin so its Front mark points along dir
@@ -240,6 +252,7 @@ namespace Oddity.RoomTest
             seats.Clear();
             var s=LoadProp("sofa");
             if(s!=null){sofa=s.transform;sofa.position=room?new Vector3(-.75f,0,1.5f):new Vector3(0,0,SofaZ);Face(sofa,Vector3.back); // the seat faces the camera
+                Leather(sofa);
                 foreach(var t in sofa.GetComponentsInChildren<Transform>().Where(t=>t.name.StartsWith("Seat")).OrderBy(t=>t.position.x))seats.Add((t,Facing(sofa),StandOff+.2f));} // the sofa seat is deep, she gets up clear of it
             var table=LoadProp("table");
             tableRoot=table!=null?table.transform:null;
