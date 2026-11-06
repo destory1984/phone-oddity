@@ -339,6 +339,7 @@ namespace Oddity.RoomTest
                 var b=rs[0].bounds;foreach(var r in rs)b.Encapsulate(r.bounds);
                 blockers.Add(Rect.MinMaxRect(b.min.x-BodyRadius,b.min.z-BodyRadius,b.max.x+BodyRadius,b.max.z+BodyRadius));
             }
+            foreach(var f in furniture)blockers.Add(Rect.MinMaxRect(f.xMin-BodyRadius,f.yMin-BodyRadius,f.xMax+BodyRadius,f.yMax+BodyRadius));
             Debug.Log("ROOMPLAY_BLOCKERS "+string.Join(" ",blockers.Select(r=>"("+F(r.xMin)+".."+F(r.xMax)+","+F(r.yMin)+".."+F(r.yMax)+")")));
         }
         bool Blocked(Vector2 p)=>blockers.Any(r=>r.Contains(p));
@@ -547,9 +548,56 @@ namespace Oddity.RoomTest
             foreach(var (pos,size) in new[]{(new Vector3(0,2.525f,0),new Vector3(RoomHalf*2+.3f,.05f,RoomHalf*2+.3f)),(new Vector3(0,1.25f,-RoomHalf-.025f),new Vector3(RoomHalf*2+.3f,2.6f,.05f)),(new Vector3(RoomHalf+.025f,1.25f,0),new Vector3(.05f,2.6f,RoomHalf*2+.3f))}){
                 var g=Part(PrimitiveType.Cube,root,pos,size,wall);g.GetComponent<Renderer>().shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;}
             Sun();
+            Furnish(root);
             Limit=RoomHalf-.25f;ZNear=-RoomHalf+.25f;ZFar=RoomHalf-.25f;
             x=-.6f;z=-.3f; // she starts on the open floor between the table and the window
             cam.transform.position=RoomEye;cam.transform.LookAt(RoomAim);
+        }
+        // a Korean one-room flat (원룸, about 5 pyeong): the entrance and shoe cabinet in the front right corner (the camera side), the kitchen run along the back wall
+        // beside the sofa (sink, cooktop, built-in washer, upper cabinets, fridge in the corner), the bed in the front left corner as far from the kitchen as it gets,
+        // a desk next to it, a low dresser with a small TV on the right wall, a rug in front of the sofa. plain boxes; furniture footprints block walking
+        readonly List<Rect> furniture=new List<Rect>();
+        void Furnish(Transform root)
+        {
+            furniture.Clear();
+            var f=new GameObject("Furniture").transform;f.SetParent(root,false);
+            Color oak=new Color(.74f,.57f,.40f), white=new Color(.93f,.93f,.91f), top=new Color(.30f,.30f,.32f), steel=new Color(.80f,.81f,.82f), dark=new Color(.12f,.12f,.13f);
+            GameObject Box(float x0,float x1,float y0,float y1,float z0,float z1,Color c,bool block=false)
+            {
+                if(block)furniture.Add(Rect.MinMaxRect(x0,z0,x1,z1));
+                return Part(PrimitiveType.Cube,f,new Vector3((x0+x1)/2,(y0+y1)/2,(z0+z1)/2),new Vector3(x1-x0,y1-y0,z1-z0),c);
+            }
+            // kitchen: counter x 0.40 -> 1.35 along the back wall, 0.85 m high, 0.6 m deep
+            Box(.40f,1.35f,0,.82f,1.40f,2f,white,true);
+            Box(.39f,1.36f,.82f,.86f,1.38f,2f,top);                                    // worktop
+            Box(.52f,.82f,.84f,.865f,1.52f,1.86f,steel);                               // sink
+            Box(.63f,.66f,.86f,1.05f,1.88f,1.91f,steel);                               // tap
+            Box(1.00f,1.30f,.86f,.87f,1.55f,1.85f,dark);                               // induction cooktop
+            var drum=Part(PrimitiveType.Cylinder,f,new Vector3(.62f,.42f,1.395f),new Vector3(.36f,.01f,.36f),new Color(.55f,.58f,.62f));drum.transform.localRotation=Quaternion.Euler(90,0,0); // washer door under the sink
+            Box(.40f,1.35f,1.48f,2.10f,1.65f,2f,white);                                // upper cabinets
+            Box(.98f,1.32f,1.36f,1.48f,1.62f,2f,steel);                                // hood
+            // fridge in the back right corner
+            Box(1.37f,2f,0,1.78f,1.36f,2f,steel,true);
+            Box(1.40f,1.97f,1.05f,1.06f,1.355f,1.36f,dark);                            // door split
+            // entrance: grey tiles a step down and a shoe cabinet against the front wall
+            Box(1.05f,2f,-.005f,.003f,-2f,-1.05f,new Color(.58f,.58f,.57f));
+            Box(1.10f,2f,0,1.05f,-2f,-1.65f,oak,true);
+            // bed (super single 1.1 x 2.0 m) along the left wall, head at the front wall
+            Box(-2f,-.90f,0,.30f,-2f,0,oak,true);                                      // frame
+            Box(-1.97f,-.93f,.30f,.48f,-1.97f,-.03f,new Color(.95f,.95f,.96f));        // mattress
+            Box(-1.98f,-.92f,.48f,.53f,-1.30f,-.02f,new Color(.55f,.66f,.78f));        // blanket
+            Box(-1.85f,-1.05f,.48f,.60f,-1.92f,-1.55f,white);                          // pillow
+            Box(-2f,-.90f,0,.95f,-2f,-1.95f,oak);                                      // headboard
+            // desk beside the bed, against the front wall
+            Box(-.80f,.10f,.70f,.74f,-2f,-1.45f,oak,true);
+            foreach(var lx in new[]{-.78f,.06f})foreach(var lz in new[]{-1.98f,-1.49f})Box(lx,lx+.04f,0,.70f,lz,lz+.04f,dark);
+            Box(-.45f,-.10f,.74f,.97f,-1.92f,-1.89f,dark);                             // monitor
+            // low dresser against the right wall between the entrance and the fridge, a small TV on it facing the bed
+            Box(1.60f,2f,0,.72f,-.05f,.95f,white,true);
+            Box(1.82f,1.85f,.76f,1.12f,.12f,.78f,dark);                                // TV
+            Box(1.78f,1.90f,.72f,.76f,.40f,.50f,dark);                                 // stand
+            // rug in front of the sofa
+            Box(-1.30f,-.20f,0,.006f,.35f,1.05f,new Color(.82f,.76f,.66f));
         }
         // a big square window in the left wall: the wall is four blocks around the opening, a wooden frame and cross bars, a bright sky card outside
         static readonly Vector2 WinZ=new Vector2(-.2f,1.4f), WinY=new Vector2(.85f,2.15f);
