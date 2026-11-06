@@ -262,12 +262,25 @@ namespace Oddity.RoomTest
                     chair.transform.SetPositionAndRotation(spot.position,spot.rotation);chair.name=spot.name;
                     var seat=Mark(chair.transform,"Seat");if(seat!=null)seats.Add((seat,Facing(chair.transform),-StandOff)); // a chair is left from behind, the table is in front
                 }}
+            if(tableRoot!=null)Laptop(tableRoot);
             if(sofa==null && seats.Count>0)sofa=seats[0].mark.root;
             propHits.Clear();foreach(var root in seats.Select(t=>t.mark.root).Distinct())foreach(var mf in root.GetComponentsInChildren<MeshFilter>())if(mf.sharedMesh!=null){var c=mf.gameObject.AddComponent<MeshCollider>();c.sharedMesh=mf.sharedMesh;propHits.Add(c);} // only for PropTop's rays
             clickHits.Clear();clickHits.AddRange(propHits);
             if(tableRoot!=null)foreach(var mf in tableRoot.GetComponentsInChildren<MeshFilter>())if(mf.sharedMesh!=null){var c=mf.gameObject.AddComponent<MeshCollider>();c.sharedMesh=mf.sharedMesh;clickHits.Add(c);}
             Blockers();
             Debug.Log("ROOMPLAY_PROPS seats="+string.Join(" ",seats.Select(t=>t.mark.root.name+"/"+t.mark.name+"("+F(t.mark.position.x)+","+F(t.mark.position.y)+","+F(t.mark.position.z)+" face "+F(t.front.x)+","+F(t.front.z)+")")));
+        }
+        // the computer lives on the dining table: an open laptop in front of the chair on the -x side, screen tilted back and facing that seat
+        static void Laptop(Transform table)
+        {
+            var rs=table.GetComponentsInChildren<Renderer>();if(rs.Length==0)return;var b=rs[0].bounds;foreach(var r in rs)b.Encapsulate(r.bounds);
+            var lap=new GameObject("Laptop").transform;lap.SetParent(table,true);lap.position=new Vector3(b.center.x-.12f,b.max.y,b.center.z);
+            Color body=new Color(.72f,.73f,.76f),screen=new Color(.10f,.12f,.16f);
+            Part(PrimitiveType.Cube,lap,new Vector3(0,.009f,0),new Vector3(.22f,.018f,.32f),body);                                   // base, keys toward -x
+            Part(PrimitiveType.Cube,lap,new Vector3(-.01f,.0185f,0),new Vector3(.12f,.002f,.28f),new Color(.25f,.26f,.28f));          // keyboard
+            var lid=new GameObject("Lid").transform;lid.SetParent(lap,false);lid.localPosition=new Vector3(.11f,.018f,0);lid.localRotation=Quaternion.Euler(0,0,-15); // hinge at the +x edge, leaning back 15 degrees away from the seat
+            Part(PrimitiveType.Cube,lid,new Vector3(0,.11f,0),new Vector3(.012f,.22f,.32f),body);
+            Part(PrimitiveType.Cube,lid,new Vector3(-.007f,.115f,0),new Vector3(.002f,.18f,.28f),screen);                            // screen faces the -x chair
         }
         // Shift+C and Shift+V step through these; the floor ones (lying, crouching) play where she stands instead of on a seat
         static readonly string[] SitClips={"KaSitPutHandBetweensLoop","KaSitSwingingLegsLoop","KaSitCrossLegsLoop","MxSitCrossedRecline","MxSitCrossedArmKnee","MxSitHoldKnee"};
@@ -562,7 +575,7 @@ namespace Oddity.RoomTest
         }
         // the living room and kitchen of a small Korean flat (the bed is in the bedroom behind the door in the left wall): the entrance and shoe cabinet in the front right corner (the camera side), the kitchen run along the back wall
         // beside the sofa (sink, cooktop, built-in washer, upper cabinets, fridge in the corner), the bedroom door in the left wall,
-        // a low TV stand on the front wall facing the sofa, a dresser beside it, the desk on the right wall, a rug in front of the sofa. plain boxes; furniture footprints block walking
+        // a low TV stand on the front wall facing the sofa, a dresser beside it, a laptop on the dining table, a rug in front of the sofa. plain boxes; furniture footprints block walking
         readonly List<Rect> furniture=new List<Rect>();
         void Furnish(Transform root)
         {
@@ -599,10 +612,6 @@ namespace Oddity.RoomTest
             Box(-.80f,-.70f,.40f,.44f,-1.88f,-1.76f,dark);                             // stand
             // a dresser between the TV stand and the shoe cabinet
             Box(.50f,1.05f,0,.80f,-2f,-1.60f,white,true);
-            // the desk on the right wall, monitor against the wall
-            Box(1.45f,2f,.70f,.74f,-.05f,.95f,oak,true);
-            foreach(var lx in new[]{1.47f,1.94f})foreach(var lz in new[]{-.03f,.89f})Box(lx,lx+.04f,0,.70f,lz,lz+.04f,dark);
-            Box(1.88f,1.91f,.74f,.97f,.25f,.65f,dark);                                 // monitor
             // rug in front of the sofa
             Box(-1.30f,-.20f,0,.006f,.35f,1.05f,new Color(.82f,.76f,.66f));
         }
