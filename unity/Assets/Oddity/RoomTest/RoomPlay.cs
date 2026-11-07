@@ -271,6 +271,7 @@ namespace Oddity.RoomTest
             if(tableRoot!=null)foreach(var mf in tableRoot.GetComponentsInChildren<MeshFilter>())if(mf.sharedMesh!=null){var c=mf.gameObject.AddComponent<MeshCollider>();c.sharedMesh=mf.sharedMesh;clickHits.Add(c);}
             clickHits.AddRange(perchCols);
             Blockers();
+            BuildSofaSpots();
             Debug.Log("ROOMPLAY_PROPS seats="+string.Join(" ",seats.Select(t=>t.mark.root.name+"/"+t.mark.name+"("+F(t.mark.position.x)+","+F(t.mark.position.y)+","+F(t.mark.position.z)+" face "+F(t.front.x)+","+F(t.front.z)+")")));
         }
 
@@ -296,12 +297,20 @@ namespace Oddity.RoomTest
             public List<Vector2> path;public int pathI;public Vector2? pathGoal;public Vector2 pathHarin;public bool replanned; // the planned walk to goal (FloorPath): waypoints, next one, the goal it was made for, where Harin was, whether the stuck replan is used
             public float surf,surfBase;public Vector3 fitFront,fitSide;public float[] ext=new float[4];public readonly List<Vector3> lowPts=new List<Vector3>();public float lastFit; // surfBase: the cushion height where it landed; fitFront/fitSide: the horizontal axes its footprint is measured on; ext: min,max of the footprint along each from the root; lowPts: the non-tail vertices within 3 cm of the lowest (the paws)
             public SkinnedMeshRenderer[] smrs;public bool[][] tailMask;public Mesh bake;public string gapKey=""; // surf: height of the surface it rests on (floor 0); the rest of these measure its lowest vertex
+            public Spot spot,after,transit,fitSpot,jobSpot;public float radius=.2f,relocAt;public Vector2 cOff; // spot: the perch / cushion spot it holds (going there, or standing on it); after: the final spot when it passes through another (fridge via counter); transit: a spot it only hops through; fitSpot: the cushion it landed on; radius, cOff: the footprint circle (centre = root + rotated cOff)
+            public bool[][] pawMask;public bool pawFallback;public int pawSeeds;public readonly List<Vector3> conPts=new List<Vector3>();public float pawLogAt; // pawMask: vertices mainly weighted to a paw / foot / toe bone; conPts: the lowest vertex of each paw and the lowest body vertices, each rests on its own surface
             public bool aiPaused;public float resumeIn;public int aiPhase;public string aiAct="",aiLast="",aiPlace="";public float aiT,aiDur,aiGo;public int aiReps,aiLastClip=-1;public Vector2 aiTarget;public bool aiHasTarget;
             public bool Idleish=>index==0 || (somali && (index==3 || index==6 || index==9 || (white && index==12)));
             public int JumpClip=>white?11:somali?0:2; // the Somali has no jump clip: the arc is flown in the Idle pose
         }
         // a high place a cat can sit on: it walks to stand (a floor spot), hops to land (top view x, z; the height comes from a downward ray), and faces yaw
         sealed class Perch{public string name;public Vector2 stand,land;public float yaw,top=float.NaN;public Func<Collider,bool> pick;}
+        // a named place a cat can take: sill, counter, fridge, table spots and sofa cushions. land = where the root ends (top view), stand = the floor spot it hops from / to,
+        // sofa spots also have the seat mark, the sofa front, and lo..hi = the cushion's extent along axis (world dot product)
+        sealed class Spot{public string key,kind;public Perch perch;public Vector2 land,stand;public float yaw,top=float.NaN;public Transform mark;public Vector3 fwd,axis;public float lo,hi;}
+        readonly Dictionary<string,List<Spot>> spotsOf=new Dictionary<string,List<Spot>>();
+        readonly Dictionary<Perch,List<Collider>> perchColsOf=new Dictionary<Perch,List<Collider>>();
+        List<Collider> sofaCols;
         readonly Dictionary<string,Perch> perches=new Dictionary<string,Perch>();
         readonly List<Collider> perchCols=new List<Collider>();readonly Dictionary<Collider,string> perchOf=new Dictionary<Collider,string>();
         static readonly string[] CatClips={"Idle","Walk","Jump","Sound","Eat"};
@@ -361,6 +370,8 @@ namespace Oddity.RoomTest
             var centre=rot*new Vector3(s0.cx*scale,0,s0.cz*scale);
             go.transform.position=new Vector3(spot.x-centre.x,-s0.minY*scale,spot.y-centre.z);p.baseY=go.transform.position.y;
             Debug.Log("ROOMPLAY_"+p.tag+" pos=("+F(go.transform.position.x)+","+F(go.transform.position.y)+","+F(go.transform.position.z)+") headheight="+F(s0.Height*scale)+" bodylength="+F(s0.length*scale)+" native headheight="+F(s0.Height)+" native bodylength="+F(s0.length)+" scale="+F(scale)+" vertices="+s0.used+" tailskipped="+s0.skipped+" clips="+p.clips.Length);
+            p.cOff=new Vector2(s0.cx*scale,s0.cz*scale);p.radius=Mathf.Clamp(s0.length*scale*.5f*.9f,.1f,.24f);
+            Debug.Log("ROOMPLAY_"+p.tag+" footprint radius="+F(p.radius)+" centreOffset=("+F(p.cOff.x)+","+F(p.cOff.y)+")");
         }
         void PetGraph(Pet p,Animator animator)
         {
@@ -500,7 +511,7 @@ namespace Oddity.RoomTest
         void PetRest(Pet p,int kind)
         {
             if(!p.somali || p.job!=0)return;
-            if(kind>=4 && !p.white)return;
+            if(kind>=4 && kind!=6 && !p.white)return;
             if(kind!=1 && !p.hasLie){Notice("이 소말리 파일에는 눕는 동작이 없음 (somali_cat_lie.glb)");return;}
             int s=p.sit;
             if(kind==5 || kind==6){
@@ -508,7 +519,8 @@ namespace Oddity.RoomTest
                 p.goal=null;p.faceTo=float.NaN;p.moving=false;p.restNext=0;
                 Debug.Log("ROOMPLAY_"+p.tag+" rest pose="+RestNames[kind]);
                 if(kind==5){p.sit=11;SetPetClip(p,13,true);}
-                else{p.jobFrom=p.jobTo=p.root.position;p.job=4;p.jobT=0;p.jobDur=p.clips[11].length;p.jobArc=.12f;p.jobHead=p.heading;SetPetClip(p,11,true);}
+                else if(p.white){p.jobFrom=p.jobTo=p.root.position;p.job=4;p.jobT=0;p.jobDur=p.clips[11].length;p.jobArc=.12f;p.jobHead=p.heading;SetPetClip(p,11,true);}
+                else{p.jobFrom=p.jobTo=p.root.position;p.job=4;p.jobT=0;p.jobDur=.3f;p.jobArc=.1f;p.jobHead=p.heading;SetPetClip(p,0,true);} // the Somali has no jump clip: a 0.3 s hop in its Idle pose
                 return;}
             if(kind==4){
                 if(s==10){p.restNext=0;return;}
@@ -584,34 +596,64 @@ namespace Oddity.RoomTest
                     if(p.somali && p.sit!=0){PetStand(p);return;} // sitting, lying or loafing: get up, then Idle
                     p.goal=null;p.faceTo=float.NaN;p.moving=false;SetPetClip(p,0,true);}
                 return;}
-            int digits=p.white?9:p.somali?6:5;
-            if(key.Length==1 && key[0]>='1' && key[0]<='0'+digits){
-                if(p.job!=0)return;
-                int n=key[0]-'1';
-                if(p.somali){
-                    if(n==2){PetSit(p);return;}
-                    if(n==3){p.goal=null;p.faceTo=float.NaN;PetStand(p);return;}
-                    if(n==4){PetRest(p,2);return;}
-                    if(n==5){PetRest(p,3);return;}
-                    if(p.white && n>=6){PetRest(p,n-2);return;} // 7 groom, 8 stretch, 9 jump in place
-                    if(n==0 && p.sit!=0){PetStand(p);return;}
-                    p.sit=0;
-                }
-                p.goal=null;p.faceTo=float.NaN;p.moving=false;SetPetClip(p,n,true);
-                return;}
+            int act=key.Length==1?"1234567890".IndexOf(key[0]):-1; // 1 lie, 2 sit, 3 loaf, 4 walk in place, 5 jump, 6 meow, 7 eat, 8 groom, 9 stretch, 0 stand: the same for every cat
+            if(act>=0){if(p.job!=0)return;CatAction(p,act);return;}
             if(key=="left"||key=="right"){if(p.job==0){p.heading+=key=="left"?45:-45;p.faceTo=float.NaN;}return;}
             if(key=="c"||key=="v"||key=="k"){
                 if(p.job!=0 || p.onSofa)return;
                 var cp=new Vector2(p.root.position.x,p.root.position.z);
-                var near=seats.Where(t=>t.mark.root==sofa).OrderBy(t=>(new Vector2(t.mark.position.x,t.mark.position.z)-cp).sqrMagnitude).ToList();
-                if(near.Count==0){Notice("소파가 없음");return;}
-                PetGoTo(p,"sofa",SofaStand(near[0].mark,near[0].front),near[0].mark,cp);
+                if(!spotsOf.TryGetValue("sofa",out var sl) || sl.Count==0){Notice("소파가 없음");return;}
+                var sp=FreeSpot("sofa",p,cp);if(sp==null){Notice("자리가 없어요");return;}
+                PetGoToSofa(p,sp,cp);
                 p.arriveRest=p.somali && key=="k"?2:0; // K: the Somali lies down on the cushion (sphinx), C and V sit
                 return;
             }
             Notice("고양이에게 없는 동작");
         }
+        // one shared table of actions for CAT, SOMALI and WHITE: the digit keys 1 2 3 4 5 6 7 8 9 0 are actions 0..9. A cat plays the clip it has; without it the notice says so
+        static readonly string[] ActionNames={"눕기 (스핑크스)","앉기","식빵","걷기 (제자리)","점프 (제자리)","울기","먹기","그루밍 (앉아서)","기지개","일어서기"};
+        static readonly string[] ActionLog={"lie","sit","loaf","walk","jump","meow","eat","groom","stretch","stand"};
+        static bool CanDo(Pet p,int a)
+        {
+            switch(a){
+                case 0:case 2:return p.somali && p.hasLie;
+                case 1:return p.somali;
+                case 3:case 4:case 5:case 9:return true; // jump: the cartoon cat's Jump, the white cat's Jump, the Somali a 0.3 s hop in its Idle pose; meow: the Sound clip (cartoon cat) and a meow sound
+                case 6:return !p.somali; // Eat: only the cartoon cat has the clip
+                case 7:case 8:return p.white;
+            }
+            return false;
+        }
+        // the action the pet is in now (for the key list and M), -1 none
+        int CurAction(Pet p)
+        {
+            if(!p.somali)return p.index==1?3:p.index==2?4:p.index==3?5:p.index==4?6:p.index==0?9:-1;
+            if(p.job==4)return 4;
+            switch(p.index){case 2:case 3:return 1;case 5:case 6:return 0;case 8:case 9:return 2;case 1:return 3;case 11:return 4;case 12:return 7;case 13:return 8;case 0:return 9;}
+            return -1;
+        }
+        void CatAction(Pet p,int a)
+        {
+            if(!CanDo(p,a)){Notice("이 고양이는 못 하는 동작");Debug.Log("ROOMPLAY_"+p.tag+" action="+ActionLog[a]+" unavailable");return;}
+            Debug.Log("ROOMPLAY_"+p.tag+" action="+ActionLog[a]);
+            if(!p.somali){ // cartoon cat: Walk 1, Jump 2, Sound 3, Eat 4, Idle 0
+                int clip=a==3?1:a==4?2:a==5?3:a==6?4:0;
+                p.goal=null;p.faceTo=float.NaN;p.moving=false;SetPetClip(p,clip,true);return;}
+            switch(a){
+                case 0:PetRest(p,2);return;
+                case 1:PetRest(p,1);return;
+                case 2:PetRest(p,3);return;
+                case 3:p.goal=null;p.faceTo=float.NaN;p.moving=false;p.sit=0;SetPetClip(p,1,true);return;
+                case 4:PetRest(p,6);return; // the white cat's Jump clip, the Somali a small hop in Idle
+                case 5:PetRandomMeow(p,.9f);return; // sound only
+                case 7:PetRest(p,4);return;
+                case 8:PetRest(p,5);return;
+                case 9:p.goal=null;p.faceTo=float.NaN;if(p.sit!=0)PetStand(p);else{p.moving=false;SetPetClip(p,0,true);}return;
+            }
+        }
         Vector2 SofaStand(Transform mark,Vector3 front){var s=mark.position+front*.7f;return NearestFree(new Vector2(s.x,s.z));}
+        Vector2 SofaStand(Spot sp)=>NearestFree(sp.land+new Vector2(sp.fwd.x,sp.fwd.z)*.7f);
+        void PetGoToSofa(Pet p,Spot sp,Vector2 look)=>PetGoTo(p,"sofa",SofaStand(sp),sp.mark,look,null,sp);
         // the nearest spot that is out of the footprints and in the room's main open area (not a sealed pocket such as the strip between a chair and the wall)
         Vector2 NearestFree(Vector2 p)
         {
@@ -652,23 +694,27 @@ namespace Oddity.RoomTest
             p.pathGoal=p.goal;p.path=path;p.pathI=path.Count>1?1:0;
             Debug.Log(PathLog(Who(p),from,p.goal.Value,path)+(again?" replan":""));
         }
-        void PetGoTo(Pet p,string kind,Vector2 goal,Transform seat,Vector2 look,string logKind=null)
+        void PetGoTo(Pet p,string kind,Vector2 goal,Transform seat,Vector2 look,string logKind=null,Spot spot=null)
         {
+            SetSpot(p,spot);p.after=null;
             p.pathGoal=null;p.replanned=false;p.goal=goal;p.goalKind=kind;p.goalSeat=seat;p.goalLook=look;p.stuck=0;p.faceTo=float.NaN;p.chainNext=null;p.arriveRest=0;
             p.hopPlan.Clear();p.hopWait=0; // a new goal drops any hops still planned for the old one (a hiss during the beat on the counter used to send the cat on to the fridge, where the landing rest pose then wiped the new goal)
             Debug.Log("ROOMPLAY_"+p.tag+" goto="+(logKind??kind)+" at=("+F(goal.x)+","+F(goal.y)+")");
         }
         // to a perch (counter, table, fridge, sill): walk to its floor spot and hop up; the fridge goes by the counter. Already on a perch the hop is direct
-        void PetGoToPerch(Pet p,string name)
+        bool PetGoToPerch(Pet p,string name,Vector2? near=null,bool random=false)
         {
-            if(!perches.TryGetValue(name,out var pr))return;
+            if(!perches.TryGetValue(name,out var pr))return false;
             var cp=new Vector2(p.root.position.x,p.root.position.z);
-            if(p.perch==pr){p.goal=null;return;}
+            var sp=FreeSpot(name,p,near??cp,random);
+            if(sp==null){if(!p.auto)Notice("자리가 없어요");return false;}
+            if(p.perch==pr && p.spot==sp && AtSpot(p,sp)){p.goal=null;return true;}
             bool onCounter=p.perch!=null && p.perch.name=="counter",onFridge=p.perch!=null && p.perch.name=="fridge";
             if(name=="fridge" && !onCounter){
-                var c=perches["counter"];PetGoTo(p,onFridge?"fridge":"counter",onFridge?cp:c.stand,null,c.land,"fridge via=counter");if(!onFridge)p.chainNext="fridge";return;}
-            if((name=="fridge" && onCounter) || (name=="counter" && onFridge)){PetGoTo(p,name,cp,null,cp);return;}
-            PetGoTo(p,name,pr.stand,null,pr.land);
+                var cs=FreeSpot("counter",p,cp,random);if(cs==null){if(!p.auto)Notice("자리가 없어요");return false;}
+                PetGoTo(p,"counter",cs.stand,null,cs.land,"fridge via=counter",cs);p.chainNext="fridge";p.after=sp;return true;}
+            if((name=="fridge" && onCounter) || (name=="counter" && onFridge)){PetGoTo(p,name,cp,null,cp,null,sp);return true;}
+            PetGoTo(p,name,sp.stand,null,sp.land,null,sp);return true;
         }
         // a left click while a pet is controlled: the same hit sets as Harin's, a different answer
         void CatClickAt(Ray ray)
@@ -681,10 +727,10 @@ namespace Oddity.RoomTest
             if(got!=null){
                 var root=got.transform.root;
                 if(root==sofa){
-                    var list=seats.Where(t=>t.mark.root==sofa).ToList();if(list.Count==0)return;
-                    var seat=list.OrderBy(t=>new Vector2(t.mark.position.x-at.x,t.mark.position.z-at.z).sqrMagnitude).First();
-                    PetGoTo(p,"sofa",SofaStand(seat.mark,seat.front),seat.mark,cp);
-                }else if(perchOf.TryGetValue(got,out var pn))PetGoToPerch(p,pn);
+                    if(!spotsOf.TryGetValue("sofa",out var sl) || sl.Count==0)return;
+                    var sp=FreeSpot("sofa",p,new Vector2(at.x,at.z));if(sp==null){Notice("자리가 없어요");return;}
+                    PetGoToSofa(p,sp,cp);
+                }else if(perchOf.TryGetValue(got,out var pn))PetGoToPerch(p,pn,new Vector2(at.x,at.z));
                 else if(root==tableRoot && perches.ContainsKey("table"))PetGoToPerch(p,"table");
                 else PetGoTo(p,"chair",NearestFree(new Vector2(at.x,at.z)),null,new Vector2(at.x,at.z)); // a chair: walk beside it, turned to it
             }else if(new Plane(Vector3.right,new Vector3(-RoomHalf,0,0)).Raycast(ray,out var wd) && InWindow(ray.GetPoint(wd))){
@@ -704,9 +750,10 @@ namespace Oddity.RoomTest
         }
         // where on the cushion a pet lands: the seat mark, then moved off the backrest and the armrests (horizontal rays just above the cushion): at least 0.30 m from the backrest, 0.19 m from an arm
         const float SofaBackClear=.30f, SofaSideClear=.19f;
-        Vector3 SofaLanding(Transform mark,Vector3 front)
+        Vector3 SofaLanding(Spot sp)
         {
-            var m=mark.position-front*.05f;float top=CushionTop(m,mark.position.y);
+            var mark=sp.mark;var front=sp.fwd;
+            var m=new Vector3(sp.land.x,mark.position.y,sp.land.y)-front*.05f;float top=CushionTop(m,mark.position.y);
             var side=Vector3.Cross(Vector3.up,front).normalized;var o=new Vector3(m.x,top+.10f,m.z);
             float Probe(Vector3 d){float best=1f;foreach(var c in propHits)if(c!=null && c.transform.root==sofa && c.Raycast(new Ray(o,d),out var h,1f) && h.distance<best)best=h.distance;return best;}
             float back=Probe(-front),pos=Probe(side),neg=Probe(-side);
@@ -722,12 +769,12 @@ namespace Oddity.RoomTest
             p.moving=false;p.job=up?1:2;p.jobT=0;p.jobFrom=p.root.position;
             if(up){
                 var here=new Vector2(p.jobFrom.x,p.jobFrom.z);
-                var seat=seats.Where(t=>t.mark.root==sofa && (p.goalSeat==null || t.mark==p.goalSeat)).OrderBy(t=>(new Vector2(t.mark.position.x,t.mark.position.z)-here).sqrMagnitude).First();
-                p.jobSeat=seat.mark;var m=SofaLanding(seat.mark,seat.front);
-                float top=CushionTop(m,seat.mark.position.y);
+                var sp=p.spot!=null && p.spot.kind=="sofa"?p.spot:FreeSpot("sofa",p,here)??spotsOf["sofa"][0];
+                SetSpot(p,sp);p.jobSpot=sp;p.jobSeat=sp.mark;var m=SofaLanding(sp);
+                float top=CushionTop(m,sp.mark.position.y);
                 p.jobTo=new Vector3(m.x,p.baseY+top,m.z);p.jobDur=CatJumpUpSeconds;p.jobArc=.14f;
             }else{
-                var seat=seats.First(t=>t.mark==p.seat);var f=SofaStand(seat.mark,seat.front);
+                var seat=seats.First(t=>t.mark==p.seat);var f=p.fitSpot!=null?SofaStand(p.fitSpot):SofaStand(seat.mark,seat.front);
                 p.jobTo=new Vector3(f.x,p.baseY,f.y);p.jobDur=CatJumpDownSeconds;p.jobArc=.1f;
             }
             var dir=p.jobTo-p.jobFrom;dir.y=0;p.jobHead=dir.sqrMagnitude>1e-4f?Mathf.Atan2(dir.x,dir.z)*Mathf.Rad2Deg:p.heading;
@@ -743,9 +790,12 @@ namespace Oddity.RoomTest
         void NextHop(Pet p)
         {
             if(p.hopPlan.Count==0)return;
-            var nx=p.hopPlan[0];p.hopPlan.RemoveAt(0);
-            if(nx=="floor"){StartHop(p,null);return;}
-            if(perches.TryGetValue(nx,out var np))StartHop(p,np);
+            var nx=p.hopPlan[0];
+            if(nx=="floor"){p.hopPlan.RemoveAt(0);StartHop(p,null);return;}
+            if(perches.TryGetValue(nx,out var np)){
+                bool mine=(p.after!=null && p.after.perch==np) || (p.spot!=null && p.spot.perch==np);
+                if(!mine && FreeSpot(np.name,p,PetXZ(p))==null){p.hopWait=.5f;return;} // every spot up there is taken: a beat, then again
+                p.hopPlan.RemoveAt(0);StartHop(p,np);}
         }
         // a hop between the floor and a perch (or counter and fridge): to is the perch to land on, null lands on the floor spot in front of the perch it is on.
         // 0.5 s for the sofa; here the time grows with the height (about 0.7 s up to a 0.85 m counter, table or sill), the Cartoon cat plays Jump, the Somali flies the arc in Idle
@@ -753,8 +803,14 @@ namespace Oddity.RoomTest
         {
             p.moving=false;p.job=3;p.jobT=0;p.jobFrom=p.root.position;p.jobPerch=to;
             Vector3 end;
-            if(to!=null){var l=to.land;end=new Vector3(l.x,p.baseY+PerchTop(to),l.y);}
-            else{var s=p.perch.stand;end=new Vector3(s.x,p.baseY,s.y);}
+            if(to!=null){
+                Spot sp;
+                if(p.after!=null && p.after.perch==to){sp=p.after;p.after=null;SetSpot(p,sp);p.transit=null;} // the final spot after passing the counter
+                else if(p.spot!=null && p.spot.perch==to){sp=p.spot;p.transit=null;}
+                else{sp=FreeSpot(to.name,p,PetXZ(p))??spotsOf[to.name][0];p.transit=sp;} // only passing through
+                p.jobSpot=sp;var l=sp.land;end=new Vector3(l.x,p.baseY+SpotTop(sp),l.y);
+            }
+            else{p.transit=null;var os=OccSpot(p);var st=FloorLanding(p,os!=null?os.stand:p.perch.stand);end=new Vector3(st.x,p.baseY,st.y);}
             float dh=end.y-p.jobFrom.y,h=Mathf.Abs(dh);bool up=dh>0;
             p.jobTo=end;
             p.jobDur=up?CatJumpUpSeconds+Mathf.Max(0,h-.45f)*.45f:CatJumpDownSeconds+Mathf.Max(0,h-.45f)*.3f;
@@ -791,8 +847,18 @@ namespace Oddity.RoomTest
                     perches["table"]=new Perch{name="table",stand=stand,land=land,yaw=180,pick=c=>c.transform.IsChildOf(tableRoot) && (lap==null || !c.transform.IsChildOf(lap))};
                 }
             }
+            foreach(var k in perches.Keys)spotsOf.Remove(k);
+            void AddSpot(Perch pr,Vector2 land,Vector2 stand){if(!spotsOf.TryGetValue(pr.name,out var l))spotsOf[pr.name]=l=new List<Spot>();l.Add(new Spot{key=pr.name+"#"+l.Count,kind=pr.name,perch=pr,land=land,stand=stand,yaw=pr.yaw});}
+            foreach(var pr in perches.Values){
+                if(pr.name=="sill")foreach(float zz in new[]{.05f,.60f,1.15f})AddSpot(pr,new Vector2(-1.88f,zz),NearestFree(new Vector2(-1.38f,zz))); // 0.55 m apart: two cats of 0.46 m do not touch
+                else if(pr.name=="counter")foreach(float xx in new[]{.62f,1.17f})AddSpot(pr,new Vector2(xx,1.50f),Mathf.Abs(xx-1.17f)<.01f?pr.stand:NearestFree(new Vector2(xx,1.10f)));
+                else AddSpot(pr,pr.land,pr.stand); // fridge, table: one spot
+                pr.land=spotsOf[pr.name][0].land;
+                perchColsOf[pr]=perchCols.Where(c=>pr.pick(c)).ToList();
+            }
             Physics.SyncTransforms();
             foreach(var pr in perches.Values)PerchTop(pr);
+            Debug.Log("ROOMPLAY_SPOTS "+string.Join(" ",spotsOf.SelectMany(kv=>kv.Value).Select(sp=>sp.key+"("+F(sp.land.x)+","+F(sp.land.y)+(sp.perch!=null?" top "+F(SpotTop(sp)):" x "+F(sp.lo)+".."+F(sp.hi))+")")));
         }
         void PetJobTick(Pet p,float dt)
         {
@@ -803,7 +869,7 @@ namespace Oddity.RoomTest
             p.root.rotation=Quaternion.Euler(0,p.heading,0);
             if(k<1)return;
             if(p.job==3){
-                p.job=0;p.root.position=p.jobTo;p.onSofa=false;p.seat=null;p.perch=p.jobPerch;p.surf=p.perch!=null?PerchTop(p.perch):0;
+                p.job=0;p.root.position=p.jobTo;p.onSofa=false;p.seat=null;p.perch=p.jobPerch;p.surf=p.perch!=null?(p.jobSpot!=null && p.jobSpot.perch==p.perch?SpotTop(p.jobSpot):PerchTop(p.perch)):0;p.settledAt=Time.unscaledTime;p.fitSpot=null;
                 SetPetClip(p,0,true);
                 if(p.perch!=null){
                     p.faceTo=p.perch.yaw;
@@ -814,7 +880,7 @@ namespace Oddity.RoomTest
                 return;
             }
             if(p.job==4){p.job=0;p.root.position=p.jobTo;SetPetClip(p,0,true);return;} // the jump in place is over
-            bool up=p.job==1;p.job=0;p.root.position=p.jobTo;p.onSofa=up;p.surf=up?p.jobTo.y-p.baseY:0;
+            bool up=p.job==1;p.job=0;p.root.position=p.jobTo;p.onSofa=up;p.surf=up?p.jobTo.y-p.baseY:0;p.settledAt=Time.unscaledTime;p.perch=null;p.fitSpot=up?p.jobSpot:null;
             if(up){p.seat=p.jobSeat;var front=seats.First(t=>t.mark==p.seat).front;
                 var side=Vector3.Cross(Vector3.up,front).normalized;var mid=SofaCentre();var toMid=new Vector3(mid.x-p.root.position.x,0,mid.z-p.root.position.z);
                 if(Vector3.Dot(side,toMid)<0)side=-side; // along the seat, towards the middle of the sofa: parallel to the backrest, the whole body on the cushion
@@ -835,10 +901,11 @@ namespace Oddity.RoomTest
             bool keys=input!=Vector2.zero;
             if(keys){p.goal=null;p.chainNext=null;} // the keys take over from a click
             if(p.onSofa && p.goal.HasValue && p.goalKind=="sofa" && p.goalSeat==p.seat)p.goal=null; // already on that seat
-            if(p.perch!=null && p.goal.HasValue && p.goalKind==p.perch.name)p.goal=null; // already up there
+            if(p.perch!=null && p.goal.HasValue && p.goalKind==p.perch.name && p.spot!=null && AtSpot(p,p.spot))p.goal=null; // already up there, on that spot
             if(p.somali && p.sit!=0 && (keys || p.goal.HasValue)){PetStand(p);return;} // walking while sitting: stand up first, the walk (a click's goal is kept) starts when StandUp is done
-            if(p.onSofa && (keys || p.goal.HasValue)){StartPetJump(p,false);return;} // any walk starts with a jump down
+            if(p.onSofa && (keys || p.goal.HasValue)){if(!p.goal.HasValue)SetSpot(p,null);StartPetJump(p,false);return;} // any walk starts with a jump down
             if(p.perch!=null && (keys || p.goal.HasValue)){ // up on a perch: counter to fridge and back are one hop, any other walk hops down first (the fridge only to the counter)
+                if(!p.goal.HasValue)SetSpot(p,null);
                 var gk=p.goal.HasValue && perches.ContainsKey(p.goalKind)?p.goalKind:null;
                 p.hopPlan=HopsOff(p.perch.name,gk);
                 if(gk!=null && p.hopPlan.Count==1 && p.hopPlan[0]==gk)p.goal=null; // counter <-> fridge as the goal itself: the one hop is the whole walk
@@ -863,6 +930,7 @@ namespace Oddity.RoomTest
             }
             float stepLen=Mathf.Min(pace*dt,reach);
             var next=Collide(from,new Vector2(Mathf.Clamp(from.x+wish.x*stepLen,-Limit-.1f,Limit+.1f),Mathf.Clamp(from.y+wish.y*stepLen,ZNear-.1f,ZFar+.1f)));
+            next=PetSeparate(p,from,next);
             bool moving=wish!=Vector2.zero && (next-from).sqrMagnitude>1e-10f;
             bool arrived=false;
             if(p.goal.HasValue){
@@ -952,9 +1020,8 @@ namespace Oddity.RoomTest
                     var t=AiFloorPoint(p,gen);if(t==null)return false;
                     at=t.Value;place=act=="rug"?"rug":"floor";PetGoTo(p,"floor",at,null,cp);p.aiDur=Rnd(3,8);break;}
                 case "sofa":{
-                    var list=seats.Where(t=>t.mark.root==sofa && FarFromOthers(p,new Vector2(t.mark.position.x,t.mark.position.z))).ToList();if(list.Count==0)return false;
-                    var seat=list[Rng().Next(list.Count)];at=new Vector2(seat.mark.position.x,seat.mark.position.z);
-                    PetGoTo(p,"sofa",SofaStand(seat.mark,seat.front),seat.mark,cp);if(p.somali)p.arriveRest=AiRestKind(p,act);p.aiDur=Rnd(10,25);break;}
+                    var sp=FreeSpot("sofa",p,cp,true);if(sp==null)return false;
+                    at=sp.land;PetGoToSofa(p,sp,cp);if(p.somali)p.arriveRest=AiRestKind(p,act);p.aiDur=Rnd(10,25);break;}
                 case "window":{
                     float wz=Rnd(0f,1.1f);var spot=NearestFree(new Vector2(-1.40f,wz));if(!FarFromOthers(p,spot))return false;
                     at=spot;PetGoTo(p,"window",spot,null,new Vector2(-RoomHalf,wz));p.aiDur=Rnd(6,15);break;}
@@ -977,8 +1044,10 @@ namespace Oddity.RoomTest
                     if(!p.white || p.sit==0 || p.job!=0)return false;
                     travel=false;PetStand(p,5);p.aiDur=4.5f;place="here";break;
                 default:{ // sill, counter, table, fridge
-                    if(!perches.TryGetValue(act,out var pr) || !FarFromOthers(p,pr.land))return false;
-                    at=pr.land;PetGoToPerch(p,act);if(p.somali)p.arriveRest=AiRestKind(p,act);p.aiDur=Rnd(10,30);break;}
+                    if(!perches.TryGetValue(act,out var pr))return false;
+                    if(act=="fridge" && !(p.perch!=null && p.perch.name=="counter") && FreeSpot("counter",p,cp)==null)return false;
+                    if(!PetGoToPerch(p,act,null,true))return false;
+                    at=p.spot!=null?p.spot.land:pr.land;if(p.somali)p.arriveRest=AiRestKind(p,act);p.aiDur=Rnd(10,30);break;}
             }
             p.aiAct=act;p.aiPlace=place;p.aiTarget=at;p.aiHasTarget=travel;p.aiGo=0;
             AiLog(p,act,place,at);
@@ -989,7 +1058,7 @@ namespace Oddity.RoomTest
         {
             var opts=new List<KeyValuePair<string,int>>();
             void Add(string n,int w){if(n!=p.aiLast)opts.Add(new KeyValuePair<string,int>(n,w));}
-            Add("wander",12);Add("rug",6);if(sofa!=null && seats.Any(t=>t.mark.root==sofa))Add("sofa",20);Add("window",15);Add("harin",15);Add("clip",15);Add("idle",5);
+            Add("wander",12);Add("rug",6);if(sofa!=null && spotsOf.TryGetValue("sofa",out var sofaSpots) && sofaSpots.Count>0)Add("sofa",20);Add("window",15);Add("harin",15);Add("clip",15);Add("idle",5);
             if(p.white && p.sit!=0)Add("stretch",8);
             foreach(var (n,w) in new[]{("sill",15),("counter",8),("table",7),("fridge",5)})if(perches.ContainsKey(n))Add(n,w);
             while(opts.Count>0){
@@ -1123,10 +1192,143 @@ namespace Oddity.RoomTest
                 }
             }
         }
-        void PetsTick(float dt){foreach(var p in pets){PetAnimTick(p);PetAiTick(p,dt);PetRestTick(p,dt);PetSfxTick(p,dt);}PetHissTick();
+        void PetsTick(float dt){foreach(var p in pets){PetAnimTick(p);PetAiTick(p,dt);PetRestTick(p,dt);PetSfxTick(p,dt);SpotLeakTick(p);}PetHissTick();PetOverlapTick();
             for(int i=delayedShots.Count-1;i>=0;i--)if(Time.unscaledTime>=delayedShots[i].at){var d=delayedShots[i];delayedShots.RemoveAt(i);PetShot(d.pet,d.file,d.vol);}}
         // two cats that are not controlled come within 0.4 m of each other: the one that arrived later (still walking, or stopped last) hisses, at most once per 30 s, then walks off to a new place
         float lastHiss=-100;
+        // ---- spots: a cat reserves a spot when it decides to go there and keeps it while it stands there; the reservation ends when it leaves (a new goal, keys, or it is found elsewhere)
+        void SetSpot(Pet p,Spot sp)
+        {
+            if(p.spot==sp)return;
+            if(p.spot!=null)Debug.Log("ROOMPLAY_"+p.tag+" release="+p.spot.key);
+            p.spot=sp;
+            if(sp!=null)Debug.Log("ROOMPLAY_"+p.tag+" reserve="+sp.key);
+        }
+        bool SpotTaken(Spot sp,Pet except){foreach(var o in pets)if(o!=except && (o.spot==sp || o.after==sp || o.transit==sp))return true;return false;}
+        // a free spot of that kind ("sofa", "sill", ...): the nearest to near, or a random one
+        Spot FreeSpot(string kind,Pet p,Vector2 near,bool random=false)
+        {
+            if(!spotsOf.TryGetValue(kind,out var list))return null;
+            var free=list.Where(sp=>!SpotTaken(sp,p)).ToList();if(free.Count==0)return null;
+            if(random)return free[Rng().Next(free.Count)];
+            return free.OrderBy(sp=>(sp.land-near).sqrMagnitude).First();
+        }
+        bool AtSpot(Pet p,Spot sp)
+        {
+            if(p.root==null)return false;
+            if(sp.kind=="sofa")return p.onSofa && p.seat==sp.mark;
+            return p.perch==sp.perch && (PetXZ(p)-sp.land).magnitude<.5f;
+        }
+        // the spot of the perch it stands on (nearest to it)
+        Spot OccSpot(Pet p)=>p.perch!=null && spotsOf.TryGetValue(p.perch.name,out var l)?l.OrderBy(sp=>(sp.land-PetXZ(p)).sqrMagnitude).First():null;
+        float SpotTop(Spot sp)
+        {
+            if(!float.IsNaN(sp.top))return sp.top;
+            Physics.SyncTransforms();
+            var ray=new Ray(new Vector3(sp.land.x,3.5f,sp.land.y),Vector3.down);float top=float.NaN;
+            foreach(var c in clickHits)if(c!=null && sp.perch.pick(c) && c.Raycast(ray,out var hit,6f) && !(hit.point.y<=top))top=hit.point.y;
+            if(float.IsNaN(top)){Debug.LogWarning("ROOMPLAY_SPOT "+sp.key+" no surface, using the perch top");top=PerchTop(sp.perch);}
+            return sp.top=top;
+        }
+        // where a cat coming down lands on the floor: its stand spot, or the nearest point round it that is clear of every other cat's footprint
+        Vector2 FloorLanding(Pet p,Vector2 st)
+        {
+            bool Clear(Vector2 q){foreach(var o in pets)if(o!=p && o.root!=null && (LevelOf(o)=="floor" || o.job!=0) && (FootCentre(o)-q).magnitude<p.radius+o.radius+.05f)return false;return true;}
+            if(Clear(st))return st;
+            for(float r=.1f;r<=.8f;r+=.1f)for(int a=0;a<360;a+=30){var q=st+new Vector2(Mathf.Cos(a*Mathf.Deg2Rad),Mathf.Sin(a*Mathf.Deg2Rad))*r;if(!Blocked(q) && Clear(q))return q;}
+            return st;
+        }
+        // the sofa's seat cushions, from a scan along the seat: the most common top height is the seat, runs of it at least 0.3 m wide are cushions, the seam between two is a dip of more than 5 cm.
+        // A cat lands in the middle of a cushion (one spot per 0.55 m of width), never on the seam
+        void BuildSofaSpots()
+        {
+            var list=new List<Spot>();spotsOf["sofa"]=list;
+            var mk=seats.Where(t=>t.mark.root==sofa).ToList();if(sofa==null || mk.Count==0)return;
+            var front=mk[0].front;var side=Vector3.Cross(Vector3.up,front).normalized;var mid=mk[mk.Count/2].mark.position;float s0=Vector3.Dot(mid,side);
+            Physics.SyncTransforms();
+            sofaCols=propHits.Where(c=>c!=null && c.transform.root==sofa).Cast<Collider>().ToList();
+            var ss=new List<float>();var tops=new List<float>();
+            for(float u=-1.5f;u<=1.5f;u+=.01f){var o=mid+side*u;float top=float.NaN;foreach(var c in sofaCols)if(c.Raycast(new Ray(new Vector3(o.x,2f,o.z),Vector3.down),out var h,3f) && !(h.point.y<=top))top=h.point.y;ss.Add(u);tops.Add(top);}
+            float maxTop=tops.Where(t=>!float.IsNaN(t)).DefaultIfEmpty(0).Max();
+            var count=new Dictionary<int,int>();foreach(var t in tops)if(!float.IsNaN(t) && t<maxTop*.8f){int k=Mathf.RoundToInt(t*100);count[k]=count.TryGetValue(k,out var n)?n+1:1;}
+            if(count.Count==0)return;
+            float seat=count.OrderByDescending(kv=>kv.Value).First().Key/100f;
+            int start=-1;var runs=new List<(float a,float b)>();
+            for(int i=0;i<=tops.Count;i++){
+                bool inside=i<tops.Count && !float.IsNaN(tops[i]) && Mathf.Abs(tops[i]-seat)<=.03f;
+                if(inside && start<0)start=i;
+                if(!inside && start>=0){if(ss[i-1]-ss[start]>=.3f)runs.Add((ss[start],ss[i-1]));start=-1;}
+            }
+            foreach(var run in runs){
+                int n=Mathf.Max(1,Mathf.FloorToInt((run.b-run.a)/.55f));
+                for(int k=0;k<n;k++){
+                    float c=run.a+(run.b-run.a)*(k+.5f)/n;var at=mid+side*c;
+                    var seg=(lo:run.a+(run.b-run.a)*k/n,hi:run.a+(run.b-run.a)*(k+1)/n);
+                    var mark=mk.OrderBy(t=>(new Vector2(t.mark.position.x,t.mark.position.z)-new Vector2(at.x,at.z)).sqrMagnitude).First();
+                    list.Add(new Spot{key="sofa#"+list.Count,kind="sofa",land=new Vector2(at.x,mid.z),mark=mark.mark,fwd=mark.front,axis=side,lo=s0+seg.lo,hi=s0+seg.hi,top=seat});
+                }
+            }
+            Debug.Log("ROOMPLAY_SOFASPOTS seat top="+F(seat)+" cushions="+runs.Count+" spots="+string.Join(" ",list.Select(sp=>sp.key+" x="+F(sp.land.x)+" ("+F(sp.lo)+".."+F(sp.hi)+") mark="+sp.mark.name)));
+        }
+        // ---- footprints: a circle of p.radius around the body centre. A walking cat is pushed out of another cat's circle (it slides round it); the safety pass moves whichever arrived later if two still overlap
+        Vector2 FootOff(Pet p){var o=p.root.rotation*new Vector3(p.cOff.x,0,p.cOff.y);return new Vector2(o.x,o.z);}
+        Vector2 FootCentre(Pet p)=>PetXZ(p)+FootOff(p);
+        string LevelOf(Pet p)=>p.job!=0?null:p.perch!=null?p.perch.name:p.onSofa?"sofa":"floor"; // null: in the air
+        Vector2 PetSeparate(Pet p,Vector2 from,Vector2 next)
+        {
+            if(p.perch!=null || p.onSofa)return next;
+            for(int pass=0;pass<2;pass++)foreach(var o in pets){
+                if(o==p || o.root==null || LevelOf(o)!="floor")continue;
+                var cn=next+FootOff(p);var co=FootCentre(o);float need=p.radius+o.radius+.01f;var d=cn-co;
+                if(d.magnitude>=need)continue;
+                if(d.sqrMagnitude<1e-6f)d=from-co;if(d.sqrMagnitude<1e-6f)d=Vector2.right;
+                next=Collide(from,co+d.normalized*need-FootOff(p));
+            }
+            return next;
+        }
+        float overlapLogAt,overlapMin=float.MaxValue;string overlapPair="";
+        void PetOverlapTick()
+        {
+            if(pets.Count<2)return;
+            for(int i=0;i<pets.Count;i++)for(int j=i+1;j<pets.Count;j++){
+                Pet a=pets[i],b=pets[j];if(a.root==null || b.root==null)continue;
+                var la=LevelOf(a);var lb=LevelOf(b);if(la==null || la!=lb)continue;
+                float gap=(FootCentre(a)-FootCentre(b)).magnitude-a.radius-b.radius;
+                if(gap<overlapMin){overlapMin=gap;overlapPair=a.tag+"-"+b.tag+"@"+la;}
+                if(gap<0)ResolveOverlap(a,b,gap);
+            }
+            if(Time.unscaledTime-overlapLogAt>=1f){
+                overlapLogAt=Time.unscaledTime;
+                if(overlapMin<float.MaxValue)Debug.Log("ROOMPLAY_OVERLAP min_gap="+F(overlapMin)+" pair="+overlapPair+(overlapMin>0?" ok":" OVERLAP"));
+                overlapMin=float.MaxValue;
+            }
+        }
+        // the cat that came later (still walking, or stopped last; the controlled cat is never the one) hisses once per 30 s and goes to a free place
+        void ResolveOverlap(Pet a,Pet b,float gap)
+        {
+            Pet victim;
+            if(a==ctl)victim=b;else if(b==ctl)victim=a;
+            else{float ta=a.moving?float.MaxValue:a.settledAt,tb=b.moving?float.MaxValue:b.settledAt;victim=ta>tb?a:b;}
+            if(Time.unscaledTime<victim.relocAt)return;
+            victim.relocAt=Time.unscaledTime+2f;
+            var other=victim==a?b:a;
+            Debug.Log("ROOMPLAY_"+victim.tag+" overlaps "+other.tag+" gap="+F(gap)+" on "+LevelOf(victim)+" -> moves to a free place");
+            if(Time.unscaledTime-lastHiss>=30f){KrLoad();var piece=Pick(krHiss);if(piece!=null){lastHiss=Time.unscaledTime;Debug.Log("ROOMPLAY_"+victim.tag+"SFX hiss");PetShot(victim,piece,.7f);}}
+            if(aiOn){victim.aiPaused=false;AiStart(victim,"wander");return;}
+            var t=AiFloorPoint(victim,()=>new Vector2(Rnd(-1.6f,1.6f),Rnd(-1.6f,1.2f)));
+            if(t.HasValue)PetGoTo(victim,"floor",t.Value,null,PetXZ(victim));
+        }
+        // a reservation that no longer matches where the cat is (a walk that was cancelled) is given back
+        void SpotLeakTick(Pet p)
+        {
+            if(p.root==null || p.job!=0 || p.moving || p.goal.HasValue || p.hopWait>0 || p.hopPlan.Count>0 || p.chainNext!=null)return;
+            p.transit=null;p.after=null;
+            if(p.spot!=null && !AtSpot(p,p.spot))SetSpot(p,null);
+            if(p.spot==null && (p.perch!=null || p.onSofa)){
+                var sp=p.onSofa?(p.fitSpot!=null && AtSpot(p,p.fitSpot)?p.fitSpot:null):OccSpot(p);
+                if(sp!=null && !SpotTaken(sp,p))SetSpot(p,sp);
+            }
+        }
         void PetHissTick()
         {
             if(!aiOn || pets.Count<2 || Time.unscaledTime-lastHiss<30f)return;
@@ -1156,31 +1358,58 @@ namespace Oddity.RoomTest
                         int n=perVertex[v];float best=-1;int bone=-1;for(int k=0;k<n;k++){var bw=weights[w+k];if(bw.weight>best){best=bw.weight;bone=bw.boneIndex;}}w+=n;
                         mask[v]=bone>=0 && bone<bones.Length && IsTail(bones[bone]);}
                     p.tailMask[i]=mask;}
+                // paw vertices: mainly weighted to a bone named paw, foot or toe (the cartoon cat's Foot / Toe, the Somali's Paw / Foot, the white cat's Paw / Toes)
+                p.pawMask=new bool[p.smrs.Length][];int pawCount=0;
+                for(int i=0;i<p.smrs.Length;i++){
+                    var src=p.smrs[i].sharedMesh;var bones=p.smrs[i].bones;var perVertex=src.GetBonesPerVertex();var weights=src.GetAllBoneWeights();var mask=new bool[src.vertexCount];int w=0;
+                    for(int v=0;v<mask.Length && v<perVertex.Length;v++){
+                        int n=perVertex[v];float best=-1;int bone=-1;for(int k=0;k<n;k++){var bw=weights[w+k];if(bw.weight>best){best=bw.weight;bone=bw.boneIndex;}}w+=n;
+                        if(bone>=0 && bone<bones.Length && !p.tailMask[i][v]){var nm=bones[bone].name.ToLowerInvariant();mask[v]=nm.Contains("paw") || nm.Contains("foot") || nm.Contains("toe");if(mask[v])pawCount++;}}
+                    p.pawMask[i]=mask;}
+                p.pawFallback=pawCount<20;Debug.Log("ROOMPLAY_"+p.tag+" paw vertices="+pawCount+(p.pawFallback?" (too few: the four lowest clusters are used)":""));
             }
-            float lo=float.MaxValue;var verts=new List<Vector3>();p.lowPts.Clear();
+            float lo=float.MaxValue;var verts=new List<Vector3>();p.lowPts.Clear();var pawPts=new List<Vector3>();var allPts=new List<Vector3>();
             float f0=float.MaxValue,f1=float.MinValue,s0=float.MaxValue,s1=float.MinValue;var rp=p.root.position;bool fit=p.onSofa && p.fitFront!=Vector3.zero;
             for(int i=0;i<p.smrs.Length;i++){
                 var smr=p.smrs[i];smr.BakeMesh(p.bake,true);p.bake.GetVertices(verts);var m=smr.transform.localToWorldMatrix;
                 for(int v=0;v<verts.Count;v++){
                     if(p.tailMask[i][v])continue;var w=m.MultiplyPoint3x4(verts[v]);
                     if(w.y<lo+.03f){if(w.y<lo){lo=w.y;}p.lowPts.Add(w);}
+                    if(p.pawMask[i][v])pawPts.Add(w);else if(p.pawFallback && w.y<rp.y+.25f)allPts.Add(w);
                     if(fit){var d=w-rp;float a=Vector3.Dot(d,p.fitFront),b=Vector3.Dot(d,p.fitSide);if(a<f0)f0=a;if(a>f1)f1=a;if(b<s0)s0=b;if(b>s1)s1=b;}
                 }
             }
             p.lowPts.RemoveAll(w=>w.y>lo+.03f);
             if(fit){p.ext[0]=f0;p.ext[1]=f1;p.ext[2]=s0;p.ext[3]=s1;}
+            // the points that must not sink: the lowest vertex of each paw (up to four clusters of 4.5 cm), a few of its neighbours within 1 cm, and the lowest body vertices (a lying belly)
+            p.conPts.Clear();
+            var src2=p.pawFallback?allPts:pawPts;src2.Sort((u,w)=>u.y.CompareTo(w.y));
+            var seeds=new List<Vector3>();var seedN=new List<int>();
+            foreach(var w in src2){
+                int hit=-1;for(int k=0;k<seeds.Count;k++)if(new Vector2(w.x-seeds[k].x,w.z-seeds[k].z).sqrMagnitude<.045f*.045f){hit=k;break;}
+                if(hit>=0){if(seedN[hit]<4 && w.y<seeds[hit].y+.01f){seedN[hit]++;p.conPts.Add(w);}}
+                else if(seeds.Count<4){seeds.Add(w);seedN.Add(1);p.conPts.Add(w);}
+            }
+            var cells=new HashSet<Vector2Int>();
+            foreach(var w in p.lowPts){var c=new Vector2Int(Mathf.RoundToInt(w.x/.03f),Mathf.RoundToInt(w.z/.03f));if(cells.Count<8 && cells.Add(c))p.conPts.Add(w);}
+            p.pawSeeds=seeds.Count;
             return lo;
         }
-        // on the sofa the surface under it is the highest cushion point under any of its paws (rays down at each low vertex), not one ray at the body centre: the cushion has seams and a rolled front edge.
-        // Only hits within 6 cm of where it landed count, so an armrest or the backrest under a vertex is not taken for the seat
-        void SofaSurface(Pet p)
+        // the surface under a point of the cat: on the sofa the cushion top (rays down on the sofa colliders, within a band round the height it landed at), on a perch the perch top, else the floor.
+        // A ray that falls into a narrow gap (the seam between cushions) is not trusted: if the best of 8 neighbours within 4 cm is more than 2 cm higher, that neighbour's top is used
+        float SurfaceUnder(Pet p,Vector3 w,out float raw)
         {
-            float best=p.surfBase;bool any=false;
-            foreach(var w in p.lowPts){
-                var ray=new Ray(new Vector3(w.x,p.surfBase+.2f,w.z),Vector3.down);
-                foreach(var c in propHits)if(c!=null && c.transform.root==sofa && c.Raycast(ray,out var hit,.5f) && hit.point.y>=p.surfBase-.06f && hit.point.y<=p.surfBase+.06f && (!any || hit.point.y>best)){best=hit.point.y;any=true;}
-            }
-            p.surf=best;
+            raw=float.NaN;
+            List<Collider> cols;float centre;
+            if(p.onSofa && p.seat!=null && sofaCols!=null){cols=sofaCols;centre=p.surfBase;}
+            else if(p.perch!=null && perchColsOf.TryGetValue(p.perch,out cols)){centre=p.surf;}
+            else return p.surf;
+            float lo=centre-.12f,hi=centre+.08f;
+            float Hit(float x,float z){var ray=new Ray(new Vector3(x,hi+.15f,z),Vector3.down);float best=float.NaN;foreach(var c in cols)if(c!=null && c.Raycast(ray,out var h,.6f) && h.point.y>=lo && h.point.y<=hi && !(h.point.y<=best))best=h.point.y;return best;}
+            float own=Hit(w.x,w.z);raw=own;float nb=float.NaN;
+            for(int a=0;a<8;a++){float ang=a*45f*Mathf.Deg2Rad;float hn=Hit(w.x+Mathf.Cos(ang)*.04f,w.z+Mathf.Sin(ang)*.04f);if(!float.IsNaN(hn) && !(hn<=nb))nb=hn;}
+            if(float.IsNaN(own))return float.IsNaN(nb)?centre:nb;
+            return !float.IsNaN(nb) && nb-own>.02f?nb:own;
         }
         const float SofaFitMargin=.03f;
         // the whole footprint on the seat: from the rump, and from each end of the body along the seat, a horizontal ray (at body height above the cushion) to the backrest and the arms; the root is eased until each has 3 cm
@@ -1195,33 +1424,44 @@ namespace Oddity.RoomTest
             float back=Clear(-p.fitFront,-p.ext[0]);if(back<SofaFitMargin)shift+=p.fitFront*(SofaFitMargin-back);
             float pos=Clear(p.fitSide,p.ext[3]);if(pos<SofaFitMargin)shift-=p.fitSide*(SofaFitMargin-pos);
             float neg=Clear(-p.fitSide,-p.ext[2]);if(neg<SofaFitMargin)shift+=p.fitSide*(SofaFitMargin-neg);
+            var cs=p.fitSpot; // inside the cushion it landed on: the footprint along the seat stays 2 cm off the seam and the arm
+            if(cs!=null){
+                float sgn=Vector3.Dot(p.fitSide,cs.axis)>=0?1:-1;float c0=Vector3.Dot(rp,p.fitSide);float e0=c0+p.ext[2],e1=c0+p.ext[3];
+                float a=sgn>0?cs.lo:-cs.hi,b=sgn>0?cs.hi:-cs.lo;const float cm=.02f;
+                if(e1-e0>b-a-2*cm)shift+=p.fitSide*((a+b)/2-(e0+e1)/2);
+                else{if(e0<a+cm)shift+=p.fitSide*(a+cm-e0);if(e1>b-cm)shift-=p.fitSide*(e1-(b-cm));}
+            }
             if(shift.sqrMagnitude<1e-8f)return;
             shift=Vector3.ClampMagnitude(shift,.15f);
             p.root.position=rp+shift*(1-Mathf.Exp(-dt*8));
             if(Time.unscaledTime-p.lastFit>1f){p.lastFit=Time.unscaledTime;Debug.Log("ROOMPLAY_"+p.tag+" sofafit back="+F(back)+" side+="+F(pos)+" side-="+F(neg)+" shift=("+F(shift.x)+","+F(shift.z)+")");}
         }
-        // while a pet rests (not walking, not in a hop) its lowest vertex is eased onto the surface it is on, 0.1 s like Harin's sole lift
+        // while a pet rests (not walking, not in a hop) every paw (and the lowest body vertices) is eased onto its own surface, 0.1 s like Harin's sole lift: the body is lifted until no point is below
+        // its surface, so the most sunk paw decides. Runs every frame on the sofa, a perch and the floor, in every pose
         void PetRestTick(Pet p,float dt)
         {
             if(p.root==null || !p.graph.IsValid() || p.job!=0 || p.moving || p.hopWait>0)return;
             float lo=PetLowest(p);
-            if(p.onSofa && p.seat!=null){SofaSurface(p);SofaFit(p,dt);}
-            float gap=lo-p.surf;
+            bool soft=p.onSofa && p.seat!=null;
+            float gap=float.MaxValue,top=float.MinValue;var sb=Time.unscaledTime-p.pawLogAt>=1f && PetEnv("ODDITY_PAWLOG")=="1"?new System.Text.StringBuilder():null;
+            for(int i=0;i<p.conPts.Count;i++){
+                var w=p.conPts[i];float s=SurfaceUnder(p,w,out var raw);top=Mathf.Max(top,s);gap=Mathf.Min(gap,w.y-s);
+                if(sb!=null && i<p.pawSeeds)sb.Append(" paw").Append(i).Append("(y=").Append(F(w.y)).Append(" surface=").Append(F(s)).Append(" raw=").Append(float.IsNaN(raw)?"none":F(raw)).Append(" gap=").Append(F((w.y-s)*1000)).Append("mm)");
+            }
+            if(p.conPts.Count==0){gap=lo-p.surf;top=p.surf;}
+            if(soft || p.perch!=null)p.surf=soft?top:p.surf;
+            if(soft){SofaFit(p,dt);}
+            if(sb!=null){p.pawLogAt=Time.unscaledTime;Debug.Log("ROOMPLAY_"+p.tag+" PAWS clip="+p.clipNames[p.index]+" spot="+(p.spot!=null?p.spot.key:"-")+" lowest-vertex="+F(lo)+" worst-gap="+F(gap*1000)+"mm"+sb);}
             if(Mathf.Abs(gap)<.0005f)return;
-            if(Mathf.Abs(gap)<.003f){var key=p.surf.ToString("0.000")+"/"+p.index;if(key!=p.gapKey){p.gapKey=key;Debug.Log("ROOMPLAY_"+p.tag+" rest surface="+F(p.surf)+" clip="+p.clipNames[p.index]+" lowest-vertex gap="+F(gap*1000)+" mm rootY="+F(p.root.position.y));}}
+            if(Mathf.Abs(gap)<.003f){var key=p.surf.ToString("0.000")+"/"+p.index;if(key!=p.gapKey){p.gapKey=key;Debug.Log("ROOMPLAY_"+p.tag+" rest surface="+F(p.surf)+" clip="+p.clipNames[p.index]+" lowest-point gap="+F(gap*1000)+" mm rootY="+F(p.root.position.y));}}
             var pos=p.root.position;pos.y-=Mathf.Clamp(gap,-.25f,.25f)*(1-Mathf.Exp(-dt*30));p.root.position=pos;
         }
         // M: the controlled pet's next clip; the Somali cycles Idle -> Walk -> Sit -> Stand -> Lie -> Loaf
         void NextCat()
         {
             var p=ctl??pets.FirstOrDefault();if(p==null || !p.graph.IsValid() || p.job!=0)return;
-            if(!p.somali){SetPetClip(p,(p.index+1)%CatClips.Length,true);return;}
-            p.mStep=(p.mStep+1)%(p.white?8:p.hasLie?6:4);p.goal=null;p.moving=false;
-            if(p.mStep==0){if(p.sit!=0)PetStand(p);else SetPetClip(p,0,true);}
-            else if(p.mStep==1){p.sit=0;SetPetClip(p,1,true);}
-            else if(p.mStep==2){if(p.sit==0 && p.index==1)SetPetClip(p,0,false);PetSit(p);}
-            else if(p.mStep==3)PetStand(p);
-            else{if(p.sit==0 && p.index==1)SetPetClip(p,0,false);PetRest(p,p.mStep==4?2:p.mStep==5?3:p.mStep==6?4:5);}
+            int start=CurAction(p);if(start<0)start=p.mStep;
+            for(int k=1;k<=10;k++){int a=(start+k)%10;if(CanDo(p,a)){p.mStep=a;CatAction(p,a);return;}}
         }
         // the computer lives on the dining table: an open laptop in front of the chair on the -x side, screen tilted back and facing that seat
         static void Laptop(Transform table)
@@ -1317,7 +1557,7 @@ namespace Oddity.RoomTest
         }
         void ScriptClick(string key)
         {
-            Vector3 target=key=="clickwindow"?new Vector3(-RoomHalf,(WinY.x+WinY.y)/2,(WinZ.x+WinZ.y)/2):key=="clicksofa"&&sofa!=null?SeatOf("SeatL",sofa):key=="clicktable"&&tableRoot!=null?tableRoot.position+Vector3.up*.7f:key=="clickcounter"?new Vector3(1.17f,.86f,1.5f):key=="clickfridge"?new Vector3(1.7f,1.2f,1.5f):key=="clicksill"?new Vector3(-1.85f,.85f,.2f):ScriptFloorPoint();
+            Vector3 target=key=="clickwindow"?new Vector3(-RoomHalf,(WinY.x+WinY.y)/2,(WinZ.x+WinZ.y)/2):key=="clicksofa"&&sofa!=null?SeatOf("SeatL",sofa):key=="clicksofar"&&sofa!=null?SeatOf("SeatR",sofa):key=="clicksofac"&&sofa!=null?SeatOf("SeatC",sofa):key=="clicktable"&&tableRoot!=null?tableRoot.position+Vector3.up*.7f:key=="clickcounter"?new Vector3(1.17f,.86f,1.5f):key=="clickfridge"?new Vector3(1.7f,1.2f,1.5f):key=="clicksill"?new Vector3(-1.85f,.85f,.2f):ScriptFloorPoint();
             ClickAt(new Ray(cameraView.transform.position,target-cameraView.transform.position));
         }
         // clickfloor's fixed point (.9, .9); ODDITY_CLICKXZ="x,z" picks another one for a path test
@@ -2321,9 +2561,8 @@ namespace Oddity.RoomTest
             Part(PrimitiveType.Cylinder,shield.transform,Vector3.zero,new Vector3(.5f,.012f,.5f),new Color(.45f,.27f,.13f));
             Part(PrimitiveType.Cylinder,shield.transform,new Vector3(0,.015f,0),new Vector3(.12f,.012f,.12f),new Color(.78f,.8f,.84f));
         }
-        static readonly string[] SomaliKeyList={"1  Idle","2  Walk (제자리)","3  앉기 (SitDown, 앉아 있기)","4  일어서기 (StandUp)","5  눕기 (스핑크스, LieDown)","6  식빵 굽기 (LoafDown)","space  멈추기 (앉았거나 누웠으면 일어서기)","W A S D  걷기 (앉았으면 먼저 일어섬)","← →  제자리 돌기","↑ ↓, 휠  줌","C V  소파에 올라가 앉기, K  올라가 눕기","클릭  바닥, 소파, 식탁, 창","M  다음 동작","O  고양이 소리 켜고 끄기","Tab  하린으로"};
-        static readonly string[] WhiteKeyList={"1  Idle","2  Walk (제자리)","3  앉기 (SitDown)","4  일어서기 (StandUp)","5  눕기 (스핑크스)","6  식빵 굽기","7  그루밍 (앉아서)","8  기지개","9  제자리 점프","space  멈추기 (앉았거나 누웠으면 일어서기)","W A S D  걷기, Shift 빠르게","← →  제자리 돌기","↑ ↓, 휠  줌","C V  소파에 올라가 앉기, K  올라가 눕기","클릭  바닥, 소파, 식탁, 조리대, 냉장고, 창","M  다음 동작","O  고양이 소리 켜고 끄기","Tab  하린으로"};
-        static readonly string[] CatKeyList={"1  Idle","2  Walk (제자리)","3  Jump","4  Sound","5  Eat","space  멈추기 (Idle)","W A S D  걷기, Shift 빠르게","← →  제자리 돌기","↑ ↓, 휠  줌","C V K  소파에 올라가기","클릭  바닥, 소파, 식탁, 창","M  다음 동작","O  고양이 소리 켜고 끄기","Tab  하린으로"};
+        static readonly string[] CatCommonKeys={"space  멈추기 (앉았거나 누웠으면 일어서기)","W A S D  걷기, Shift 빠르게","← →  제자리 돌기","↑ ↓, 휠  줌","C V  소파에 올라가 앉기, K  올라가 눕기","클릭  바닥, 소파, 식탁, 조리대, 냉장고, 창","M  다음 동작","O  고양이 소리 켜고 끄기","Tab  하린으로"};
+        static string CatRow(Pet p,int i){const string keys="1234567890";return i<10?keys[i]+"  "+ActionNames[i]+(CanDo(p,i)?"":" (없음)"):CatCommonKeys[i-10];}
         void OnGUI()
         {
             var ev=Event.current;
@@ -2331,14 +2570,14 @@ namespace Oddity.RoomTest
                 if(ev.type==EventType.KeyDown){if(!tabGuiDown){tabGuiDown=true;TabPress("ongui");}ev.Use();GUIUtility.keyboardControl=0;}
                 else if(ev.type==EventType.KeyUp){tabGuiDown=false;ev.Use();}
             }
-            bool cat=ctl!=null;var keyList=cat && ctl.white?WhiteKeyList:cat && ctl.somali?SomaliKeyList:CatKeyList;
-            int rows=cat?keyList.Length:Keys.Length;
+            bool cat=ctl!=null;
+            int rows=cat?10+CatCommonKeys.Length:Keys.Length;
             float listEnd=34+rows*17;GUI.Box(new Rect(10,10,340,listEnd-6),"");var style=new GUIStyle(GUI.skin.label){fontSize=12};
             GUI.Label(new Rect(16,13,330,20),cat?(ctl.white?"흰 고양이":ctl.somali?"소말리 고양이":"고양이"):modelName??"준비 중",style);
             for(int i=0;i<rows;i++){
                 if(cat){
-                    bool on=ctl.white?(i==0&&ctl.index==0)||(i==1&&ctl.index==1)||(i==2&&(ctl.index==2||ctl.index==3))||(i==3&&ctl.index==4)||(i==4&&(ctl.index==5||ctl.index==6))||(i==5&&(ctl.index==8||ctl.index==9))||(i==6&&ctl.index==12)||(i==7&&ctl.index==13)||(i==8&&ctl.index==11):ctl.somali?(i==0&&ctl.index==0)||(i==1&&ctl.index==1)||(i==2&&(ctl.index==2||ctl.index==3))||(i==3&&ctl.index==4)||(i==4&&(ctl.index==5||ctl.index==6))||(i==5&&(ctl.index==8||ctl.index==9)):i<5 && i==ctl.index;style.normal.textColor=on?Color.yellow:Color.white;
-                    GUI.Label(new Rect(16,34+i*17,330,18),(on?"> ":"  ")+keyList[i],style);
+                    bool on=i<10 && i==CurAction(ctl);style.normal.textColor=on?Color.yellow:i<10 && !CanDo(ctl,i)?Color.gray:Color.white;
+                    GUI.Label(new Rect(16,34+i*17,330,18),(on?"> ":"  ")+CatRow(ctl,i),style);
                     continue;
                 }
                 bool selected=i==current;
