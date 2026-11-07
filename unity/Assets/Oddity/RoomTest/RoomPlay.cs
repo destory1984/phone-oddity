@@ -29,7 +29,7 @@ namespace Oddity.RoomTest
             ("5", "KaIdle24Dance04"), ("6", "KaIdle89CheekPointPose"),
             ("7", "KaIdle41CuteShyPose"), ("8", "KaIdle44GreetingBow"),
             ("9", "BlowKissSkin"), ("space", "CatwalkIdleSkin"),
-            ("a", "CatwalkSkin"), ("shift", "KaRun01"), ("f", "UAL1Standard#Sword_Attack"), ("z", "ZeroTwoDance"), ("0", "KaIdle73IdolPose"), ("c", "KaSitPutHandBetweensLoop"), ("v", "KaSitWithBothLegsUpLoop"), ("y", "MxYawn"), ("k", "KaSleepTurnToTheSideLoop"), ("d", "CatwalkSkin"), ("w", "CatwalkSkin"), ("s", "CatwalkSkin"), ("left", "누르는 동안 시계 방향 회전"), ("right", "누르는 동안 반시계 회전"), ("n", "다음 모델, Shift+N 이전 모델"),("r", "현재 모델 다시 불러오기"), ("l", "주인공(카메라) 바라보기 켜고 끄기"), ("h", "식탁 의자에서 턱 괴기 켜고 끄기"), ("g", "다음 걷기"), ("escape", "재생 끝내기"), ("up", "줌 인"), ("down", "줌 아웃"), ("m", "고양이(소말리) 동작 바꾸기"), ("tab", "Tab 하린, 고양이, 소말리 번갈아 조종")
+            ("a", "CatwalkSkin"), ("shift", "KaRun01"), ("f", "UAL1Standard#Sword_Attack"), ("z", "ZeroTwoDance"), ("0", "KaIdle73IdolPose"), ("c", "KaSitPutHandBetweensLoop"), ("v", "KaSitWithBothLegsUpLoop"), ("y", "MxYawn"), ("k", "KaSleepTurnToTheSideLoop"), ("d", "CatwalkSkin"), ("w", "CatwalkSkin"), ("s", "CatwalkSkin"), ("left", "누르는 동안 시계 방향 회전"), ("right", "누르는 동안 반시계 회전"), ("n", "다음 모델, Shift+N 이전 모델"),("r", "현재 모델 다시 불러오기"), ("l", "주인공(카메라) 바라보기 켜고 끄기"), ("h", "식탁 의자에서 턱 괴기 켜고 끄기"), ("g", "다음 걷기"), ("escape", "재생 끝내기"), ("up", "줌 인"), ("down", "줌 아웃"), ("m", "고양이(소말리) 동작 바꾸기"), ("tab", "Tab 하린, 고양이, 소말리, 흰 고양이 번갈아 조종"), ("o", "O 고양이 소리 켜고 끄기")
         };
         // G cycles the walk; ODDITY_PLAYWALK picks the first one
         static readonly string[] Walks={"CatwalkSkin","KaWalk01","KaWalk02","KaWalk03","KaWalk04","KaWalk05","KaWalk06","KaWalk07","WalkFemale","WalkFeminine","WalkStandardSkin"};
@@ -131,7 +131,7 @@ namespace Oddity.RoomTest
                 var text=Environment.GetEnvironmentVariable("ODDITY_PLAYKEYS");scripted=!string.IsNullOrWhiteSpace(text);
                 if(scripted)foreach(var part in text.Split(',')){
                     var pair=part.Split(':');
-                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0]=="wait" || pair[0].StartsWith("click") || pair[0]=="wheelup" || pair[0]=="wheeldown" || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
+                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0]=="realtab" || pair[0]=="wait" || pair[0].StartsWith("click") || pair[0]=="wheelup" || pair[0]=="wheeldown" || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
                     script.Add((pair[0],seconds));
                 }
                 Debug.Log("ROOMPLAY_READY model="+modelName);
@@ -279,14 +279,15 @@ namespace Oddity.RoomTest
         // Cartoon import settings: Editor/CatImport.cs. The Somali glb goes through UniGLTF like the props; its clips come out Legacy, so RoomPlay copies them as Mecanim clips.
         sealed class Pet
         {
-            public string tag;public bool somali;
+            public string tag;public bool somali,white;public float walkSpd=.5f,runSpd=1.2f,aiSpd=.35f,walkClipSpd=1; // somali: a pet with rest poses (the Somali and the white cat); white: also Groom, Stretch, Jump; walkSpd/runSpd/aiSpd: m/s
             public string[] clipNames;public AnimationClip[] clips;
             public Transform root;public PlayableGraph graph;public AnimationPlayableOutput outp;
             public int index;public bool moving;public float heading=-1000;
             public bool onSofa;public Transform seat;public float baseY;
             public Vector2? goal;public string goalKind;public Transform goalSeat;public Vector2 goalLook;public float faceTo=float.NaN,stuck;
             public int job;public float jobT,jobDur,jobArc,jobHead;public Vector3 jobFrom,jobTo;public Transform jobSeat;
-            public int sit; // Somali only: 0 standing, 1 SitDown playing, 2 sitting (SittingIdle), 3 StandUp playing, 4 LieDown, 5 lying (LyingIdle, sphinx), 6 GetUp, 7 LoafDown, 8 loafing (LoafIdle), 9 LoafUp
+            public bool groomAfter; // white: the SitDown that is playing leads into Groom
+            public int sit; // Somali and white only (10 grooming, 11 stretching): 0 standing, 1 SitDown playing, 2 sitting (SittingIdle), 3 StandUp playing, 4 LieDown, 5 lying (LyingIdle, sphinx), 6 GetUp, 7 LoafDown, 8 loafing (LoafIdle), 9 LoafUp
             public bool hasLie;public int restNext,arriveRest;public float settledAt; // restNext: the rest pose (1 sit, 2 lie, 3 loaf) to start when the Up clip ends; arriveRest: the pose to take on landing on the sofa or a perch (0 = sit); settledAt: when it last stopped moving, for the hiss
             public int mStep;
             public AudioSource shot,purr;
@@ -294,8 +295,8 @@ namespace Oddity.RoomTest
             public Perch perch,jobPerch;public string chainNext,jobChain;public float hopWait;public bool auto; // perch: a high place it sits on now (null: floor or sofa); chain: counter first, then the fridge
             public float surf;public SkinnedMeshRenderer[] smrs;public bool[][] tailMask;public Mesh bake;public string gapKey=""; // surf: height of the surface it rests on (floor 0); the rest of these measure its lowest vertex
             public bool aiPaused;public float resumeIn;public int aiPhase;public string aiAct="",aiLast="",aiPlace="";public float aiT,aiDur,aiGo;public int aiReps,aiLastClip=-1;public Vector2 aiTarget;public bool aiHasTarget;
-            public bool Idleish=>index==0 || (somali && (index==3 || index==6 || index==9));
-            public int JumpClip=>somali?0:2; // the Somali has no jump clip: the arc is flown in the Idle pose
+            public bool Idleish=>index==0 || (somali && (index==3 || index==6 || index==9 || (white && index==12)));
+            public int JumpClip=>white?11:somali?0:2; // the Somali has no jump clip: the arc is flown in the Idle pose
         }
         // a high place a cat can sit on: it walks to stand (a floor spot), hops to land (top view x, z; the height comes from a downward ray), and faces yaw
         sealed class Perch{public string name;public Vector2 stand,land;public float yaw,top=float.NaN;public Func<Collider,bool> pick;}
@@ -304,11 +305,16 @@ namespace Oddity.RoomTest
         static readonly string[] CatClips={"Idle","Walk","Jump","Sound","Eat"};
         static readonly string[] SomaliClips={"Idle","WalkClean","SitDown","SittingIdle","StandUp","LieDown","LyingIdle","GetUp","LoafDown","LoafIdle","LoafUp"}; // the last six only come with somali_cat_lie.glb (hasLie)
         static bool SomaliLoops(int i)=>i==0||i==1||i==3||i==6||i==9;
+        // the white cat: the Somali's eleven clips in the same order, then Jump (11), Groom (12, sitting, loops), Stretch (13)
+        static readonly string[] WhiteClips={"Idle","Walk","SitDown","SittingIdle","StandUp","LieDown","LyingIdle","GetUp","LoafDown","LoafIdle","LoafUp","Jump","Groom","Stretch"};
+        static bool WhiteLoops(int i)=>SomaliLoops(i)||i==12;
         static bool IsUp(int s)=>s==3||s==6||s==9;
         const string CatDir="Assets/Oddity/DevMotion/Cat/";
+        const string WhiteDir="Assets/Models/test/";
         const string SomaliFile="Assets/Oddity/DevMotion/Cat/Somali/somali_cat.glb",SomaliLieFile="Assets/Oddity/DevMotion/Cat/Somali/somali_cat_lie.glb";
         // sizes: the cartoon cat (big head, short body) by head-top height, the Somali by body length nose tip to rump, tail excluded (0.46 m, a typical adult house cat); env overrides in metres
         static readonly float CartoonCatHeight=PetEnv("ODDITY_CATSIZE")!=null?float.Parse(PetEnv("ODDITY_CATSIZE"),CultureInfo.InvariantCulture):CartoonCatDefaultHeight;
+        static readonly float WhiteBodyLength=PetEnv("ODDITY_WHITELENGTH")!=null?float.Parse(PetEnv("ODDITY_WHITELENGTH"),CultureInfo.InvariantCulture):.46f;
         static readonly float SomaliBodyLength=PetEnv("ODDITY_SOMALILENGTH")!=null?float.Parse(PetEnv("ODDITY_SOMALILENGTH"),CultureInfo.InvariantCulture):.46f;
         const float CartoonCatDefaultHeight=.21f; // vertex-measured head-top height: .141 m was too small, .29 m too big
         readonly List<Pet> pets=new List<Pet>();Pet ctl; // ctl: the controlled pet, null while Harin is
@@ -318,6 +324,7 @@ namespace Oddity.RoomTest
             if(!room || PetEnv("ODDITY_CAT")=="0")return;
             SpawnCat();
             if(PetEnv("ODDITY_SOMALI")!="0")SpawnSomali();
+            if(PetEnv("ODDITY_WHITE")!="0")SpawnWhite();
         }
         // what the pet measures in the pose now playing, from the baked vertices of its skinned meshes only (a stray static mesh in a glb, like a ground plane, counts for nothing)
         // and without the tail (vertices mainly weighted to a bone named "tail" or below one): length = nose tip to rump along the root's forward axis, minY/maxY = floor to head top
@@ -430,6 +437,50 @@ namespace Oddity.RoomTest
                 pets.Add(p);
             }catch(Exception e){Debug.LogWarning("ROOMPLAY_SOMALI failed: "+e.Message);}
         }
+
+        // the realistic white cat (Blender-made clips, git-ignored Assets/Models/test/whitecat-2-N-anim.glb, the newest N): a wrapper root like the Somali's. Its Walk clip covers 0.70 model units a second,
+        // so at the body length scale it walks 0.70 * scale m/s; Shift 1.6x, autonomous 0.8x
+        float WhiteYaw=PetEnv("ODDITY_WHITEYAW")!=null?float.Parse(PetEnv("ODDITY_WHITEYAW"),CultureInfo.InvariantCulture):180-25;
+        float WhiteFix=PetEnv("ODDITY_WHITEFIX")!=null?float.Parse(PetEnv("ODDITY_WHITEFIX"),CultureInfo.InvariantCulture):0;
+        void SpawnWhite()
+        {
+            try{
+                var dir=Path.Combine(Application.dataPath,"Models/test");
+                var found=Directory.Exists(dir)?Directory.GetFiles(dir,"whitecat-2-*-anim.glb").OrderByDescending(f=>{var parts=Path.GetFileNameWithoutExtension(f).Split('-');return parts.Length>=3 && int.TryParse(parts[2],out var n)?n:-1;}).FirstOrDefault():null;
+                if(found==null){Debug.LogWarning("ROOMPLAY_WHITE no whitecat-2-N-anim.glb in "+WhiteDir+", no white cat");return;}
+                string file=WhiteDir+Path.GetFileName(found);
+                var prefab=AssetDatabase.LoadAssetAtPath<GameObject>(file);
+                if(prefab==null){AssetDatabase.ImportAsset(file,ImportAssetOptions.ForceSynchronousImport|ImportAssetOptions.ForceUpdate);prefab=AssetDatabase.LoadAssetAtPath<GameObject>(file);}
+                if(prefab==null){Debug.LogWarning("ROOMPLAY_WHITE import failed "+file+", no white cat");return;}
+                var all=AssetDatabase.LoadAllAssetsAtPath(file).OfType<AnimationClip>().ToList();
+                AnimationClip Find(string n)=>all.FirstOrDefault(c=>c.name==n) ?? all.FirstOrDefault(c=>c.name.EndsWith(n) && !c.name.StartsWith("__preview__"));
+                var p=new Pet{tag="WHITE",somali=true,white=true,hasLie=true,clipNames=WhiteClips,clips=new AnimationClip[WhiteClips.Length]};
+                for(int i=0;i<WhiteClips.Length;i++){
+                    var src=Find(WhiteClips[i]);
+                    if(src==null){Debug.LogWarning("ROOMPLAY_WHITE clip missing "+WhiteClips[i]+" (have "+string.Join(",",all.Select(c=>c.name))+"), no white cat");return;}
+                    p.clips[i]=PetClipCopy(src,WhiteLoops(i));}
+                var wrap=new GameObject("White");var go=Instantiate(prefab,wrap.transform);go.name="WhiteModel";go.transform.localRotation=Quaternion.identity;
+                p.root=wrap.transform;
+                foreach(var a in go.GetComponentsInChildren<Animation>())Destroy(a);
+                foreach(var r in go.GetComponentsInChildren<Renderer>())if(r is SkinnedMeshRenderer smr)smr.updateWhenOffscreen=true;
+                var host=go.GetComponent<Animator>();if(host==null)host=go.AddComponent<Animator>();PetGraph(p,host);
+                // measured, not assumed: the nose points from Pelvis to Head; the model is turned so that direction is the wrapper's +z, which is what every heading in this file means
+                Transform Bone(string n)=>go.GetComponentsInChildren<Transform>().FirstOrDefault(t=>t.name==n);
+                var head=Bone("Head");var pelvis=Bone("Pelvis");
+                if(head!=null && pelvis!=null){
+                    var fw=Vector3.ProjectOnPlane(head.position-pelvis.position,Vector3.up);
+                    if(fw.sqrMagnitude>1e-8f){float ang=Mathf.Atan2(fw.x,fw.z)*Mathf.Rad2Deg;go.transform.localRotation=Quaternion.Euler(0,WhiteFix-ang,0);Debug.Log("ROOMPLAY_WHITE nose measured at "+F(ang)+" deg from +z, model turned by "+F(-ang));}
+                }else Debug.LogWarning("ROOMPLAY_WHITE Head or Pelvis bone missing, facing unmeasured");
+                PetSfxSetup(p,wrap);
+                // front left on the open floor in front of the TV stand (z -2 -> -1.62), clear of the Somali (-1.30, -0.85) and the rug cat, turned toward the camera at an angle the other way
+                var spot=PetEnv("ODDITY_WHITESPOT")!=null?PetEnv("ODDITY_WHITESPOT").Split(',').Select(s=>float.Parse(s,CultureInfo.InvariantCulture)).ToArray():new[]{-.25f,-1.05f};
+                PetPlace(p,new Vector2(spot[0],spot[1]),WhiteYaw,true,WhiteBodyLength);
+                float scale=p.root.localScale.x;p.walkSpd=.70f*scale;p.runSpd=p.walkSpd*1.6f;p.aiSpd=p.walkSpd*.8f;
+                var mat=go.GetComponentsInChildren<Renderer>().SelectMany(r=>r.sharedMaterials).FirstOrDefault(m=>m!=null);
+                Debug.Log("ROOMPLAY_WHITE file="+Path.GetFileName(found)+" speed="+F(p.walkSpd)+" m/s run="+F(p.runSpd)+" ai="+F(p.aiSpd)+" clips="+string.Join(",",p.clips.Select(c=>c.name+":"+F(c.length)+(c.legacy?"L":"M")))+" renderers="+go.GetComponentsInChildren<Renderer>().Length+" material="+(mat!=null?mat.shader.name+" colour="+(mat.HasProperty("_BaseColor")?mat.GetColor("_BaseColor").ToString():"-")+" map="+(mat.HasProperty("_BaseMap") && mat.GetTexture("_BaseMap")!=null):"none"));
+                pets.Add(p);
+            }catch(Exception e){Debug.LogWarning("ROOMPLAY_WHITE failed: "+e.Message);}
+        }
         void SetPetClip(Pet p,int i,bool log)
         {
             bool changed=i!=p.index || p.loopCount<0;
@@ -441,35 +492,55 @@ namespace Oddity.RoomTest
         }
         // the Somali rests in one of three poses: sits (SitDown once, then SittingIdle), lies like a sphinx (LieDown, LyingIdle) or loafs (LoafDown, LoafIdle). It gets up with the matching Up clip
         // (StandUp, GetUp, LoafUp) and then goes on; changing between poses stands up first (restNext). PetAnimTick moves between the clips
-        static readonly string[] RestNames={"","sit","lie","loaf"};
+        static readonly string[] RestNames={"","sit","lie","loaf","groom","stretch","jump"};
         void PetSit(Pet p)=>PetRest(p,1);
+        // kinds 1 sit, 2 lie, 3 loaf (both cats); 4 groom (sits first, then loops Groom), 5 stretch (once, standing), 6 jump in place (once) are the white cat's
         void PetRest(Pet p,int kind)
         {
             if(!p.somali || p.job!=0)return;
+            if(kind>=4 && !p.white)return;
             if(kind!=1 && !p.hasLie){Notice("이 소말리 파일에는 눕는 동작이 없음 (somali_cat_lie.glb)");return;}
             int s=p.sit;
-            if((kind==1 && (s==1||s==2)) || (kind==2 && (s==4||s==5)) || (kind==3 && (s==7||s==8))){p.restNext=0;return;} // already in that pose
+            if(kind==5 || kind==6){
+                if(s!=0){PetStand(p,kind);return;} // up first, then the stretch or the jump
+                p.goal=null;p.faceTo=float.NaN;p.moving=false;p.restNext=0;
+                Debug.Log("ROOMPLAY_"+p.tag+" rest pose="+RestNames[kind]);
+                if(kind==5){p.sit=11;SetPetClip(p,13,true);}
+                else{p.jobFrom=p.jobTo=p.root.position;p.job=4;p.jobT=0;p.jobDur=p.clips[11].length;p.jobArc=.12f;p.jobHead=p.heading;SetPetClip(p,11,true);}
+                return;}
+            if(kind==4){
+                if(s==10){p.restNext=0;return;}
+                if(s==2){p.sit=10;p.restNext=0;SetPetClip(p,12,true);Debug.Log("ROOMPLAY_"+p.tag+" rest pose=groom");return;}
+                if(s==1){p.groomAfter=true;p.restNext=0;return;}
+                if(s!=0){PetStand(p,4);return;}
+                p.groomAfter=true;kind=1; // from standing: sit down, the Groom follows
+            }
+            else if(kind==1 && s==10){p.sit=2;p.restNext=0;SetPetClip(p,3,true);return;}
+            if((kind==1 && (s==1||s==2)) || (kind==2 && (s==4||s==5)) || (kind==3 && (s==7||s==8))){p.restNext=0;if(kind==1)p.groomAfter=false;return;} // already in that pose
             if(s!=0){PetStand(p,kind);return;} // another pose or an Up clip playing: up first, then this pose
             p.goal=null;p.faceTo=float.NaN;p.moving=false;p.restNext=0;
             p.sit=kind==1?1:kind==2?4:7;SetPetClip(p,kind==1?2:kind==2?5:8,true);
-            Debug.Log("ROOMPLAY_"+p.tag+" rest pose="+RestNames[kind]);
+            Debug.Log("ROOMPLAY_"+p.tag+" rest pose="+(p.groomAfter?"groom":RestNames[kind]));
         }
         void PetStand(Pet p,int then=0)
         {
             if(!p.somali)return;
-            p.moving=false;p.restNext=then;
+            p.moving=false;p.restNext=then;p.groomAfter=false;
             if(IsUp(p.sit))return;
             int s=p.sit;
+            if(s==11){p.sit=0;SetPetClip(p,0,true);int n=p.restNext;p.restNext=0;if(n>0)PetRest(p,n);return;} // a stretch cut short
+            if(p.white && s==0){p.restNext=0;if(then>0)PetRest(p,then);return;} // already standing
             if(s==4||s==5){p.sit=6;SetPetClip(p,7,true);}
             else if(s==7||s==8){p.sit=9;SetPetClip(p,10,true);}
-            else{p.sit=3;SetPetClip(p,4,true);}
+            else{p.sit=3;SetPetClip(p,4,true);} // sitting or grooming
         }
         void PetAnimTick(Pet p)
         {
             if(!p.somali || !p.graph.IsValid())return;
             var pl=p.outp.GetSourcePlayable();if(!pl.IsValid())return;
             double t=pl.GetTime();
-            if(p.sit==1 && t>=p.clips[2].length){p.sit=2;SetPetClip(p,3,true);}
+            if(p.sit==1 && t>=p.clips[2].length){if(p.groomAfter){p.groomAfter=false;p.sit=10;SetPetClip(p,12,true);Debug.Log("ROOMPLAY_"+p.tag+" rest pose=groom");}else{p.sit=2;SetPetClip(p,3,true);}}
+            else if(p.sit==11 && t>=p.clips[13].length){p.sit=0;SetPetClip(p,0,true);}
             else if(p.hasLie && p.sit==4 && t>=p.clips[5].length){p.sit=5;SetPetClip(p,6,true);}
             else if(p.hasLie && p.sit==7 && t>=p.clips[8].length){p.sit=8;SetPetClip(p,9,true);}
             else if(IsUp(p.sit) && t>=p.clips[p.sit==3?4:p.sit==6?7:10].length){
@@ -511,7 +582,7 @@ namespace Oddity.RoomTest
                     if(p.somali && p.sit!=0){PetStand(p);return;} // sitting, lying or loafing: get up, then Idle
                     p.goal=null;p.faceTo=float.NaN;p.moving=false;SetPetClip(p,0,true);}
                 return;}
-            int digits=p.somali?6:5;
+            int digits=p.white?9:p.somali?6:5;
             if(key.Length==1 && key[0]>='1' && key[0]<='0'+digits){
                 if(p.job!=0)return;
                 int n=key[0]-'1';
@@ -520,6 +591,7 @@ namespace Oddity.RoomTest
                     if(n==3){p.goal=null;p.faceTo=float.NaN;PetStand(p);return;}
                     if(n==4){PetRest(p,2);return;}
                     if(n==5){PetRest(p,3);return;}
+                    if(p.white && n>=6){PetRest(p,n-2);return;} // 7 groom, 8 stretch, 9 jump in place
                     if(n==0 && p.sit!=0){PetStand(p);return;}
                     p.sit=0;
                 }
@@ -692,6 +764,7 @@ namespace Oddity.RoomTest
                 Debug.Log("ROOMPLAY_"+p.tag+" perch="+(p.perch!=null?p.perch.name:"floor")+" pos=("+F(p.jobTo.x)+","+F(p.jobTo.y)+","+F(p.jobTo.z)+")");
                 return;
             }
+            if(p.job==4){p.job=0;p.root.position=p.jobTo;SetPetClip(p,0,true);return;} // the jump in place is over
             bool up=p.job==1;p.job=0;p.root.position=p.jobTo;p.onSofa=up;p.surf=up?p.jobTo.y-p.baseY:0;
             if(up){p.seat=p.jobSeat;var front=seats.First(t=>t.mark==p.seat).front;p.faceTo=Mathf.Atan2(front.x,front.z)*Mathf.Rad2Deg;if(p.goalKind=="sofa")p.goal=null;} // idles facing the camera side
             SetPetClip(p,0,true);
@@ -719,9 +792,9 @@ namespace Oddity.RoomTest
                 StartHop(p,p.perch.name=="fridge"?perches["counter"]:null);return;
             }
             var from=new Vector2(p.root.position.x,p.root.position.z);
-            var wish=input.normalized;float pace=run?CatRunSpeed:CatWalkSpeed;float reach=float.MaxValue;
+            var wish=input.normalized;float pace=run?p.runSpd:p.walkSpd;float reach=float.MaxValue;
             if(keys){var fw=Vector3.ProjectOnPlane(cameraView.transform.forward,Vector3.up).normalized;var rt=new Vector3(fw.z,0,-fw.x);var w3=rt*wish.x+fw*wish.y;wish=new Vector2(w3.x,w3.z).normalized;}
-            else if(p.goal.HasValue){var d=p.goal.Value-from;wish=d.normalized;pace=auto?AiWalkSpeed:CatWalkSpeed;run=false;reach=d.magnitude;}
+            else if(p.goal.HasValue){var d=p.goal.Value-from;wish=d.normalized;pace=auto?p.aiSpd:p.walkSpd;run=false;reach=d.magnitude;}
             float stepLen=Mathf.Min(pace*dt,reach);
             var next=Collide(from,new Vector2(Mathf.Clamp(from.x+wish.x*stepLen,-Limit-.1f,Limit+.1f),Mathf.Clamp(from.y+wish.y*stepLen,ZNear-.1f,ZFar+.1f)));
             bool moving=wish!=Vector2.zero && (next-from).sqrMagnitude>1e-10f;
@@ -741,7 +814,7 @@ namespace Oddity.RoomTest
                 if(moving)p.walkStart=Time.unscaledTime;
                 else if(Time.unscaledTime-p.walkStart>=1f)PetShot(p,"cat_flap_ears",.4f); // stopped after walking at least 1 s
                 p.moving=moving;if(!moving)p.settledAt=Time.unscaledTime;SetPetClip(p,moving?1:0,true);}
-            if(moving){var pl=p.outp.GetSourcePlayable();if(pl.IsValid())pl.SetSpeed(run?CatRunSpeed/CatWalkSpeed:auto && !keys?AiWalkSpeed/CatWalkSpeed:1);}
+            if(moving){var pl=p.outp.GetSourcePlayable();if(pl.IsValid())pl.SetSpeed(run?p.runSpd/p.walkSpd:auto && !keys?p.aiSpd/p.walkSpd:1);}
             if(arrived){
                 var kind=p.goalKind;var look=p.goalLook;p.goal=null;
                 if(kind=="sofa")StartPetJump(p,true);
@@ -796,6 +869,9 @@ namespace Oddity.RoomTest
         {
             if(!p.hasLie)return 1;
             int r=Rng().Next(100);
+            if(p.white){ // sit 30, lie 30, loaf 25, groom 15 (sill: lie 45, loaf 30, sit 15, groom 10)
+                if(act=="sill")return r<45?2:r<75?3:r<90?1:4;
+                return r<30?1:r<60?2:r<85?3:4;}
             if(act=="sill")return r<50?2:r<80?3:1;
             return r<40?1:r<75?2:3;
         }
@@ -829,6 +905,9 @@ namespace Oddity.RoomTest
                     place="here";break;
                 case "idle":
                     travel=false;p.aiDur=Rnd(4,10);place="here";break;
+                case "stretch": // the white cat, after a rest: up, a stretch
+                    if(!p.white || p.sit==0 || p.job!=0)return false;
+                    travel=false;PetStand(p,5);p.aiDur=4.5f;place="here";break;
                 default:{ // sill, counter, table, fridge
                     if(!perches.TryGetValue(act,out var pr) || !FarFromOthers(p,pr.land))return false;
                     at=pr.land;PetGoToPerch(p,act);if(p.somali)p.arriveRest=AiRestKind(p,act);p.aiDur=Rnd(10,30);break;}
@@ -843,6 +922,7 @@ namespace Oddity.RoomTest
             var opts=new List<KeyValuePair<string,int>>();
             void Add(string n,int w){if(n!=p.aiLast)opts.Add(new KeyValuePair<string,int>(n,w));}
             Add("wander",12);Add("rug",6);if(sofa!=null && seats.Any(t=>t.mark.root==sofa))Add("sofa",20);Add("window",15);Add("harin",15);Add("clip",15);Add("idle",5);
+            if(p.white && p.sit!=0)Add("stretch",8);
             foreach(var (n,w) in new[]{("sill",15),("counter",8),("table",7),("fridge",5)})if(perches.ContainsKey(n))Add(n,w);
             while(opts.Count>0){
                 int total=opts.Sum(o=>o.Value),r=Rng().Next(total),i=0;
@@ -932,7 +1012,7 @@ namespace Oddity.RoomTest
         }
         void PetShot(Pet p,string file,float vol)
         {
-            if(p.shot==null)return;
+            if(p.shot==null || !catSfxOn)return;
             var c=CatSfx(file);if(c==null)return;
             p.shot.PlayOneShot(c,vol);
             Debug.Log("ROOMPLAY_"+p.tag+"SFX "+(file.Contains(".")?file:file+".wav"));
@@ -952,6 +1032,7 @@ namespace Oddity.RoomTest
         void PetSfxTick(Pet p,float dt)
         {
             if(p.root==null || p.shot==null || !p.graph.IsValid())return;
+            if(!catSfxOn){if(p.purr.isPlaying)p.purr.Stop();p.purr.volume=0;p.purrOn=false;p.purrTarget=0;return;}
             if(p.Idleish){
                 p.idleTime+=dt;
                 if(p.idleTime>=(p.somali && (p.index==6 || p.index==9)?2:3) && !p.purrOn && p.purr.clip!=null){
@@ -1029,12 +1110,12 @@ namespace Oddity.RoomTest
         {
             var p=ctl??pets.FirstOrDefault();if(p==null || !p.graph.IsValid() || p.job!=0)return;
             if(!p.somali){SetPetClip(p,(p.index+1)%CatClips.Length,true);return;}
-            p.mStep=(p.mStep+1)%(p.hasLie?6:4);p.goal=null;p.moving=false;
+            p.mStep=(p.mStep+1)%(p.white?8:p.hasLie?6:4);p.goal=null;p.moving=false;
             if(p.mStep==0){if(p.sit!=0)PetStand(p);else SetPetClip(p,0,true);}
             else if(p.mStep==1){p.sit=0;SetPetClip(p,1,true);}
             else if(p.mStep==2){if(p.sit==0 && p.index==1)SetPetClip(p,0,false);PetSit(p);}
             else if(p.mStep==3)PetStand(p);
-            else{if(p.sit==0 && p.index==1)SetPetClip(p,0,false);PetRest(p,p.mStep==4?2:3);}
+            else{if(p.sit==0 && p.index==1)SetPetClip(p,0,false);PetRest(p,p.mStep==4?2:p.mStep==5?3:p.mStep==6?4:5);}
         }
         // the computer lives on the dining table: an open laptop in front of the chair on the -x side, screen tilted back and facing that seat
         static void Laptop(Transform table)
@@ -1624,6 +1705,8 @@ namespace Oddity.RoomTest
         }
         void Command(string key)
         {
+            if(key=="o"){ToggleCatSfx();return;}
+            if(key=="realtab"){StartCoroutine(RealTab());return;}
             if(key.StartsWith("click")){ScriptClick(key);return;}
             if(key=="wheelup"||key=="wheeldown"){wheelZoom=Mathf.Clamp(wheelZoom+(key=="wheelup"?WheelNotch:-WheelNotch),-1,1);return;} // one notch per script step
             if(ctl!=null && key!="tab" && key!="escape" && key!="m"){CatCommand(key);return;} // the cat has its own keys while it is controlled
@@ -1688,10 +1771,52 @@ namespace Oddity.RoomTest
             busy=false;
         }
         void Notice(string text){message=text;messageUntil=Time.realtimeSinceStartup+5;Debug.Log("ROOMPLAY "+text);}
+        // Tab hands control between Harin and the pets. It is polled at the top of every Update, before any early return (statue, busy, reviewing, no model, scripted), through the Input System,
+        // and again from OnGUI because the editor's Game view can take Tab for IMGUI focus navigation before the Input System reports it. One press switches once (0.15 s dedupe, OnGUI auto-repeat ignored)
+        // O: every cat sound on or off (one-shots and purrs), remembered between runs in EditorPrefs; ODDITY_CATSFX=0|1 overrides it
+        const string CatSfxPref="Oddity.RoomPlay.CatSfx";
+        bool catSfxOn=CatSfxInitial();
+        static bool CatSfxInitial(){var e=PetEnv("ODDITY_CATSFX");if(e=="0")return false;if(e=="1")return true;return EditorPrefs.GetBool(CatSfxPref,true);}
+        void ToggleCatSfx()
+        {
+            catSfxOn=!catSfxOn;
+            if(PetEnv("ODDITY_CATSFX")==null)EditorPrefs.SetBool(CatSfxPref,catSfxOn);
+            foreach(var p in pets){
+                if(p.shot!=null && !catSfxOn)p.shot.Stop();
+                if(p.purr!=null && !catSfxOn){p.purr.Stop();p.purr.volume=0;}
+                p.purrOn=false;p.purrTarget=0;p.idleTime=0; // back on: a purr starts again only after a cat has rested 2-3 s
+            }
+            delayedShots.Clear();
+            Notice(catSfxOn?"고양이 소리 켬":"고양이 소리 끔");
+            Debug.Log("ROOMPLAY_CATSFX enabled="+(catSfxOn?1:0));
+        }
+        float lastTabAt=-10;bool tabGuiDown;
+        void TabPress(string source)
+        {
+            if(Time.realtimeSinceStartup-lastTabAt<.15f)return;
+            lastTabAt=Time.realtimeSinceStartup;
+            Debug.Log("ROOMPLAY_TABKEY source="+source);
+            ToggleControl();
+        }
+        void TabPoll()
+        {
+            var kb=Keyboard.current;
+            if(kb!=null && kb.tabKey.wasPressedThisFrame)TabPress("inputsystem");
+            if(kb!=null && kb.oKey.wasPressedThisFrame)ToggleCatSfx();
+        }
+        // scripted "realtab": a real Tab press and release queued as Input System state, so it reaches TabPoll the way a keyboard does
+        IEnumerator RealTab()
+        {
+            var kb=Keyboard.current??InputSystem.AddDevice<Keyboard>();
+            InputSystem.QueueStateEvent(kb,new UnityEngine.InputSystem.LowLevel.KeyboardState(Key.Tab));
+            yield return null;yield return null;
+            InputSystem.QueueStateEvent(kb,new UnityEngine.InputSystem.LowLevel.KeyboardState());
+        }
         void Update()
         {
             if(cameraView!=null){float aspect=Screen.width/(float)Mathf.Max(1,Screen.height);float target=16f/9;
                 cameraView.rect=aspect>target?new Rect((1-target/aspect)/2,0,target/aspect,1):new Rect(0,(1-aspect/target)/2,1,aspect/target);}
+            TabPoll();
             PetsTick(Mathf.Min(Time.unscaledDeltaTime,.05f));
             if(statue!=null && !busy){StatueUpdate(Mathf.Min(Time.unscaledDeltaTime,.05f));return;}
             if(model==null || busy || reviewing)return;float dt=Mathf.Min(Time.unscaledDeltaTime,.05f);var input=Vector2.zero;bool run=false;float zoomKey=0;
@@ -1712,7 +1837,7 @@ namespace Oddity.RoomTest
                 turning=(kb.leftArrowKey.isPressed?1:0)-(kb.rightArrowKey.isPressed?1:0);
                 var mouse=Mouse.current;if(mouse!=null && mouse.leftButton.wasPressedThisFrame && room)ClickAt(cameraView.ScreenPointToRay(mouse.position.ReadValue()));
                 if(mouse!=null){float wheel=mouse.scroll.ReadValue().y;if(wheel!=0)wheelZoom=Mathf.Clamp(wheelZoom+Mathf.Sign(wheel)*WheelNotch,-1,1);} // wheel up zooms in
-                foreach(var entry in Keys)if(!Walk(entry.key) && entry.key!="left" && entry.key!="right"){
+                foreach(var entry in Keys)if(!Walk(entry.key) && entry.key!="left" && entry.key!="right" && entry.key!="tab" && entry.key!="o"){ // Tab and O have their own poll (TabPoll)
                     if(kb[KeyOf(entry.key)].wasPressedThisFrame && (input==Vector2.zero || !char.IsDigit(entry.key[0])))Command(entry.key);
                 }
                 // an action moves while its key is held and holds the pose the moment it is let go; space returns to the idle
@@ -2048,17 +2173,23 @@ namespace Oddity.RoomTest
             Part(PrimitiveType.Cylinder,shield.transform,Vector3.zero,new Vector3(.5f,.012f,.5f),new Color(.45f,.27f,.13f));
             Part(PrimitiveType.Cylinder,shield.transform,new Vector3(0,.015f,0),new Vector3(.12f,.012f,.12f),new Color(.78f,.8f,.84f));
         }
-        static readonly string[] SomaliKeyList={"1  Idle","2  Walk (제자리)","3  앉기 (SitDown, 앉아 있기)","4  일어서기 (StandUp)","5  눕기 (스핑크스, LieDown)","6  식빵 굽기 (LoafDown)","space  멈추기 (앉았거나 누웠으면 일어서기)","W A S D  걷기 (앉았으면 먼저 일어섬)","← →  제자리 돌기","↑ ↓, 휠  줌","C V  소파에 올라가 앉기, K  올라가 눕기","클릭  바닥, 소파, 식탁, 창","M  다음 동작","Tab  하린으로"};
-        static readonly string[] CatKeyList={"1  Idle","2  Walk (제자리)","3  Jump","4  Sound","5  Eat","space  멈추기 (Idle)","W A S D  걷기, Shift 빠르게","← →  제자리 돌기","↑ ↓, 휠  줌","C V K  소파에 올라가기","클릭  바닥, 소파, 식탁, 창","M  다음 동작","Tab  하린으로"};
+        static readonly string[] SomaliKeyList={"1  Idle","2  Walk (제자리)","3  앉기 (SitDown, 앉아 있기)","4  일어서기 (StandUp)","5  눕기 (스핑크스, LieDown)","6  식빵 굽기 (LoafDown)","space  멈추기 (앉았거나 누웠으면 일어서기)","W A S D  걷기 (앉았으면 먼저 일어섬)","← →  제자리 돌기","↑ ↓, 휠  줌","C V  소파에 올라가 앉기, K  올라가 눕기","클릭  바닥, 소파, 식탁, 창","M  다음 동작","O  고양이 소리 켜고 끄기","Tab  하린으로"};
+        static readonly string[] WhiteKeyList={"1  Idle","2  Walk (제자리)","3  앉기 (SitDown)","4  일어서기 (StandUp)","5  눕기 (스핑크스)","6  식빵 굽기","7  그루밍 (앉아서)","8  기지개","9  제자리 점프","space  멈추기 (앉았거나 누웠으면 일어서기)","W A S D  걷기, Shift 빠르게","← →  제자리 돌기","↑ ↓, 휠  줌","C V  소파에 올라가 앉기, K  올라가 눕기","클릭  바닥, 소파, 식탁, 조리대, 냉장고, 창","M  다음 동작","O  고양이 소리 켜고 끄기","Tab  하린으로"};
+        static readonly string[] CatKeyList={"1  Idle","2  Walk (제자리)","3  Jump","4  Sound","5  Eat","space  멈추기 (Idle)","W A S D  걷기, Shift 빠르게","← →  제자리 돌기","↑ ↓, 휠  줌","C V K  소파에 올라가기","클릭  바닥, 소파, 식탁, 창","M  다음 동작","O  고양이 소리 켜고 끄기","Tab  하린으로"};
         void OnGUI()
         {
-            bool cat=ctl!=null;var keyList=cat && ctl.somali?SomaliKeyList:CatKeyList;
+            var ev=Event.current;
+            if(ev!=null && ev.keyCode==KeyCode.Tab){
+                if(ev.type==EventType.KeyDown){if(!tabGuiDown){tabGuiDown=true;TabPress("ongui");}ev.Use();GUIUtility.keyboardControl=0;}
+                else if(ev.type==EventType.KeyUp){tabGuiDown=false;ev.Use();}
+            }
+            bool cat=ctl!=null;var keyList=cat && ctl.white?WhiteKeyList:cat && ctl.somali?SomaliKeyList:CatKeyList;
             int rows=cat?keyList.Length:Keys.Length;
             float listEnd=34+rows*17;GUI.Box(new Rect(10,10,340,listEnd-6),"");var style=new GUIStyle(GUI.skin.label){fontSize=12};
-            GUI.Label(new Rect(16,13,330,20),cat?(ctl.somali?"소말리 고양이":"고양이"):modelName??"준비 중",style);
+            GUI.Label(new Rect(16,13,330,20),cat?(ctl.white?"흰 고양이":ctl.somali?"소말리 고양이":"고양이"):modelName??"준비 중",style);
             for(int i=0;i<rows;i++){
                 if(cat){
-                    bool on=ctl.somali?(i==0&&ctl.index==0)||(i==1&&ctl.index==1)||(i==2&&(ctl.index==2||ctl.index==3))||(i==3&&ctl.index==4)||(i==4&&(ctl.index==5||ctl.index==6))||(i==5&&(ctl.index==8||ctl.index==9)):i<5 && i==ctl.index;style.normal.textColor=on?Color.yellow:Color.white;
+                    bool on=ctl.white?(i==0&&ctl.index==0)||(i==1&&ctl.index==1)||(i==2&&(ctl.index==2||ctl.index==3))||(i==3&&ctl.index==4)||(i==4&&(ctl.index==5||ctl.index==6))||(i==5&&(ctl.index==8||ctl.index==9))||(i==6&&ctl.index==12)||(i==7&&ctl.index==13)||(i==8&&ctl.index==11):ctl.somali?(i==0&&ctl.index==0)||(i==1&&ctl.index==1)||(i==2&&(ctl.index==2||ctl.index==3))||(i==3&&ctl.index==4)||(i==4&&(ctl.index==5||ctl.index==6))||(i==5&&(ctl.index==8||ctl.index==9)):i<5 && i==ctl.index;style.normal.textColor=on?Color.yellow:Color.white;
                     GUI.Label(new Rect(16,34+i*17,330,18),(on?"> ":"  ")+keyList[i],style);
                     continue;
                 }
@@ -2069,7 +2200,7 @@ namespace Oddity.RoomTest
             if(Time.realtimeSinceStartup<messageUntil)GUI.Label(new Rect(16,listEnd+4,900,40),message,new GUIStyle(GUI.skin.label){fontSize=24});
             // who is controlled: top right, white with a dark outline; it pops (1.3 -> 1 in 0.2 s) and flashes when Tab hands control over
             float age=Time.realtimeSinceStartup-labelPop;
-            var flash=cat?(ctl.somali?new Color(1f,.62f,.30f):new Color(1f,.82f,.25f)):Color.yellow;
+            var flash=cat?(ctl.white?new Color(.62f,.80f,1f):ctl.somali?new Color(1f,.62f,.30f):new Color(1f,.82f,.25f)):Color.yellow;
             string who=cat?ctl.tag:"HARIN";
             var tint=age<.35f?Color.Lerp(flash,Color.white,Mathf.Clamp01(age/.35f)):Color.white;
             var big=new GUIStyle(GUI.skin.label){fontSize=18,fontStyle=FontStyle.Bold,alignment=TextAnchor.MiddleRight};
@@ -2079,6 +2210,8 @@ namespace Oddity.RoomTest
             foreach(var o in new[]{new Vector2(-2,0),new Vector2(2,0),new Vector2(0,-2),new Vector2(0,2),new Vector2(-1.5f,-1.5f),new Vector2(1.5f,-1.5f),new Vector2(-1.5f,1.5f),new Vector2(1.5f,1.5f)})GUI.Label(new Rect(rect.x+o.x,rect.y+o.y,rect.width,rect.height),who,big);
             big.normal.textColor=tint;GUI.Label(rect,who,big);
             GUI.matrix=saved;
+            if(!catSfxOn){var small=new GUIStyle(GUI.skin.label){fontSize=13,alignment=TextAnchor.MiddleRight};var r2=new Rect(Screen.width-230,46,220,22);
+                small.normal.textColor=new Color(0,0,0,.9f);GUI.Label(new Rect(r2.x+1,r2.y+1,r2.width,r2.height),"고양이 소리 끔",small);small.normal.textColor=new Color(1f,.85f,.6f);GUI.Label(r2,"고양이 소리 끔",small);}
         }
         void OnDestroy(){foreach(var pet in pets)if(pet.graph.IsValid())pet.graph.Destroy();zeroTwoAudio?.Dispose();zeroTwoDance?.Dispose();if(clips!=null && clips[ZeroTwoIndex]!=null)Destroy(clips[ZeroTwoIndex]);if(graph.IsValid())graph.Destroy();if(boundsMesh!=null)Destroy(boundsMesh);if(soleBake!=null)Destroy(soleBake);EditorSettings.enterPlayModeOptionsEnabled=oldEnabled;EditorSettings.enterPlayModeOptions=oldOptions;}
     }
