@@ -1,8 +1,9 @@
-"""Retarget the white cat's 14 clips onto the Somali and the cartoon cat (Blender 5.x, headless).
+"""Retarget the white cat's 14 clips onto the Somali, the cartoon cat and the striped cat4 (Blender 5.x, headless).
 
   blender.exe -b --python tools/blender/retarget_cats.py -- extract --src SRC.glb --out LANDMARKS.json
   blender.exe -b --python tools/blender/retarget_cats.py -- somali  --src LANDMARKS.json --in somali_cat_lie.glb --out OUT.glb [--shots DIR] [--only a,b] [--frames name:f,f;name:f]
   blender.exe -b --python tools/blender/retarget_cats.py -- cartoon --src LANDMARKS.json --dir CATDIR --out OUT.glb [--shots DIR] [--only a,b]
+  blender.exe -b --python tools/blender/retarget_cats.py -- cat4    --src LANDMARKS.json --in cat4-2.glb --out cat4_shared.glb [--shots DIR] [--only a,b] [--frames name:f,f;name:f]
 
 Stage 'extract' samples every clip of the white cat glb (30 fps) into a json: armature-space
 matrices of its 35 bones plus the floor clearances of its mesh (per paw, torso, whole body).
@@ -10,6 +11,10 @@ The target stages rebuild each pose from those landmarks: spine and tail by chor
 (rotation over the reference pose), head/ears/feet by world rotation deltas, legs by 2-bone IK
 (positions relative to shoulder/hip scaled by leg length), then a per-frame floor solve (pelvis
 height from the torso clearance, each paw from the source paw clearance times the scale).
+Stage 'cat4' (rigged striped tabby, bone names identical to the white cat, rest pose is a mid-stride walk, faces +X, left +Y)
+first builds a neutral standing reference from the white cat's Idle frame 0 (tail by chord directions, legs by IK with
+the source knee poles, all four paws put on z = 0) and uses that as the reference pose; each leg has its own scale
+because the rig's left and right leg lengths differ.
 Everything is in-place. Coordinates: floor z = 0 for the source (faces -Y, left +X).
 """
 import bpy, sys, math, os, json, copy
@@ -233,6 +238,13 @@ class Retarget:
         self.kf = dist(lf['eff'], lf['up']) / (ref['H']['FrontPaw.L'] - ref['H']['FrontUpperLeg.L']).length
         self.kh = dist(lh['eff'], lh['up']) / (ref['H']['HindHock.L'] - ref['H']['HindUpperLeg.L']).length
         self.kb = 0.5 * (self.kf + self.kh)
+        self.kl = {}      # per-leg scale (identical to kf/kh when the rig is left/right symmetric)
+        for kind, sn in (('F', ('FrontPaw', 'FrontUpperLeg')), ('H', ('HindHock', 'HindUpperLeg'))):
+            for sd, lg in L[kind].items():
+                self.kl[kind + sd] = dist(lg['eff'], lg['up']) / (ref['H'][sn[0] + '.' + sd] - ref['H'][sn[1] + '.' + sd]).length
+        self.kf = 0.5 * (self.kl['FL'] + self.kl['FR']) if 'FR' in self.kl else self.kf
+        self.kh = 0.5 * (self.kl['HL'] + self.kl['HR']) if 'HR' in self.kl else self.kh
+        self.kb = 0.5 * (self.kf + self.kh)
         print("SCALE kf %.3f kh %.3f kb %.3f" % (self.kf, self.kh, self.kb))
 
     def build_spec(self, fd, par):
@@ -274,8 +286,8 @@ class Retarget:
                 head = head + cur
             _, posed0 = t.solve(spec)
         for kind in ('F', 'H'):
-            k = self.kf if kind == 'F' else self.kh
             for side, lg in cfg['legs'][kind].items():
+                k = self.kl[kind + side]
                 sS, sE, sW = lg['src']
                 Pt = posed0[lg['up']].translation
                 Sref, Eref, Wref = t.rhead[lg['up']], t.rhead[lg['mid']], t.rhead[lg['eff']]
@@ -353,6 +365,9 @@ class Retarget:
             par['pz'] += d
             for k in par['pawdz']: par['pawdz'][k] += d
             basis, posed = t.solve(self.build_spec(fd, par)); t.apply(basis)
+            if DEBUG:
+                m2 = t.measure(); zz = t.verts()[:, 2]; ii = np.where(t.M_body)[0][np.argmin(zz[t.M_body])]
+                print('   LIFT %.3f -> body %.3f lowest vertex group %s' % (d, m2['body'] - fl, t.dom[ii]))
         return basis, par
 
 # =============================================================== render, keyframing, export
@@ -668,9 +683,111 @@ def stage_cartoon():
                    'metres of the FBX import (a 0.33 m shoulder-height cat), faces -Y, floor z = 0')
         print("EXPORTED", OUT)
 
+
+# =============================================================== stage cat4
+def stand_reference(tgt, SRC, C, legs, tail, front_back=0.0):
+    """Neutral standing reference for a rig whose rest pose is a mid-stride walk. Tail directions follow the white cat's Idle
+    frame 0, each leg is solved by 2-bone IK (source knee pole, source leg shape scaled to this rig's leg length) and its
+    effector height is corrected (front paws are moved back by front_back to compensate the mesh) until the lowest vertex of each paw group sits on z = 0. Returns the posed matrices."""
+    ref = SRC.ref; RH = ref['H']; bones = tgt.arm.data.bones
+    def rdir(b): return (bones[b].tail_local - bones[b].head_local).normalized()
+    spec = {'loc': {}, 'abs': {}}
+    pts = [RH[n] for n in TAIL_SRC]; pts.append(pts[-1] + (pts[-1] - pts[-2]))
+    tp = [tgt.rhead[b] for b in tail]; tp.append(tp[-1] + (tp[-1] - tp[-2]))
+    for b, (u0, u1) in zip(tail, frac_bounds(tp)):
+        spec['abs'][b] = rdir(b).rotation_difference(C @ chord(pts, u0, u1)).to_matrix()
+    _, posed0 = tgt.solve(spec)
+    dz = {}
+    def legspec():
+        sp = {'loc': dict(spec['loc']), 'abs': dict(spec['abs'])}
+        for kind in ('F', 'H'):
+            for sd, lg in legs[kind].items():
+                sS, sE, sW = lg['src']
+                Pt = posed0[lg['up']].translation
+                Sref, Eref, Wref = tgt.rhead[lg['up']], tgt.rhead[lg['mid']], tgt.rhead[lg['eff']]
+                l1 = (Eref - Sref).length; l2 = (Wref - Eref).length
+                k = (l1 + l2) / ((RH[sE] - RH[sS]).length + (RH[sW] - RH[sE]).length)
+                T = Pt + k * (C @ (RH[sW] - RH[sS])); T.z += dz.get(kind + sd, 0.0)
+                if kind == 'F': T += (C @ V((0, 1, 0))) * front_back
+                pole = C @ (RH[sE] - (RH[sS] + RH[sW]) * 0.5)
+                Kp, d1, d2, ov = ik2(Pt, l1, l2, T, pole)
+                if DEBUG: print('   STANDLEG %s%s P=%s T=%s K=%s l1=%.3f l2=%.3f k=%.3f over=%.3f' % (kind, sd, tuple(round(x, 3) for x in Pt), tuple(round(x, 3) for x in T), tuple(round(x, 3) for x in Kp), l1, l2, k, ov))
+                sp['abs'][lg['up']] = (Eref - Sref).rotation_difference(d1).to_matrix()
+                sp['abs'][lg['mid']] = (Wref - Eref).rotation_difference(d2).to_matrix()
+                if kind == 'F':      # paw bone points like the source paw (head -> toes)
+                    a = tgt.rhead[lg['toe']] - tgt.rhead[lg['eff']]
+                    sp['abs'][lg['eff']] = a.rotation_difference(C @ (RH['FrontToes.' + sd] - RH['FrontPaw.' + sd])).to_matrix()
+                else:                # hock -> paw like the source, then paw -> toes
+                    a = tgt.rhead[lg['paw']] - tgt.rhead[lg['eff']]
+                    sp['abs'][lg['eff']] = a.rotation_difference(C @ (RH['HindPaw.' + sd] - RH['HindHock.' + sd])).to_matrix()
+                    a = tgt.rhead[lg['toe']] - tgt.rhead[lg['paw']]
+                    sp['abs'][lg['paw']] = a.rotation_difference(C @ (RH['HindToes.' + sd] - RH['HindPaw.' + sd])).to_matrix()
+        return sp
+    for it in range(6):
+        basis, posed = tgt.solve(legspec()); tgt.apply(basis)
+        m = tgt.measure(); worst = 0.0
+        for k, v in m['paw'].items():
+            dz[k] = dz.get(k, 0.0) - v; worst = max(worst, abs(v))
+        print("STAND it%d paw heights %s" % (it, {k: round(v, 4) for k, v in m['paw'].items()}))
+        if worst < 0.0005: break
+    basis, posed = tgt.solve(legspec()); tgt.apply(basis)
+    return tgt.capture()
+
+def stage_cat4():
+    SRC = Src(apath(arg('--src'))); IN = apath(arg('--in')); OUT = apath(arg('--out')); SHOTS = apath(arg('--shots'))
+    ONLY = arg('--only').split(',') if arg('--only') else None
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.ops.import_scene.gltf(filepath=IN)
+    sc = bpy.context.scene; sc.render.fps = FPS
+    arm = [o for o in bpy.data.objects if o.type == 'ARMATURE'][0]
+    for o in list(bpy.data.objects):        # a stray 42-vertex icosphere sits in the Sketchfab file
+        if o.type == 'MESH' and o.name == 'Icosphere': bpy.data.objects.remove(o, do_unlink=True)
+    meshes = [o for o in bpy.data.objects if o.type == 'MESH' and len(o.vertex_groups)]
+    arm.animation_data_create()
+    C = Rz(90)          # source faces -Y and its left is +X; cat4 faces +X and its left is +Y
+    tgt = Target(arm, meshes)
+    tgt.setup_masks(('Pelvis', 'Spine0', 'Chest', 'Neck', 'Head', 'Scapula'),
+                    {'FL': ('FrontLowerLeg.L', 'FrontPaw.L', 'FrontToes.L'), 'FR': ('FrontLowerLeg.R', 'FrontPaw.R', 'FrontToes.R'),
+                     'HL': ('HindHock.L', 'HindPaw.L', 'HindToes.L'), 'HR': ('HindHock.R', 'HindPaw.R', 'HindToes.R')},
+                    ('Tail04', 'Tail05', 'Tail06', 'Tail07', 'Ear'))
+    legs = {'F': {}, 'H': {}}
+    for sd in 'LR':
+        legs['F'][sd] = dict(up='FrontUpperLeg.' + sd, mid='FrontLowerLeg.' + sd, eff='FrontPaw.' + sd, eff_loc='FrontPaw.' + sd,
+                             toe='FrontToes.' + sd, src=('FrontUpperLeg.' + sd, 'FrontLowerLeg.' + sd, 'FrontPaw.' + sd),
+                             rots={'FrontPaw.' + sd: 'FrontPaw.' + sd, 'FrontToes.' + sd: 'FrontToes.' + sd})
+        legs['H'][sd] = dict(up='HindUpperLeg.' + sd, mid='HindLowerLeg.' + sd, eff='HindHock.' + sd, paw='HindPaw.' + sd, toe='HindToes.' + sd,
+                             src=('HindUpperLeg.' + sd, 'HindLowerLeg.' + sd, 'HindHock.' + sd),
+                             chord=('HindHock.' + sd, 'HindHock.' + sd, 'HindPaw.' + sd),
+                             foot_loc=('HindPaw.' + sd, 'HindHock.' + sd), rots={'HindPaw.' + sd: 'HindPaw.' + sd, 'HindToes.' + sd: 'HindToes.' + sd})
+    tail = ['Tail0%d' % i for i in range(1, 8)]
+    ref_m = stand_reference(tgt, SRC, C, legs, tail, front_back=0.08)   # the mesh's forelegs sit 0.08 ahead of their bones, so the paw targets move back
+    tgt.set_reference(ref_m)
+    FLOOR = 0.0
+    cfg = dict(C=C, floor=FLOOR, root='Root', rear=['Pelvis'], fwd=['Spine01', 'Spine02', 'Chest', 'Neck'], fwd_end='Head', head=['Head'],
+               rots={'Ear.L': 'Ear.L', 'Ear.R': 'Ear.R'},
+               tail=tail, tail_margin=0.07, legs=legs, pawkeys=['FL', 'FR', 'HL', 'HR'])
+    rt = Retarget(tgt, SRC, cfg)
+    print("LEGSCALE", {k: round(v, 3) for k, v in rt.kl.items()})
+    basis, _ = tgt.solve({'loc': {}, 'abs': {}}); tgt.apply(basis)
+    m = rt.measure_ref()
+    print("REF trunk %+.3f paws %s body %+.3f" % (m['trunk'] - FLOOR, {k: round(v - FLOOR, 3) for k, v in m['paw'].items()}, m['body'] - FLOOR))
+    cam = ref_framing(tgt, C)
+    if SHOTS and not ONLY: render_views('ref', SHOTS, C, FLOOR, cam[0], cam[1])
+    acts = build_clips(rt, SHOTS, ONLY, arg('--frames'), cam)
+    if OUT and not ONLY:
+        export_glb(arm, acts, OUT)
+        P = tgt.verts(); f = C @ V((0, -1, 0))
+        body = P[tgt.M_body]; proj = body @ np.array(f)
+        hd = np.array([d.startswith('Head') for d in tgt.dom]); hz = P[hd][:, 2].max() - FLOOR
+        write_json(os.path.splitext(OUT)[0] + '.json', rt, {'len': float(proj.max() - proj.min()), 'head': float(hz)},
+                   'model units of the cat4 glb (0.91 units from nose to tail base, shoulder height about 0.4), faces +X, floor z = %s' % FLOOR)
+        print("EXPORTED", OUT)
+
 if STAGE == 'extract':
     stage_extract()
 elif STAGE == 'somali':
     stage_somali()
 elif STAGE == 'cartoon':
     stage_cartoon()
+elif STAGE == 'cat4':
+    stage_cat4()
