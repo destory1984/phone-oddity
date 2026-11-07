@@ -7,7 +7,7 @@
 
 | 자산 | 출처 | 라이선스 | 표기 | 둔 곳 |
 |---|---|---|---|---|
-| Cartoon Cat (CAT) | Unity Asset Store, Zealous Interactive, 무료 | Standard Unity Asset Store EULA. 게임에 넣어 배포 가능, 파일 자체 재배포 금지 | 필요 없음 | `unity/Assets/Oddity/DevMotion/Cat/*.fbx`, `cartoon_cat_shared.glb` |
+| Cartoon Cat (CAT) | Unity Asset Store, Zealous Interactive, 무료 | Standard Unity Asset Store EULA. 게임에 넣어 배포 가능, 파일 자체 재배포 금지 | 필요 없음 | 쓰지 않음 (2026-11-08 게임에서 뺐다). 파일은 저장소 밖 보관 폴더로 옮겼다 |
 | Somali Cat Animated ver 1.2 (SOMALI) | [Sketchfab, DreamNoms](https://sketchfab.com/3d-models/somali-cat-animated-ver-12-e185c3fd92b64c32b4515a32b29252fc) | CC BY 4.0. 상업 이용과 변경 가능 | 필요: "Somali Cat Animated ver 1.2" by DreamNoms, CC BY 4.0 | `unity/Assets/Oddity/DevMotion/Cat/Somali/` |
 | Medium poly Cat In Motion (cat4, 줄무늬) | [Sketchfab, rt699448](https://sketchfab.com/3d-models/medium-poly-cat-in-motion-3d-model-free-5c31c77904de4e458d434c167ea0f4bc), 2026-11-08 받음 | CC BY 4.0. 상업 이용과 변경 가능 | 필요: "Medium poly Cat In Motion 3d Model Free" by rt699448, CC BY 4.0 | 아직 프로젝트 밖 (`Downloads`, `test1/.../sketchfab/cat4/`) |
 | 흰 고양이 (WHITE) | Tripo 로 만든 메시를 코덱스가 리깅 | Tripo 이용 약관을 따른다 (만든 계정의 요금제에 따라 상업 이용 조건이 다르니 배포 전에 확인) | 약관 확인 뒤 정함 | `unity/Assets/Models/test/whitecat-2-1*.glb` |
