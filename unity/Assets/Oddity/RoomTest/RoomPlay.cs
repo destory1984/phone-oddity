@@ -297,6 +297,7 @@ namespace Oddity.RoomTest
                 catGraph=PlayableGraph.Create("Cat");catGraph.SetTimeUpdateMode(DirectorUpdateMode.GameTime);
                 catOut=AnimationPlayableOutput.Create(catGraph,"Cat",animator);catGraph.Play();
                 SetCatClip(0,false);catGraph.Evaluate(0);
+                CatSfxSetup(go);
                 Bounds Box(){var rs=go.GetComponentsInChildren<Renderer>();var b=rs[0].bounds;foreach(var r in rs)b.Encapsulate(r.bounds);return b;}
                 go.transform.SetPositionAndRotation(Vector3.zero,Quaternion.identity);
                 float scale=CatHeight/Mathf.Max(1e-4f,Box().size.y);go.transform.localScale=Vector3.one*scale;
@@ -311,7 +312,9 @@ namespace Oddity.RoomTest
         float CatYaw=Environment.GetEnvironmentVariable("ODDITY_CATYAW")!=null?float.Parse(Environment.GetEnvironmentVariable("ODDITY_CATYAW"),CultureInfo.InvariantCulture):180-35;
         void SetCatClip(int i,bool log)
         {
-            catIndex=i;
+            bool changed=i!=catIndex || catLoopCount<0;
+            catIndex=i;catLoopCount=0;
+            if(changed)CatSfxClipStart(i);
             var old=catOut.GetSourcePlayable();if(old.IsValid())catGraph.DestroyPlayable(old);
             var p=AnimationClipPlayable.Create(catGraph,catClips[i]);p.SetApplyFootIK(false);catOut.SetSourcePlayable(p);
             if(log)Debug.Log("ROOMPLAY_CAT clip="+CatClips[i]);
@@ -325,6 +328,7 @@ namespace Oddity.RoomTest
         {
             if(catRoot==null){Debug.Log("ROOMPLAY_CONTROL target=harin (no cat)");return;}
             catControl=!catControl;
+            if(catControl)CatShot("meow.ogg",.5f); // feedback that control moved to the cat; nothing when it goes back to Harin
             if(!catControl && catMoving){catMoving=false;SetCatClip(0,false);}
             Debug.Log("ROOMPLAY_CONTROL target="+(catControl?"cat":"harin"));
         }
@@ -340,8 +344,73 @@ namespace Oddity.RoomTest
             if(moving){catHeading=Mathf.LerpAngle(catHeading,Mathf.Atan2(wish.x,wish.y)*Mathf.Rad2Deg,1-Mathf.Exp(-12*dt));
                 catRoot.position=new Vector3(next.x,catRoot.position.y,next.y);}
             catRoot.rotation=Quaternion.Euler(0,catHeading,0);
-            if(moving!=catMoving){catMoving=moving;SetCatClip(moving?1:0,true);}
+            if(moving!=catMoving){
+                if(moving)catWalkStart=Time.unscaledTime;
+                else if(Time.unscaledTime-catWalkStart>=1f)CatShot("cat_flap_ears",.4f); // stopped after walking at least 1 s
+                catMoving=moving;SetCatClip(moving?1:0,true);}
             if(moving){var pl=catOut.GetSourcePlayable();if(pl.IsValid())pl.SetSpeed(run?CatRunSpeed/CatWalkSpeed:1);}
+        }
+        // cat sounds (git-ignored files in Assets/Oddity/DevMotion/Cat/Sfx): 3D from the cat, one source for one-shots and one looping for the purr.
+        // Sound clip: a random meow at its start and at each loop; Eat: mewfood; Jump: meow per loop; Idle: sleepy purr after 3 s, a soft meow every 12-25 s; Walk: ear flap on stopping
+        const string CatSfxDir="Assets/Oddity/DevMotion/Cat/Sfx/";
+        static readonly string[] CatMeows={"meow.ogg","kitten_mew.wav","cat_softmew.wav","cat_mewpurr.wav","cat_mewpurr2.wav","cat_sfx_1.wav","cat_sfx_2.wav","cat_sfx_3.wav","cat_sfx_4.wav","cat_sfx_5.wav","cat_sfx_6.wav","cat_sfx_7.wav","cat_sfx_8.wav"};
+        static readonly string[] CatSoftMeows={"cat_softmew.wav","kitten_mew.wav","cat_mewpurr.wav"};
+        readonly Dictionary<string,AudioClip> catSfx=new Dictionary<string,AudioClip>();
+        AudioSource catShotSource,catPurrSource;
+        int catLoopCount,lastMeow=-1;float catWalkStart,catIdleTime,catNextSoft,catPurrTarget;bool catPurrOn;
+        AudioClip CatSfx(string file)
+        {
+            if(!file.Contains("."))file+=".wav";
+            if(catSfx.TryGetValue(file,out var c))return c;
+            c=AssetDatabase.LoadAssetAtPath<AudioClip>(CatSfxDir+file);
+            if(c==null)Debug.LogWarning("ROOMPLAY_CATSFX missing "+file+", silent");
+            catSfx[file]=c;return c; // a null stays cached so the warning comes once
+        }
+        void CatSfxSetup(GameObject go)
+        {
+            AudioSource Make(bool loop){var a=go.AddComponent<AudioSource>();a.playOnAwake=false;a.loop=loop;a.spatialBlend=1;a.rolloffMode=AudioRolloffMode.Logarithmic;a.minDistance=6;a.maxDistance=12;return a;} // the camera sits about 5.4 m from the rug: inside 6 m the set volumes hold, the cat still pans left/right
+            catShotSource=Make(false);catPurrSource=Make(true);catPurrSource.volume=0;
+            catPurrSource.clip=CatSfx("cat_purrsleepy_loop.wav");
+            catLoopCount=-1;catNextSoft=UnityEngine.Random.Range(12f,25f);
+        }
+        void CatShot(string file,float vol)
+        {
+            if(catShotSource==null)return;
+            var c=CatSfx(file);if(c==null)return;
+            catShotSource.PlayOneShot(c,vol);
+            Debug.Log("ROOMPLAY_CATSFX "+(file.Contains(".")?file:file+".wav"));
+        }
+        void CatRandomMeow(float vol)
+        {
+            int k;do{k=UnityEngine.Random.Range(0,CatMeows.Length);}while(k==lastMeow && CatMeows.Length>1);
+            lastMeow=k;CatShot(CatMeows[k],vol);
+        }
+        void CatSfxClipStart(int i)
+        {
+            catIdleTime=0;catNextSoft=UnityEngine.Random.Range(12f,25f);
+            if(i==3)CatRandomMeow(.9f);else if(i==4)CatShot("cat_mewfood.wav",.7f);else if(i==2)CatShot("meow.ogg",.6f);
+        }
+        void CatSfxTick(float dt)
+        {
+            if(catRoot==null || catShotSource==null || !catGraph.IsValid())return;
+            if(catIndex==0){
+                catIdleTime+=dt;
+                if(catIdleTime>=3 && !catPurrOn && catPurrSource.clip!=null){catPurrOn=true;catPurrTarget=.25f;if(!catPurrSource.isPlaying)catPurrSource.Play();Debug.Log("ROOMPLAY_CATSFX purr on");}
+                catNextSoft-=dt;
+                if(catNextSoft<=0){catNextSoft=UnityEngine.Random.Range(12f,25f);CatShot(CatSoftMeows[UnityEngine.Random.Range(0,CatSoftMeows.Length)],.5f);}
+            }else if(catPurrOn){catPurrOn=false;catPurrTarget=0;Debug.Log("ROOMPLAY_CATSFX purr off");}
+            // the purr fades in over 1 s and out over 0.3 s
+            float rate=catPurrTarget>catPurrSource.volume?.25f/1f:.25f/.3f;
+            catPurrSource.volume=Mathf.MoveTowards(catPurrSource.volume,catPurrTarget,rate*dt);
+            if(!catPurrOn && catPurrSource.isPlaying && catPurrSource.volume<=0)catPurrSource.Stop();
+            // clip loops: the playable's time crossing the clip length
+            if(catIndex==2 || catIndex==3){
+                var pl=catOut.GetSourcePlayable();
+                if(pl.IsValid()){
+                    var len=catClips[catIndex].length;int n=len>0?(int)Mathf.Floor((float)pl.GetTime()/len):0;
+                    if(n>catLoopCount){catLoopCount=n;if(n>0){if(catIndex==3)CatRandomMeow(.9f);else CatShot("meow.ogg",.6f);}}
+                }
+            }
         }
         void NextCat(){if(catRoot==null || !catGraph.IsValid())return;SetCatClip((catIndex+1)%CatClips.Length,true);}
         // the computer lives on the dining table: an open laptop in front of the chair on the -x side, screen tilted back and facing that seat
@@ -985,6 +1054,7 @@ namespace Oddity.RoomTest
         {
             if(cameraView!=null){float aspect=Screen.width/(float)Mathf.Max(1,Screen.height);float target=16f/9;
                 cameraView.rect=aspect>target?new Rect((1-target/aspect)/2,0,target/aspect,1):new Rect(0,(1-aspect/target)/2,1,aspect/target);}
+            CatSfxTick(Mathf.Min(Time.unscaledDeltaTime,.05f));
             if(statue!=null && !busy){StatueUpdate(Mathf.Min(Time.unscaledDeltaTime,.05f));return;}
             if(model==null || busy || reviewing)return;float dt=Mathf.Min(Time.unscaledDeltaTime,.05f);var input=Vector2.zero;bool run=false;float zoomKey=0;
             turning=0;
