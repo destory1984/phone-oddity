@@ -80,6 +80,7 @@ namespace Oddity.RoomTest
         float lift, liftSpeed, floorError;
         Mesh boundsMesh;
         float[] weights, from;
+        float startYaw=45; // the first-frame facing in the apartment (ODDITY_HARINAT can change it)
         float walkTwist, runTwist, bodyFix, speed, runSpeed, x, z, heading=180, yaw=180, turnStart=180, targetYaw=180, turnTime=1, blend=1;
         int current=9, direction, blockedDirection;
         float Limit=1.08f, LimX0=-1.08f, LimX1=1.08f, ZNear=-.6f, ZFar=15f; // the room view widens these to its floor
@@ -129,6 +130,8 @@ namespace Oddity.RoomTest
                 BuildPerches();
                 SpawnPets();
                 if(apt){heading=yaw=targetYaw=turnStart=45;turnTime=1;Select(9);} // she starts facing the living room's camera (north-east)
+                var at=Environment.GetEnvironmentVariable("ODDITY_HARINAT"); // "x,z,yaw": where Harin starts and which way she faces (0 = north, 180 = south), for lighting tests
+                if(!string.IsNullOrWhiteSpace(at)){var v=at.Split(',').Select(t=>float.Parse(t,CultureInfo.InvariantCulture)).ToArray();x=v[0];z=v[1];heading=yaw=targetYaw=turnStart=startYaw=v[2];Debug.Log("ROOMPLAY_HARINAT x="+F(x)+" z="+F(z)+" yaw="+F(yaw));}
                 var text=Environment.GetEnvironmentVariable("ODDITY_PLAYKEYS");scripted=!string.IsNullOrWhiteSpace(text);
                 if(scripted)foreach(var part in text.Split(',')){
                     var pair=part.Split(':');
@@ -1907,7 +1910,7 @@ namespace Oddity.RoomTest
         }
         void AptTick()
         {
-            if(!faced && model!=null && !busy && apt){faced=true;heading=45;Turn(45);yaw=targetYaw=turnStart=45;turnTime=1;} // she starts facing the living room's camera
+            if(!faced && model!=null && !busy && apt){faced=true;heading=startYaw;Turn(startYaw);yaw=targetYaw=turnStart=startYaw;turnTime=1;} // she starts facing the living room's camera
             if(aptView==null || aptForced)return;
             var pos=ctl!=null?PetXZ(ctl):new Vector2(x,z);
             var oldFwd=Vector3.ProjectOnPlane(cameraView.transform.forward,Vector3.up).normalized;
