@@ -89,8 +89,10 @@ def verts():
     mw = np.array(body.matrix_world)
     return a @ mw[:3, :3].T + mw[:3, 3]
 
-def minz():
-    return float(verts()[M_BODYFLOOR][:, 2].min())
+def minz(torso=False):
+    """Lowest body vertex; torso=True ignores the paws (tucked poses lie on the belly, paws only rest)."""
+    m = (M_BODYFLOOR & ~M_PAWS) if torso else M_BODYFLOOR
+    return float(verts()[m][:, 2].min())
 
 # ---------------------------------------------------------------- solver
 def Rz(a): return Matrix.Rotation(math.radians(a), 3, 'Z')
@@ -224,12 +226,12 @@ def build_spec(P, ground=None):
 def pose_basis(P):
     return solve_chain(build_spec(P))
 
-def ground(P, target=0.0, iters=4):
+def ground(P, target=0.0, iters=4, torso=False):
     """Shift pelvis height (and keep paw targets) so the lowest body vertex sits on the floor."""
     P = copy.deepcopy(P)
     for it in range(iters):
         apply_basis(pose_basis(P)[0])
-        mz = minz()
+        mz = minz(torso)
         if abs(mz - target) < 0.002:
             break
         px, py, pz = P['pel']
@@ -433,7 +435,7 @@ def tail_dirs(angles):
         out['A%d' % (i + 1)] = (math.sin(y) * math.cos(p), math.cos(y) * math.cos(p), math.sin(p))
     return out
 
-def fit(P, front=None, hind=None, tailfloor=0.012, iters=5):
+def fit(P, front=None, hind=None, tailfloor=0.012, iters=5, torso=False):
     """Ground the pelvis, then put front/hind paw targets relative to the solved shoulders/hips.
     front: dict(dx, dy, z, pitch, pole); hind: dict(dx, dy, hz?, ...) see callers."""
     P = copy.deepcopy(P)
@@ -452,8 +454,8 @@ def fit(P, front=None, hind=None, tailfloor=0.012, iters=5):
                     P['H' + s + 'm'] = (sx * hind['m'][0], hind['m'][1], hind['m'][2])
                     P['H' + s + 'p'] = (sx * hind['pole'][0], hind['pole'][1], hind['pole'][2])
                     P['H' + s + 'pitch'] = (hind.get('pitch', 0),)
-        P = ground(P, iters=1)
-    P = ground(P, iters=2)
+        P = ground(P, iters=1, torso=torso)
+    P = ground(P, iters=2, torso=torso)
     return P
 
 def tailfix(P, angles):
@@ -462,11 +464,14 @@ def tailfix(P, angles):
     return Q
 
 SIT = copy.deepcopy(STAND)
-SIT.update({'Pelvis': (56, 0, 0), 'Spine01': (3, 0, 0), 'Spine02': (3, 0, 0), 'Chest': (2, 0, 0),
-            'Neck': (-34, 0, 0), 'Head': (-30, 0, 0), 'pel': (0, 0.07, -0.30)})
-SIT.update(tail_dirs([(8, -18), (45, -12), (100, -4), (150, -2), (190, 0), (215, 0)]))
+# a sitting cat: rump on the surface, front legs straight and vertical (the shoulders can be no higher than the
+# legs reach, so the back is tucked steeply at the pelvis and flattens toward the chest), haunch folded forward
+# with the hind paws flat beside/ahead of the hips, tail laid round the hips
+SIT.update({'Pelvis': (58, 0, 0), 'Spine01': (-6, 0, 0), 'Spine02': (-10, 0, 0), 'Chest': (-8, 0, 0),
+            'Neck': (-17, 0, 0), 'Head': (-15, 0, 0), 'pel': (0, 0.07, -0.30)})
+SIT.update(tail_dirs([(35, -18), (80, -10), (125, -4), (155, -2), (175, 0), (190, 0)]))
 SIT = fit(SIT, front=dict(x=0.06, dy=0.015, z=0.06, pitch=0, pole=(0.2, 1, 0)),
-          hind=dict(x=0.12, dy=-0.02, z=0.045, m=(0.05, -0.97, -0.10), pole=(0.4, -1.0, 0.3), pitch=40))
+          hind=dict(x=0.11, dy=-0.05, z=0.045, m=(0.05, -0.97, -0.10), pole=(0.4, -1.0, 0.3), pitch=40))
 
 SPHINX = copy.deepcopy(STAND)
 SPHINX.update({'Pelvis': (6, 0, 0), 'Spine01': (0, 0, 0), 'Spine02': (4, 0, 0), 'Chest': (6, 0, 0),
@@ -476,11 +481,13 @@ SPHINX = fit(SPHINX, front=dict(x=0.06, dy=-0.20, z=0.06, pitch=48, pole=(0.0, 1
              hind=dict(x=0.16, dy=0.02, z=0.045, m=(0.05, -0.97, -0.10), pole=(0.4, -1.0, 0.3), pitch=40))
 
 LOAF = copy.deepcopy(STAND)
-LOAF.update({'Pelvis': (4, 0, 0), 'Spine01': (0, 0, 0), 'Spine02': (0, 0, 0), 'Chest': (4, 0, 0),
-             'Neck': (8, 0, 0), 'Head': (-8, 0, 0), 'pel': (0, 0.02, -0.30)})
-LOAF.update(tail_dirs([(0, -50), (20, -42), (60, -30), (110, -12), (150, -3), (175, 0)]))
-LOAF = fit(LOAF, front=dict(x=0.07, dy=-0.03, z=0.06, pitch=48, pole=(0.0, 1, 0.3)),
-           hind=dict(x=0.14, dy=0.02, z=0.045, m=(0.05, -0.97, -0.10), pole=(0.4, -1.0, 0.3), pitch=40))
+# loaf: belly on the surface (the paws only rest, so the torso is grounded), back low and level, elbows folded,
+# forepaws close under the chin, hocks folded beside the haunch
+LOAF.update({'Pelvis': (2, 0, 0), 'Spine01': (0, 0, 0), 'Spine02': (-2, 0, 0), 'Chest': (-12, 0, 0),
+             'Neck': (22, 0, 0), 'Head': (-14, 0, 0), 'pel': (0, 0.02, -0.30)})
+LOAF.update(tail_dirs([(20, -50), (70, -42), (115, -30), (150, -12), (175, -3), (190, 0)]))
+LOAF = fit(LOAF, front=dict(x=0.075, dy=0.0, z=0.06, pitch=48, pole=(0.0, 1, 1.5)),
+           hind=dict(x=0.13, dy=-0.03, z=0.045, m=(0.05, -0.97, -0.10), pole=(0.4, -1.0, 0.3), pitch=40), torso=True)
 POSES = {'Stand': STAND, 'Sit': SIT, 'Sphinx': SPHINX, 'Loaf': LOAF}
 
 # ---- shared modulations for the rest loops
@@ -510,6 +517,18 @@ def grounded(fn, iters=2):
     """Wrap a pose function so the lowest body vertex stays within 2 mm of the floor."""
     def f(fr):
         return ground(fn(fr), iters=iters)
+    return f
+def grounded_blend(fn, frames, down, iters=2):
+    """Grounding for the loaf transitions: paws+body near the standing end, the belly (paws ignored) near the
+    loaf end, blended by smoothstep over the second half. down=True: the loaf is at the end of the clip."""
+    def f(fr):
+        P = fn(fr)
+        t = fr / frames
+        w = ease((t - 0.4) / 0.4) if down else ease((0.6 - t) / 0.4)
+        Pa = ground(P, iters=iters); Pt = ground(P, iters=iters, torso=True)
+        Q = copy.deepcopy(Pa)
+        Q['pel'] = tuple(a + (b - a) * w for a, b in zip(Pa['pel'], Pt['pel']))
+        return Q
     return f
 
 # ---- jump
@@ -582,10 +601,12 @@ def build_all(only=None):
         if want(name):
             fr = int(round(secs * FPS))
             out[name] = (make_action(name, fn(fr), fr), fr, loop)
-    def trans(A, B, mid=None):
+    def trans(A, B, mid=None, blend=None):
         def g(fr):
             T = fr / FPS
             keys = [(0.0, A)] + ([(T * 0.5, mid)] if mid is not None else []) + [(T, B)]
+            if blend is not None:
+                return grounded_blend(keyed(keys, fr), fr, blend)
             return grounded(keyed(keys, fr))
         return g
     def jump_fn(fr):
@@ -600,9 +621,9 @@ def build_all(only=None):
     mk('LieDown', trans(STAND, SPHINX), 1.5, False)
     mk('LyingIdle', lambda fr: rest_loop(SPHINX, fr, head_yaw=9, tail_segs=(3, 4, 5), tail_yaw=14), 3.0, True)
     mk('GetUp', trans(SPHINX, STAND), 1.2, False)
-    mk('LoafDown', trans(STAND, LOAF), 1.5, False)
+    mk('LoafDown', trans(STAND, LOAF, blend=True), 1.5, False)
     mk('LoafIdle', lambda fr: rest_loop(LOAF, fr, head_yaw=5, breath=1.3, tail_segs=(4, 5), tail_yaw=8), 3.0, True)
-    mk('LoafUp', trans(LOAF, STAND), 1.2, False)
+    mk('LoafUp', trans(LOAF, STAND, blend=False), 1.2, False)
     mk('Jump', jump_fn, 0.8, False)
     mk('Groom', groom_fn, 3.0, True)
     mk('Stretch', stretch_fn, 2.5, False)
