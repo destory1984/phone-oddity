@@ -135,7 +135,7 @@ namespace Oddity.RoomTest
                 var text=Environment.GetEnvironmentVariable("ODDITY_PLAYKEYS");scripted=!string.IsNullOrWhiteSpace(text);
                 if(scripted)foreach(var part in text.Split(',')){
                     var pair=part.Split(':');
-                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0]=="realtab" || pair[0]=="wait" || pair[0].StartsWith("click") || pair[0].StartsWith("view") || pair[0]=="wheelup" || pair[0]=="liftup" || pair[0]=="liftdown" || pair[0]=="swingleft" || pair[0]=="swingright" || pair[0]=="tiltup" || pair[0]=="tiltdown" || pair[0]=="freeze" || pair[0]=="unfreeze" || (pair[0].StartsWith("shade") && int.TryParse(pair[0].Substring(5),out _)) || pair[0]=="wheeldown" || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
+                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0]=="realtab" || pair[0]=="wait" || pair[0].StartsWith("click") || pair[0].StartsWith("view") || pair[0]=="wheelup" || pair[0]=="liftup" || pair[0]=="liftdown" || pair[0]=="swingleft" || pair[0]=="swingright" || pair[0]=="tiltup" || pair[0]=="tiltdown" || pair[0]=="freeze" || pair[0]=="unfreeze" || (pair[0].StartsWith("gi") && int.TryParse(pair[0].Substring(2),out _)) || (pair[0].StartsWith("shade") && int.TryParse(pair[0].Substring(5),out _)) || pair[0]=="wheeldown" || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
                     script.Add((pair[0],seconds));
                 }
                 Debug.Log("ROOMPLAY_READY model="+modelName);
@@ -167,11 +167,13 @@ namespace Oddity.RoomTest
         // Harin's MToon shade: the VRM's shade colours are about 98% of the lit colour and GI equalization is 0.9, so her face never darkens.
         // ODDITY_SHADE=percent (script keys shade100, shade95, ...) darkens it: shade = original x percent (warm), GI equalization 0.9 - 1.5 (1 - k) and
         // shading shift -0.25 + 0.625 (1 - k) (85% gives 0.675 and -0.156); 100 = as imported
+        // ODDITY_SHADEGI=percent (script keys gi90, gi30, ...) sets GI equalization on its own instead of following the shade
+        int giWant=int.TryParse(Environment.GetEnvironmentVariable("ODDITY_SHADEGI"),out var gv)?Mathf.Clamp(gv,0,100):-1,giHave=-2;
         int shadeWant=int.TryParse(Environment.GetEnvironmentVariable("ODDITY_SHADE"),out var sv)?Mathf.Clamp(sv,40,100):100,shadeHave=-1;GameObject shadeFor;
         readonly Dictionary<Material,(Color shade,float gi,float shift)> shadeOrig=new Dictionary<Material,(Color,float,float)>();
         void ShadeTick()
         {
-            if(model==null || (shadeFor==model && shadeHave==shadeWant))return;
+            if(model==null || (shadeFor==model && shadeHave==shadeWant && giHave==giWant))return;
             if(shadeFor!=model){shadeOrig.Clear();shadeFor=model;}
             int n=0;
             foreach(var r in model.GetComponentsInChildren<Renderer>(true))foreach(var m in r.materials){
@@ -179,9 +181,9 @@ namespace Oddity.RoomTest
                 if(!shadeOrig.TryGetValue(m,out var o)){o=(m.GetColor("_ShadeColor"),m.GetFloat("_GiEqualization"),m.GetFloat("_ShadingShiftFactor"));shadeOrig[m]=o;}
                 float k=shadeWant/100f;var c=o.shade;bool orig=shadeWant>=100;
                 m.SetColor("_ShadeColor",orig?c:new Color(c.r*k,c.g*k*(1-.4f*(1-k)),c.b*k*(1-.6f*(1-k)),c.a));
-                m.SetFloat("_GiEqualization",orig?o.gi:Mathf.Clamp01(.9f-1.5f*(1-k)));
+                m.SetFloat("_GiEqualization",giWant>=0?giWant/100f:orig?o.gi:Mathf.Clamp01(.9f-1.5f*(1-k)));
                 m.SetFloat("_ShadingShiftFactor",orig?o.shift:-.25f+.625f*(1-k));n++;}
-            shadeHave=shadeWant;Debug.Log("ROOMPLAY_SHADE look="+shadeWant+" materials="+n);
+            shadeHave=shadeWant;giHave=giWant;Debug.Log("ROOMPLAY_SHADE look="+shadeWant+" gi="+giWant+" materials="+n);
         }
         void LoadModel(string path)
         {
@@ -2236,6 +2238,7 @@ namespace Oddity.RoomTest
             if(key=="realtab"){StartCoroutine(RealTab());return;}
             if(key.StartsWith("click")){ScriptClick(key);return;}
             if(key.StartsWith("view")){AptForce(key.Substring(4));return;} // script only: a room's camera by name (viewkitchen), viewauto goes back to following the character
+            if(key.StartsWith("gi") && int.TryParse(key.Substring(2),out var gp)){giWant=Mathf.Clamp(gp,0,100);return;} // script only: GI equalization in percent
             if(key=="freeze"||key=="unfreeze"){poseFreeze=key=="freeze";return;} // script only: hold Harin's pose
             if(key.StartsWith("shade") && int.TryParse(key.Substring(5),out var pc)){shadeWant=Mathf.Clamp(pc,40,100);return;} // script only: Harin's shade in percent
             if(key=="tiltup"||key=="tiltdown"){TiltNotchBy(key=="tiltup"?1:-1);return;} // Alt + wheel, one notch per script step
