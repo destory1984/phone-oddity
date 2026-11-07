@@ -289,7 +289,7 @@ class Retarget:
             for side, lg in cfg['legs'][kind].items():
                 k = self.kl[kind + side]
                 sS, sE, sW = lg['src']
-                Pt = posed0[lg['up']].translation
+                Pt = posed0[lg['up']].translation     # the reference pose already carries the up_dz of stand_reference
                 Sref, Eref, Wref = t.rhead[lg['up']], t.rhead[lg['mid']], t.rhead[lg['eff']]
                 rel = (Wref - Sref) + k * (C @ ((H[sW] - H[sS]) - (RH[sW] - RH[sS])))
                 T = Pt + rel
@@ -685,7 +685,7 @@ def stage_cartoon():
 
 
 # =============================================================== stage cat4
-def stand_reference(tgt, SRC, C, legs, tail, front_back=0.0):
+def stand_reference(tgt, SRC, C, legs, tail, front_back=0.0, shoulder_z=None, spine_level=None, head_pitch=0.0, hip_z=None, pelvis_lift=0.0, foot_under=None):
     """Neutral standing reference for a rig whose rest pose is a mid-stride walk. Tail directions follow the white cat's Idle
     frame 0, each leg is solved by 2-bone IK (source knee pole, source leg shape scaled to this rig's leg length) and its
     effector height is corrected (front paws are moved back by front_back to compensate the mesh) until the lowest vertex of each paw group sits on z = 0. Returns the posed matrices."""
@@ -696,19 +696,34 @@ def stand_reference(tgt, SRC, C, legs, tail, front_back=0.0):
     tp = [tgt.rhead[b] for b in tail]; tp.append(tp[-1] + (tp[-1] - tp[-2]))
     for b, (u0, u1) in zip(tail, frac_bounds(tp)):
         spec['abs'][b] = rdir(b).rotation_difference(C @ chord(pts, u0, u1)).to_matrix()
+    # spine: the rest pose is a mid-stride walk with a dipped chest, so level it with the white cat's Idle chord directions
+    # (the head bone keeps its rest orientation so the face stays level); then put the shoulders at the wanted height
+    sp_b = ['Pelvis', 'Spine01', 'Spine02', 'Chest', 'Neck']
+    sp_src = [RH[n] for n in SPINE_SRC]
+    sp_t = [tgt.rhead[b] for b in sp_b] + [tgt.rhead['Head']]
+    for i, b in enumerate(sp_b):
+        a = sp_t[i + 1] - sp_t[i]; g = C @ (sp_src[i + 1] - sp_src[i])
+        if i == 0: g = V((g.x, g.y, g.z * pelvis_lift))
+        elif spine_level is not None: g = V((g.x, g.y, g.z * spine_level))
+        spec['abs'][b] = a.rotation_difference(g).to_matrix()
+    spec['abs']['Head'] = Matrix.Rotation(math.radians(head_pitch), 3, 'Y')
     _, posed0 = tgt.solve(spec)
-    dz = {}
+    if shoulder_z is not None:
+        zs = posed0['Pelvis'].translation.z if hip_z is not None else 0.5 * (posed0['FrontUpperLeg.L'].translation.z + posed0['FrontUpperLeg.R'].translation.z)
+        spec['loc']['Root'] = tgt.rhead['Root'] + V((0, 0, (hip_z if hip_z is not None else shoulder_z) - zs))
+        _, posed0 = tgt.solve(spec)
+    dz = {}; dxb = {}; shx = {}
     def legspec():
         sp = {'loc': dict(spec['loc']), 'abs': dict(spec['abs'])}
         for kind in ('F', 'H'):
             for sd, lg in legs[kind].items():
                 sS, sE, sW = lg['src']
-                Pt = posed0[lg['up']].translation
+                Pt = posed0[lg['up']].translation + V((0, 0, lg.get('up_dz', 0.0))); sp['loc'][lg['up']] = Pt; shx[kind + sd] = Pt.x
                 Sref, Eref, Wref = tgt.rhead[lg['up']], tgt.rhead[lg['mid']], tgt.rhead[lg['eff']]
                 l1 = (Eref - Sref).length; l2 = (Wref - Eref).length
                 k = (l1 + l2) / ((RH[sE] - RH[sS]).length + (RH[sW] - RH[sE]).length)
                 T = Pt + k * (C @ (RH[sW] - RH[sS])); T.z += dz.get(kind + sd, 0.0)
-                if kind == 'F': T += (C @ V((0, 1, 0))) * front_back
+                if kind == 'F': T += (C @ V((0, 1, 0))) * dxb.get(kind + sd, front_back)
                 pole = C @ (RH[sE] - (RH[sS] + RH[sW]) * 0.5)
                 Kp, d1, d2, ov = ik2(Pt, l1, l2, T, pole)
                 if DEBUG: print('   STANDLEG %s%s P=%s T=%s K=%s l1=%.3f l2=%.3f k=%.3f over=%.3f' % (kind, sd, tuple(round(x, 3) for x in Pt), tuple(round(x, 3) for x in T), tuple(round(x, 3) for x in Kp), l1, l2, k, ov))
@@ -723,13 +738,21 @@ def stand_reference(tgt, SRC, C, legs, tail, front_back=0.0):
                     a = tgt.rhead[lg['toe']] - tgt.rhead[lg['paw']]
                     sp['abs'][lg['paw']] = a.rotation_difference(C @ (RH['HindToes.' + sd] - RH['HindPaw.' + sd])).to_matrix()
         return sp
-    for it in range(6):
+    for it in range(10):
         basis, posed = tgt.solve(legspec()); tgt.apply(basis)
         m = tgt.measure(); worst = 0.0
         for k, v in m['paw'].items():
             dz[k] = dz.get(k, 0.0) - v; worst = max(worst, abs(v))
-        print("STAND it%d paw heights %s" % (it, {k: round(v, 4) for k, v in m['paw'].items()}))
-        if worst < 0.0005: break
+        P = tgt.verts(); worstx = 0.0
+        for k in ('FL', 'FR'):      # a foreleg hangs vertically: the foot's mesh sits under the shoulder joint
+            if foot_under is None: break
+            # the mesh forearm does not follow its bones (the left one leans forward about 45 degrees against 30 for the bones),
+            # so measure the mesh: bottom half of the forearm vertices against its top half
+            md = np.array([d == 'FrontLowerLeg.' + k[1] for d in tgt.dom]); zz = P[md][:, 2]; xx = P[md][:, 0]; zm = np.median(zz)
+            ex = 0.8 * float(xx[zz <= zm].mean() - xx[zz > zm].mean() - foot_under)
+            dxb[k] = dxb.get(k, front_back) + ex; worstx = max(worstx, abs(ex))
+        print("STAND it%d paw heights %s foot dx %s" % (it, {k: round(v, 4) for k, v in m['paw'].items()}, {k: round(v, 3) for k, v in dxb.items()}))
+        if worst < 0.0005 and worstx < 0.003: break
     basis, posed = tgt.solve(legspec()); tgt.apply(basis)
     return tgt.capture()
 
@@ -749,7 +772,7 @@ def stage_cat4():
     tgt.setup_masks(('Pelvis', 'Spine0', 'Chest', 'Neck', 'Head', 'Scapula'),
                     {'FL': ('FrontLowerLeg.L', 'FrontPaw.L', 'FrontToes.L'), 'FR': ('FrontLowerLeg.R', 'FrontPaw.R', 'FrontToes.R'),
                      'HL': ('HindHock.L', 'HindPaw.L', 'HindToes.L'), 'HR': ('HindHock.R', 'HindPaw.R', 'HindToes.R')},
-                    ('Tail04', 'Tail05', 'Tail06', 'Tail07', 'Ear'))
+                    ('Tail0', 'Ear'))      # the whole tail is ignored by the floor test: a sitting cat's tail base lies 2 cm in the floor rather than lifting every paw
     legs = {'F': {}, 'H': {}}
     for sd in 'LR':
         legs['F'][sd] = dict(up='FrontUpperLeg.' + sd, mid='FrontLowerLeg.' + sd, eff='FrontPaw.' + sd, eff_loc='FrontPaw.' + sd,
@@ -759,10 +782,19 @@ def stage_cat4():
                              src=('HindUpperLeg.' + sd, 'HindLowerLeg.' + sd, 'HindHock.' + sd),
                              chord=('HindHock.' + sd, 'HindHock.' + sd, 'HindPaw.' + sd),
                              foot_loc=('HindPaw.' + sd, 'HindHock.' + sd), rots={'HindPaw.' + sd: 'HindPaw.' + sd, 'HindToes.' + sd: 'HindToes.' + sd})
+    # the rig's left legs are longer than its right legs (front 0.383 vs 0.328, hind 0.421 vs 0.330 bone chain), so the left
+    # joints sit a little higher and the right ones a little lower; the legs then bend about equally
+    for sd, sg in (('L', 1.0), ('R', -1.0)):
+        legs['F'][sd]['up_dz'] = sg * float(os.environ.get('C4_FDZ', 0.03)); legs['H'][sd]['up_dz'] = sg * float(os.environ.get('C4_HDZ', 0.02))
     tail = ['Tail0%d' % i for i in range(1, 8)]
-    ref_m = stand_reference(tgt, SRC, C, legs, tail, front_back=0.08)   # the mesh's forelegs sit 0.08 ahead of their bones, so the paw targets move back
+    ref_m = stand_reference(tgt, SRC, C, legs, tail, front_back=float(os.environ.get('C4_FB', 0.08)), shoulder_z=float(os.environ.get('C4_HS', 0.385)), spine_level=float(os.environ.get('C4_SL', 1.0)), head_pitch=float(os.environ.get('C4_HP', 0.0)), hip_z=float(os.environ.get('C4_HZ', 0.382)), pelvis_lift=float(os.environ.get('C4_PL', 0.0)), foot_under=float(os.environ.get('C4_FU', 0.01)))   # the mesh's forelegs sit 0.08 ahead of their bones, so the paw targets move back
     tgt.set_reference(ref_m)
     FLOOR = 0.0
+    if DEBUG:
+        for n in ('Pelvis', 'Spine01', 'Spine02', 'Chest', 'Neck', 'Head', 'FrontUpperLeg.L', 'FrontLowerLeg.L', 'FrontPaw.L', 'FrontToes.L', 'HindUpperLeg.L', 'HindLowerLeg.L', 'HindHock.L', 'HindPaw.L', 'HindToes.L'):
+            h = ref_m[n].translation; print('   REFPT %-16s %.3f %.3f %.3f' % (n, h.x, h.y, h.z))
+        for n in ('Pelvis', 'Spine01', 'Spine02', 'Chest', 'Neck', 'Head', 'FrontUpperLeg.L', 'FrontPaw.L', 'HindUpperLeg.L', 'HindHock.L', 'HindPaw.L'):
+            h = C @ SRC.ref['H'][n]; print('   SRCPT %-16s %.3f %.3f %.3f' % (n, h.x, h.y, h.z))
     cfg = dict(C=C, floor=FLOOR, root='Root', rear=['Pelvis'], fwd=['Spine01', 'Spine02', 'Chest', 'Neck'], fwd_end='Head', head=['Head'],
                rots={'Ear.L': 'Ear.L', 'Ear.R': 'Ear.R'},
                tail=tail, tail_margin=0.07, legs=legs, pawkeys=['FL', 'FR', 'HL', 'HR'])
