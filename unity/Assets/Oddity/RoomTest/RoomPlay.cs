@@ -620,6 +620,24 @@ namespace Oddity.RoomTest
             if(ctl!=null)PetShot(ctl,"meow.ogg",.5f); // feedback that control moved to a pet; nothing when it goes back to Harin
             Debug.Log("ROOMPLAY_CONTROL target="+(ctl==null?"harin":ctl.tag.ToLowerInvariant()));
         }
+        // R while a cat is controlled: re-import its files (the newest whitecat-2-N-anim for WHITE), take the old cat out and spawn it again in the same place in the Tab order,
+        // standing where it stood if it was on the floor (on the sofa or a perch it starts from its spawn spot), still controlled. Spot reservations go with the old cat
+        void ReloadPet(Pet old)
+        {
+            int at=pets.IndexOf(old);if(at<0)return;
+            var xz=PetXZ(old);float yaw=old.root!=null?old.root.eulerAngles.y:0;bool onFloor=!old.onSofa && old.perch==null && old.job==0;
+            if(old.graph.IsValid())old.graph.Destroy();if(old.root!=null)Destroy(old.root.gameObject);
+            pets.RemoveAt(at);ctl=null;
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+            foreach(var f in new[]{SomaliSharedFile,TabbySharedFile})if(File.Exists(Path.Combine(Application.dataPath,"../"+f)))AssetDatabase.ImportAsset(f,ImportAssetOptions.ForceSynchronousImport|ImportAssetOptions.ForceUpdate);
+            int before=pets.Count;
+            switch(old.tag){case "SOMALI":SpawnSomali();break;case "WHITE":SpawnWhite();break;case "TABBY":SpawnTabby();break;}
+            if(pets.Count==before){Notice(old.tag+" 다시 불러오기 실패");Debug.LogWarning("ROOMPLAY_RELOAD "+old.tag+" failed");return;}
+            var p=pets[pets.Count-1];pets.RemoveAt(pets.Count-1);pets.Insert(at,p);
+            if(onFloor && p.root!=null){var pos=p.root.position;p.root.position=new Vector3(xz.x,pos.y,xz.y);p.root.rotation=Quaternion.Euler(0,yaw,0);}
+            ctl=p;AiPause(p);labelPop=Time.realtimeSinceStartup;
+            Notice(old.tag+" 다시 불러옴");Debug.Log("ROOMPLAY_RELOAD "+old.tag+" at=("+F(PetXZ(p).x)+","+F(PetXZ(p).y)+") floor="+(onFloor?1:0));
+        }
         // a pet's own keys while it is controlled: digits are clips (kept after release), space idle, C/V/K up onto the sofa, the rest have no pet meaning
         float labelPop=-10;
         const float CatJumpUpSeconds=.5f, CatJumpDownSeconds=.4f;
@@ -2200,6 +2218,7 @@ namespace Oddity.RoomTest
             if(key=="swingleft"||key=="swingright"){SwingNotchBy(key=="swingleft"?1:-1);return;} // Shift + wheel, one notch per script step
             if(key=="liftup"||key=="liftdown"){LiftNotchBy(key=="liftup"?1:-1);return;} // Ctrl + wheel, one notch per script step
             if(key=="wheelup"||key=="wheeldown"){wheelZoom=Mathf.Clamp(wheelZoom+(key=="wheelup"?WheelNotch:-WheelNotch),-1,1);return;} // one notch per script step
+            if(ctl!=null && key=="r"){ReloadPet(ctl);return;} // R on a controlled cat reads its newest files again
             if(ctl!=null && key!="tab" && key!="escape" && key!="m"){CatCommand(key);return;} // the cat has its own keys while it is controlled
             if(key=="n"){bool back=Keyboard.current!=null && Keyboard.current.shiftKey.isPressed;if(!busy)StartCoroutine(Reload(StepLine(back?-1:1),false));}
             else if(key=="r"){if(!busy)StartCoroutine(Reload(StepLine(0),true));}
@@ -2679,7 +2698,7 @@ namespace Oddity.RoomTest
             Part(PrimitiveType.Cylinder,shield.transform,Vector3.zero,new Vector3(.5f,.012f,.5f),new Color(.45f,.27f,.13f));
             Part(PrimitiveType.Cylinder,shield.transform,new Vector3(0,.015f,0),new Vector3(.12f,.012f,.12f),new Color(.78f,.8f,.84f));
         }
-        static readonly string[] CatCommonKeys={"space  멈추기 (앉았거나 누웠으면 일어서기)","W A S D  걷기, Shift 빠르게","← →  제자리 돌기","↑ ↓, 휠  줌, Ctrl+휠  카메라 높이","Shift+휠  카메라 좌우, Alt+휠  기울기","C V  소파에 올라가 앉기, K  올라가 눕기","클릭  바닥, 소파, 식탁, 조리대, 냉장고, 창","M  다음 동작","O  고양이 소리 켜고 끄기","Tab  하린으로"};
+        static readonly string[] CatCommonKeys={"space  멈추기 (앉았거나 누웠으면 일어서기)","W A S D  걷기, Shift 빠르게","← →  제자리 돌기","↑ ↓, 휠  줌, Ctrl+휠  카메라 높이","Shift+휠  카메라 좌우, Alt+휠  기울기","C V  소파에 올라가 앉기, K  올라가 눕기","클릭  바닥, 소파, 식탁, 조리대, 냉장고, 창","M  다음 동작, R  이 고양이 다시 불러오기","O  고양이 소리 켜고 끄기","Tab  하린으로"};
         static string CatRow(Pet p,int i){const string keys="123456789";return i<ActionNames.Length?keys[i]+"  "+ActionNames[i]+(CanDo(p,i)?"":" (없음)"):CatCommonKeys[i-ActionNames.Length];}
         static readonly bool noHud=Environment.GetEnvironmentVariable("ODDITY_NOHUD")=="1";
         void OnGUI()
