@@ -29,7 +29,7 @@ namespace Oddity.RoomTest
             ("5", "KaIdle24Dance04"), ("6", "KaIdle89CheekPointPose"),
             ("7", "KaIdle41CuteShyPose"), ("8", "KaIdle44GreetingBow"),
             ("9", "BlowKissSkin"), ("space", "CatwalkIdleSkin"),
-            ("a", "CatwalkSkin"), ("shift", "KaRun01"), ("f", "UAL1Standard#Sword_Attack"), ("z", "ZeroTwoDance"), ("0", "KaIdle73IdolPose"), ("c", "KaSitPutHandBetweensLoop"), ("v", "KaSitWithBothLegsUpLoop"), ("y", "MxYawn"), ("k", "KaSleepTurnToTheSideLoop"), ("d", "CatwalkSkin"), ("w", "CatwalkSkin"), ("s", "CatwalkSkin"), ("left", "누르는 동안 시계 방향 회전"), ("right", "누르는 동안 반시계 회전"), ("n", "다음 모델, Shift+N 이전 모델"),("r", "현재 모델 다시 불러오기"), ("l", "주인공(카메라) 바라보기 켜고 끄기"), ("h", "식탁 의자에서 턱 괴기 켜고 끄기"), ("g", "다음 걷기"), ("escape", "재생 끝내기"), ("up", "줌 인"), ("down", "줌 아웃")
+            ("a", "CatwalkSkin"), ("shift", "KaRun01"), ("f", "UAL1Standard#Sword_Attack"), ("z", "ZeroTwoDance"), ("0", "KaIdle73IdolPose"), ("c", "KaSitPutHandBetweensLoop"), ("v", "KaSitWithBothLegsUpLoop"), ("y", "MxYawn"), ("k", "KaSleepTurnToTheSideLoop"), ("d", "CatwalkSkin"), ("w", "CatwalkSkin"), ("s", "CatwalkSkin"), ("left", "누르는 동안 시계 방향 회전"), ("right", "누르는 동안 반시계 회전"), ("n", "다음 모델, Shift+N 이전 모델"),("r", "현재 모델 다시 불러오기"), ("l", "주인공(카메라) 바라보기 켜고 끄기"), ("h", "식탁 의자에서 턱 괴기 켜고 끄기"), ("g", "다음 걷기"), ("escape", "재생 끝내기"), ("up", "줌 인"), ("down", "줌 아웃"), ("m", "고양이 동작 바꾸기"), ("tab", "Tab 하린과 고양이 번갈아 조종")
         };
         // G cycles the walk; ODDITY_PLAYWALK picks the first one
         static readonly string[] Walks={"CatwalkSkin","KaWalk01","KaWalk02","KaWalk03","KaWalk04","KaWalk05","KaWalk06","KaWalk07","WalkFemale","WalkFeminine","WalkStandardSkin"};
@@ -126,6 +126,7 @@ namespace Oddity.RoomTest
                 var napClip=Environment.GetEnvironmentVariable("ODDITY_PLAYNAP");if(!string.IsNullOrWhiteSpace(napClip))Keys[NapIndex].clip=napClip; // and K
                 LoadModel(Environment.GetEnvironmentVariable("ODDITY_MODEL")??NewestInTest(DefaultLine)??"Assets/Models/test/harin-6T-I1-30.vrm"); // the newest N1 build by default
                 PlaceSofa();
+                SpawnCat();
                 var text=Environment.GetEnvironmentVariable("ODDITY_PLAYKEYS");scripted=!string.IsNullOrWhiteSpace(text);
                 if(scripted)foreach(var part in text.Split(',')){
                     var pair=part.Split(':');
@@ -270,6 +271,79 @@ namespace Oddity.RoomTest
             Blockers();
             Debug.Log("ROOMPLAY_PROPS seats="+string.Join(" ",seats.Select(t=>t.mark.root.name+"/"+t.mark.name+"("+F(t.mark.position.x)+","+F(t.mark.position.y)+","+F(t.mark.position.z)+" face "+F(t.front.x)+","+F(t.front.z)+")")));
         }
+
+        // the cat (Asset Store "Cartoon Cat", git-ignored, Assets/Oddity/DevMotion/Cat): a house cat on the rug facing the camera at an angle. M cycles its clip
+        // Idle -> Walk -> Jump -> Sound -> Eat -> Idle (in place). ODDITY_CAT=0 leaves it out; missing files only log a warning. Import settings: Editor/CatImport.cs
+        static readonly string[] CatClips={"Idle","Walk","Jump","Sound","Eat"};
+        const string CatDir="Assets/Oddity/DevMotion/Cat/";
+        const float CatHeight=.30f; // top of the head standing about 0.30 m, shoulder about 0.25 m
+        Transform catRoot;PlayableGraph catGraph;AnimationPlayableOutput catOut;readonly AnimationClip[] catClips=new AnimationClip[5];int catIndex;
+        void SpawnCat()
+        {
+            if(!room || Environment.GetEnvironmentVariable("ODDITY_CAT")=="0")return;
+            try{
+                var prefab=AssetDatabase.LoadAssetAtPath<GameObject>(CatDir+"cat_Idle.fbx");
+                var tex=AssetDatabase.LoadAssetAtPath<Texture2D>(CatDir+"Texture.png");
+                if(prefab==null || tex==null){Debug.LogWarning("ROOMPLAY_CAT files missing in "+CatDir+", no cat");return;}
+                for(int i=0;i<CatClips.Length;i++){
+                    catClips[i]=AssetDatabase.LoadAllAssetsAtPath(CatDir+"cat_"+CatClips[i]+".fbx").OfType<AnimationClip>().FirstOrDefault(c=>!c.name.StartsWith("__preview__"));
+                    if(catClips[i]==null){Debug.LogWarning("ROOMPLAY_CAT clip missing "+CatClips[i]+", no cat");return;}}
+                var go=Instantiate(prefab);go.name="Cat";catRoot=go.transform;
+                var mat=new Material(Shader.Find("Universal Render Pipeline/Lit")){name="CatSkin"};
+                mat.SetTexture("_BaseMap",tex);mat.SetColor("_BaseColor",Color.white);mat.SetFloat("_Smoothness",.15f);mat.SetFloat("_Metallic",0);
+                foreach(var r in go.GetComponentsInChildren<Renderer>()){r.sharedMaterials=Enumerable.Repeat(mat,Mathf.Max(1,r.sharedMaterials.Length)).ToArray();
+                    if(r is SkinnedMeshRenderer smr)smr.updateWhenOffscreen=true;}
+                var animator=go.GetComponent<Animator>()??go.AddComponent<Animator>();animator.applyRootMotion=false;
+                catGraph=PlayableGraph.Create("Cat");catGraph.SetTimeUpdateMode(DirectorUpdateMode.GameTime);
+                catOut=AnimationPlayableOutput.Create(catGraph,"Cat",animator);catGraph.Play();
+                SetCatClip(0,false);catGraph.Evaluate(0);
+                Bounds Box(){var rs=go.GetComponentsInChildren<Renderer>();var b=rs[0].bounds;foreach(var r in rs)b.Encapsulate(r.bounds);return b;}
+                go.transform.SetPositionAndRotation(Vector3.zero,Quaternion.identity);
+                float scale=CatHeight/Mathf.Max(1e-4f,Box().size.y);go.transform.localScale=Vector3.one*scale;
+                // on the rug in front of the sofa (rug x -1.30 -> -0.20, z 0.35 -> 1.05), clear of every furniture footprint, turned toward the camera and a little to the right
+                var spot=new Vector2(-.55f,.85f);
+                foreach(var f in furniture)if(f.Contains(spot))Debug.LogWarning("ROOMPLAY_CAT spot is inside a furniture footprint");
+                go.transform.rotation=Quaternion.Euler(0,CatYaw,0);
+                var b2=Box();go.transform.position=new Vector3(spot.x-b2.center.x,-b2.min.y,spot.y-b2.center.z);
+                Debug.Log("ROOMPLAY_CAT pos=("+F(go.transform.position.x)+","+F(go.transform.position.y)+","+F(go.transform.position.z)+") height="+F(Box().size.y)+" clips="+catClips.Length+" scale="+F(scale));
+            }catch(Exception e){Debug.LogWarning("ROOMPLAY_CAT failed: "+e.Message);}
+        }
+        float CatYaw=Environment.GetEnvironmentVariable("ODDITY_CATYAW")!=null?float.Parse(Environment.GetEnvironmentVariable("ODDITY_CATYAW"),CultureInfo.InvariantCulture):180-35;
+        void SetCatClip(int i,bool log)
+        {
+            catIndex=i;
+            var old=catOut.GetSourcePlayable();if(old.IsValid())catGraph.DestroyPlayable(old);
+            var p=AnimationClipPlayable.Create(catGraph,catClips[i]);p.SetApplyFootIK(false);catOut.SetSourcePlayable(p);
+            if(log)Debug.Log("ROOMPLAY_CAT clip="+CatClips[i]);
+        }
+
+        // Tab hands WASD to the cat and back. The cat walks screen-relative like Harin (0.5 m/s, shift 1.2 m/s with the Walk clip played faster), no root motion,
+        // inside the room and out of the furniture footprints (the same blockers as Harin's)
+        bool catControl;bool catMoving;float catHeading=-1000;
+        const float CatWalkSpeed=.5f, CatRunSpeed=1.2f;
+        void ToggleControl()
+        {
+            if(catRoot==null){Debug.Log("ROOMPLAY_CONTROL target=harin (no cat)");return;}
+            catControl=!catControl;
+            if(!catControl && catMoving){catMoving=false;SetCatClip(0,false);}
+            Debug.Log("ROOMPLAY_CONTROL target="+(catControl?"cat":"harin"));
+        }
+        void CatTick(float dt,Vector2 input,bool run)
+        {
+            if(catHeading<-999)catHeading=catRoot.eulerAngles.y;
+            var wish=input.normalized;
+            if(wish!=Vector2.zero){var fw=Vector3.ProjectOnPlane(cameraView.transform.forward,Vector3.up).normalized;var rt=new Vector3(fw.z,0,-fw.x);var w3=rt*wish.x+fw*wish.y;wish=new Vector2(w3.x,w3.z).normalized;}
+            float pace=run?CatRunSpeed:CatWalkSpeed;
+            var from=new Vector2(catRoot.position.x,catRoot.position.z);
+            var next=Collide(from,new Vector2(Mathf.Clamp(from.x+wish.x*pace*dt,-Limit-.1f,Limit+.1f),Mathf.Clamp(from.y+wish.y*pace*dt,ZNear-.1f,ZFar+.1f)));
+            bool moving=wish!=Vector2.zero && (next-from).sqrMagnitude>1e-10f;
+            if(moving){catHeading=Mathf.LerpAngle(catHeading,Mathf.Atan2(wish.x,wish.y)*Mathf.Rad2Deg,1-Mathf.Exp(-12*dt));
+                catRoot.position=new Vector3(next.x,catRoot.position.y,next.y);}
+            catRoot.rotation=Quaternion.Euler(0,catHeading,0);
+            if(moving!=catMoving){catMoving=moving;SetCatClip(moving?1:0,true);}
+            if(moving){var pl=catOut.GetSourcePlayable();if(pl.IsValid())pl.SetSpeed(run?CatRunSpeed/CatWalkSpeed:1);}
+        }
+        void NextCat(){if(catRoot==null || !catGraph.IsValid())return;SetCatClip((catIndex+1)%CatClips.Length,true);}
         // the computer lives on the dining table: an open laptop in front of the chair on the -x side, screen tilted back and facing that seat
         static void Laptop(Transform table)
         {
@@ -707,8 +781,9 @@ namespace Oddity.RoomTest
             if(wheelZoom!=0){float take=Mathf.MoveTowards(wheelZoom,0,dt*WheelRate);roomZoom=Mathf.Clamp01(roomZoom+wheelZoom-take);wheelZoom=take;if(roomZoom<=0 || roomZoom>=1)wheelZoom=0;} // each notch eases in over about 0.1 s
             float fov=RoomFov*Mathf.Pow(RoomFovNear/RoomFov,roomZoom); // even steps from 46 to 5 degrees
             Transform chest=null,neck=null;if(anim!=null){chest=anim.GetBoneTransform(HumanBodyBones.Chest)??anim.GetBoneTransform(HumanBodyBones.Hips);neck=anim.GetBoneTransform(HumanBodyBones.Head);}
-            if(chest!=null){
-                var want=neck!=null?Vector3.Lerp(chest.position,neck.position,Mathf.InverseLerp(14,RoomFovNear,fov)):chest.position;
+            bool onCat=catControl && catRoot!=null;
+            if(chest!=null || onCat){
+                var want=onCat?catRoot.position+Vector3.up*Mathf.Lerp(.15f,.2f,Mathf.InverseLerp(14,RoomFovNear,fov)):neck!=null?Vector3.Lerp(chest.position,neck.position,Mathf.InverseLerp(14,RoomFovNear,fov)):chest.position;
                 if(!roomFocusSet){roomFocus=want;roomFocusSet=true;lastWant=want;}
                 wantPath+=Vector3.Distance(want,lastWant);lastWant=want;var wasFocus=roomFocus;
                 float slack=Vector3.Distance(RoomEye,roomFocus)*Mathf.Tan(fov*.5f*Mathf.Deg2Rad)*RoomSlack;
@@ -716,7 +791,7 @@ namespace Oddity.RoomTest
                 if(m>slack)roomFocus=Vector3.Lerp(roomFocus,roomFocus+off*(1-slack/m),1-Mathf.Exp(-RoomFollow*dt));
                 focusPath+=Vector3.Distance(roomFocus,wasFocus);
             }
-            var aim=chest!=null?Vector3.Lerp(RoomAim,roomFocus,Mathf.SmoothStep(0,1,Mathf.Min(1,roomZoom*2.5f))):RoomAim;
+            var aim=(chest!=null || onCat)?Vector3.Lerp(RoomAim,roomFocus,Mathf.SmoothStep(0,1,Mathf.Min(1,roomZoom*2.5f))):RoomAim;
             cameraView.fieldOfView=fov;cameraView.transform.position=RoomEye;cameraView.transform.LookAt(aim);
         }
         // L: head and eyes turn to the camera (the player), up to 70 degrees, blended over 0.3 s
@@ -854,6 +929,8 @@ namespace Oddity.RoomTest
             else if(key=="c"||key=="v"){if(direction==0 && !busy){int index=key=="c"?SitIndex:CurlIndex;
                 if(Keyboard.current!=null && Keyboard.current.shiftKey.isPressed)NextSit(index);else Sit(index);}}
             else if(key=="g"){if(direction==0 && !busy){int i=(Array.IndexOf(Walks,Keys[10].clip)+1)%Walks.Length;SetWalk(Walks[i]);try{LoadModel(modelPath);Notice("걷기 "+Walks[i]);}catch(Exception e){Notice("걷기 실패: "+e.Message);}}}
+            else if(key=="m")NextCat();
+            else if(key=="tab")ToggleControl();
             else if(key=="escape")EditorApplication.ExitPlaymode();
             else if(key=="left"||key=="right"){heading+=key=="left"?45:-45;if(direction==0)Turn(heading);}
             else if(direction==0){int i=Array.FindIndex(Keys,k=>k.key==key);if(i>=0 && (i<9 || key=="f" || key=="z" || key=="0" || key=="y"))Select(i);}
@@ -934,6 +1011,7 @@ namespace Oddity.RoomTest
                 bool action=current<9 || current==12 || current==ZeroTwoIndex || current==IdolIndex || current==YawnIndex;bool pressed=action && kb[KeyOf(Keys[current].key)].isPressed;
                 if(action && held && !pressed)Log("hold");held=pressed;
             }
+            if(catControl && catRoot!=null){CatTick(dt,input,run);input=Vector2.zero;run=false;} // WASD and shift drive the cat; Harin keeps her pose
             if(busy)return;
             zeroTwoInputReady=true;
             if(input!=Vector2.zero && clickGoal.HasValue){clickGoal=null;clickSeat=null;} // the keys take over from a click
@@ -1096,7 +1174,7 @@ namespace Oddity.RoomTest
         float Lean(){var hips=anim.GetBoneTransform(HumanBodyBones.Hips);var neck=anim.GetBoneTransform(HumanBodyBones.Neck);return Vector3.Angle(Vector3.up,neck.position-hips.position);}
         float WristAngle(int i)=>Quaternion.Angle(restHand[i],hands[i].localRotation);
         // like the bake: her lowest sole vertex rests on the floor every frame, the lift follows over 0.1 s
-        static Key KeyOf(string key)=>key=="escape"?Key.Escape:key=="space"?Key.Space:key=="left"?Key.LeftArrow:key=="right"?Key.RightArrow:key=="up"?Key.UpArrow:key=="down"?Key.DownArrow:char.IsDigit(key[0])?(Key)Enum.Parse(typeof(Key),"Digit"+key):(Key)Enum.Parse(typeof(Key),key.ToUpperInvariant());
+        static Key KeyOf(string key)=>key=="tab"?Key.Tab:key=="escape"?Key.Escape:key=="space"?Key.Space:key=="left"?Key.LeftArrow:key=="right"?Key.RightArrow:key=="up"?Key.UpArrow:key=="down"?Key.DownArrow:char.IsDigit(key[0])?(Key)Enum.Parse(typeof(Key),"Digit"+key):(Key)Enum.Parse(typeof(Key),key.ToUpperInvariant());
         static bool Walk(string key)=>key=="shift"||key=="shifts"||key=="a"||key=="d"||key=="w"||key=="s";
         static Vector2 WalkDir(string key)=>key=="a"?Vector2.left:key=="d"||key=="shift"?Vector2.right:key=="w"?Vector2.up:key=="s"||key=="shifts"?Vector2.down:Vector2.zero;
         void RestFeet()
@@ -1273,6 +1351,6 @@ namespace Oddity.RoomTest
             }
             if(Time.realtimeSinceStartup<messageUntil)GUI.Label(new Rect(16,listEnd+4,900,40),message,new GUIStyle(GUI.skin.label){fontSize=24});
         }
-        void OnDestroy(){zeroTwoAudio?.Dispose();zeroTwoDance?.Dispose();if(clips!=null && clips[ZeroTwoIndex]!=null)Destroy(clips[ZeroTwoIndex]);if(graph.IsValid())graph.Destroy();if(boundsMesh!=null)Destroy(boundsMesh);if(soleBake!=null)Destroy(soleBake);EditorSettings.enterPlayModeOptionsEnabled=oldEnabled;EditorSettings.enterPlayModeOptions=oldOptions;}
+        void OnDestroy(){if(catGraph.IsValid())catGraph.Destroy();zeroTwoAudio?.Dispose();zeroTwoDance?.Dispose();if(clips!=null && clips[ZeroTwoIndex]!=null)Destroy(clips[ZeroTwoIndex]);if(graph.IsValid())graph.Destroy();if(boundsMesh!=null)Destroy(boundsMesh);if(soleBake!=null)Destroy(soleBake);EditorSettings.enterPlayModeOptionsEnabled=oldEnabled;EditorSettings.enterPlayModeOptions=oldOptions;}
     }
 }

@@ -19,11 +19,11 @@ namespace Oddity.EditorTools
         // KAWAII ANIMATIONS clips ship without a mesh and take their T-pose Avatar from the pack's DummyDoll
         const string KawaiiDoll = Folder + "Resources/Motion/KaDummyDoll.fbx";
 
-        public override uint GetVersion() => 7;
+        public override uint GetVersion() => 8;
 
         void OnPreprocessModel()
         {
-            if (!assetPath.StartsWith(Folder)) return;
+            if (!assetPath.StartsWith(Folder) || assetPath.StartsWith(CatImport.Folder)) return;
             var importer = (ModelImporter)assetImporter;
             importer.animationType = ModelImporterAnimationType.Human;
             importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
@@ -51,7 +51,7 @@ namespace Oddity.EditorTools
 
         void OnPreprocessAnimation()
         {
-            if (!assetPath.StartsWith(Folder)) return;
+            if (!assetPath.StartsWith(Folder) || assetPath.StartsWith(CatImport.Folder)) return;
             var importer = (ModelImporter)assetImporter;
             var clips = importer.defaultClipAnimations;
             foreach (var c in clips)
