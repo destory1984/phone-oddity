@@ -105,7 +105,7 @@ namespace Oddity.RoomTest
         void Start()
         {
             try {
-                Time.captureDeltaTime=0; Application.targetFrameRate=60; Application.runInBackground=true; // a scripted run kept stalling at frame 2 when the editor window was not in front
+                catSfxOn=CatSfxInitial();Time.captureDeltaTime=0; Application.targetFrameRate=60; Application.runInBackground=true; // a scripted run kept stalling at frame 2 when the editor window was not in front
                 RenderSettings.skybox=null;
                 RenderSettings.ambientMode=UnityEngine.Rendering.AmbientMode.Flat;
                 RenderSettings.ambientLight=new Color(.42f,.41f,.44f); // a dimmer fill and a stronger key so cloth folds read (was .66 fill, .55 key)
@@ -124,7 +124,7 @@ namespace Oddity.RoomTest
                 var sitClip=Environment.GetEnvironmentVariable("ODDITY_PLAYSIT");if(!string.IsNullOrWhiteSpace(sitClip))Keys[SitIndex].clip=sitClip; // which clip C sits with
                 var curlClip=Environment.GetEnvironmentVariable("ODDITY_PLAYCURL");if(!string.IsNullOrWhiteSpace(curlClip))Keys[CurlIndex].clip=curlClip; // and V
                 var napClip=Environment.GetEnvironmentVariable("ODDITY_PLAYNAP");if(!string.IsNullOrWhiteSpace(napClip))Keys[NapIndex].clip=napClip; // and K
-                LoadModel(Environment.GetEnvironmentVariable("ODDITY_MODEL")??NewestInTest(DefaultLine)??"Assets/Models/test/harin-6T-I1-30.vrm"); // the newest N1 build by default
+                LoadModel(Environment.GetEnvironmentVariable("ODDITY_MODEL")??NewestInTest(DefaultLine)??NewestInTest(null)??"Assets/Models/test/harin-6T-I1-30.vrm"); // the newest O2 build by default, else the newest vrm of any line
                 PlaceSofa();
                 BuildPerches();
                 SpawnPets();
@@ -292,9 +292,10 @@ namespace Oddity.RoomTest
             public int mStep;
             public AudioSource shot,purr;
             public int loopCount;public float walkStart,idleTime,nextSoft,purrTarget;public bool purrOn;
-            public Perch perch,jobPerch;public string chainNext,jobChain;public float hopWait;public bool auto; // perch: a high place it sits on now (null: floor or sofa); chain: counter first, then the fridge
+            public Perch perch,jobPerch;public string chainNext;public List<string> hopPlan=new List<string>();public float hopWait;public bool auto; // perch: a high place it sits on now (null: floor or sofa); chainNext: counter first, then the fridge; hopPlan: the hops still to fly, planned at the start (fridge>counter>floor, floor>counter>fridge), no rest pose between them
             public List<Vector2> path;public int pathI;public Vector2? pathGoal;public Vector2 pathHarin;public bool replanned; // the planned walk to goal (FloorPath): waypoints, next one, the goal it was made for, where Harin was, whether the stuck replan is used
-            public float surf;public SkinnedMeshRenderer[] smrs;public bool[][] tailMask;public Mesh bake;public string gapKey=""; // surf: height of the surface it rests on (floor 0); the rest of these measure its lowest vertex
+            public float surf,surfBase;public Vector3 fitFront,fitSide;public float[] ext=new float[4];public readonly List<Vector3> lowPts=new List<Vector3>();public float lastFit; // surfBase: the cushion height where it landed; fitFront/fitSide: the horizontal axes its footprint is measured on; ext: min,max of the footprint along each from the root; lowPts: the non-tail vertices within 3 cm of the lowest (the paws)
+            public SkinnedMeshRenderer[] smrs;public bool[][] tailMask;public Mesh bake;public string gapKey=""; // surf: height of the surface it rests on (floor 0); the rest of these measure its lowest vertex
             public bool aiPaused;public float resumeIn;public int aiPhase;public string aiAct="",aiLast="",aiPlace="";public float aiT,aiDur,aiGo;public int aiReps,aiLastClip=-1;public Vector2 aiTarget;public bool aiHasTarget;
             public bool Idleish=>index==0 || (somali && (index==3 || index==6 || index==9 || (white && index==12)));
             public int JumpClip=>white?11:somali?0:2; // the Somali has no jump clip: the arc is flown in the Idle pose
@@ -558,7 +559,7 @@ namespace Oddity.RoomTest
             if(pets.Count==0){Debug.Log("ROOMPLAY_CONTROL target=harin (no cat)");return;}
             if(ctl!=null){ // leaving this pet: a jump in the air lands at once, it stops walking; it lives on its own again after 3 s
                 var p=ctl;
-                p.jobChain=null;p.chainNext=null;p.hopWait=0;
+                p.hopPlan.Clear();p.chainNext=null;p.hopWait=0;
                 if(p.job!=0)PetJobTick(p,100);
                 p.goal=null;p.faceTo=float.NaN;
                 if(p.moving){p.moving=false;SetPetClip(p,0,false);}
@@ -654,6 +655,7 @@ namespace Oddity.RoomTest
         void PetGoTo(Pet p,string kind,Vector2 goal,Transform seat,Vector2 look,string logKind=null)
         {
             p.pathGoal=null;p.replanned=false;p.goal=goal;p.goalKind=kind;p.goalSeat=seat;p.goalLook=look;p.stuck=0;p.faceTo=float.NaN;p.chainNext=null;p.arriveRest=0;
+            p.hopPlan.Clear();p.hopWait=0; // a new goal drops any hops still planned for the old one (a hiss during the beat on the counter used to send the cat on to the fridge, where the landing rest pose then wiped the new goal)
             Debug.Log("ROOMPLAY_"+p.tag+" goto="+(logKind??kind)+" at=("+F(goal.x)+","+F(goal.y)+")");
         }
         // to a perch (counter, table, fridge, sill): walk to its floor spot and hop up; the fridge goes by the counter. Already on a perch the hop is direct
@@ -692,6 +694,7 @@ namespace Oddity.RoomTest
                 PetGoTo(p,"floor",NearestFree(new Vector2(pt.x,pt.z)),null,cp);
             }
         }
+        Vector3 SofaCentre(){var rs=sofa.GetComponentsInChildren<Renderer>();if(rs.Length==0)return sofa.position;var b=rs[0].bounds;foreach(var r in rs)b.Encapsulate(r.bounds);return b.center;}
         // the top of the cushion under a world point
         float CushionTop(Vector3 p,float fallback)
         {
@@ -729,6 +732,20 @@ namespace Oddity.RoomTest
             }
             var dir=p.jobTo-p.jobFrom;dir.y=0;p.jobHead=dir.sqrMagnitude>1e-4f?Mathf.Atan2(dir.x,dir.z)*Mathf.Rad2Deg:p.heading;
             SetPetClip(p,p.JumpClip,true);
+        }
+        // the hops to get off a perch, fixed: fridge > counter > floor, table / sill / counter > floor; counter <-> fridge only when that perch is the goal itself
+        List<string> HopsOff(string at,string goalPerch)
+        {
+            if(at=="fridge")return goalPerch=="counter"?new List<string>{"counter"}:new List<string>{"counter","floor"};
+            if(at=="counter" && goalPerch=="fridge")return new List<string>{"fridge"};
+            return new List<string>{"floor"};
+        }
+        void NextHop(Pet p)
+        {
+            if(p.hopPlan.Count==0)return;
+            var nx=p.hopPlan[0];p.hopPlan.RemoveAt(0);
+            if(nx=="floor"){StartHop(p,null);return;}
+            if(perches.TryGetValue(nx,out var np))StartHop(p,np);
         }
         // a hop between the floor and a perch (or counter and fridge): to is the perch to land on, null lands on the floor spot in front of the perch it is on.
         // 0.5 s for the sofa; here the time grows with the height (about 0.7 s up to a 0.85 m counter, table or sill), the Cartoon cat plays Jump, the Somali flies the arc in Idle
@@ -790,17 +807,21 @@ namespace Oddity.RoomTest
                 SetPetClip(p,0,true);
                 if(p.perch!=null){
                     p.faceTo=p.perch.yaw;
-                    if(p.jobChain!=null)p.hopWait=.35f; // counter on the way to the fridge: a beat, no sitting
-                    else if(p.somali){int rk=p.arriveRest>0?p.arriveRest:1;p.arriveRest=0;PetRest(p,rk);} // the Somali rests up there
+                    if(p.hopPlan.Count>0)p.hopWait=.2f; // an intermediate perch on a planned hop chain: a beat, no rest pose
+                    else if(p.somali && !p.goal.HasValue){int rk=p.arriveRest>0?p.arriveRest:1;p.arriveRest=0;PetRest(p,rk);} // the Somali rests up there, unless a goal is already waiting (resting would wipe it)
                 }
                 Debug.Log("ROOMPLAY_"+p.tag+" perch="+(p.perch!=null?p.perch.name:"floor")+" pos=("+F(p.jobTo.x)+","+F(p.jobTo.y)+","+F(p.jobTo.z)+")");
                 return;
             }
             if(p.job==4){p.job=0;p.root.position=p.jobTo;SetPetClip(p,0,true);return;} // the jump in place is over
             bool up=p.job==1;p.job=0;p.root.position=p.jobTo;p.onSofa=up;p.surf=up?p.jobTo.y-p.baseY:0;
-            if(up){p.seat=p.jobSeat;var front=seats.First(t=>t.mark==p.seat).front;p.faceTo=Mathf.Atan2(front.x,front.z)*Mathf.Rad2Deg;if(p.goalKind=="sofa")p.goal=null;} // idles facing the camera side
+            if(up){p.seat=p.jobSeat;var front=seats.First(t=>t.mark==p.seat).front;
+                var side=Vector3.Cross(Vector3.up,front).normalized;var mid=SofaCentre();var toMid=new Vector3(mid.x-p.root.position.x,0,mid.z-p.root.position.z);
+                if(Vector3.Dot(side,toMid)<0)side=-side; // along the seat, towards the middle of the sofa: parallel to the backrest, the whole body on the cushion
+                p.fitFront=front;p.fitSide=side;p.surfBase=p.jobTo.y-p.baseY;p.faceTo=Mathf.Atan2(side.x,side.z)*Mathf.Rad2Deg;if(p.goalKind=="sofa")p.goal=null;}
+            else{p.fitFront=p.fitSide=Vector3.zero;}
             SetPetClip(p,0,true);
-            if(up && p.somali){int rk=p.arriveRest>0?p.arriveRest:1;p.arriveRest=0;PetRest(p,rk);} // the Somali rests on the cushion
+            if(up && p.somali && !p.goal.HasValue){int rk=p.arriveRest>0?p.arriveRest:1;p.arriveRest=0;PetRest(p,rk);} // the Somali rests on the cushion
             Debug.Log("ROOMPLAY_"+p.tag+" onsofa="+(up?1:0)+" pos=("+F(p.jobTo.x)+","+F(p.jobTo.y)+","+F(p.jobTo.z)+")");
         }
         void CatTick(float dt,Vector2 input,bool run,float turn)=>PetMove(ctl,dt,input,run,turn,false);
@@ -809,7 +830,7 @@ namespace Oddity.RoomTest
         {
             p.auto=auto;
             if(p.heading<-999)p.heading=p.root.eulerAngles.y;
-            if(p.hopWait>0){p.hopWait-=dt;if(p.hopWait<=0){var nx=p.jobChain;p.jobChain=null;if(nx!=null && perches.TryGetValue(nx,out var np))StartHop(p,np);}return;} // a beat on the counter, then the fridge
+            if(p.hopWait>0){p.hopWait-=dt;if(p.hopWait<=0)NextHop(p);return;} // a beat on the intermediate perch, then the next planned hop
             if(p.job!=0){PetJobTick(p,dt);return;}
             bool keys=input!=Vector2.zero;
             if(keys){p.goal=null;p.chainNext=null;} // the keys take over from a click
@@ -818,10 +839,11 @@ namespace Oddity.RoomTest
             if(p.somali && p.sit!=0 && (keys || p.goal.HasValue)){PetStand(p);return;} // walking while sitting: stand up first, the walk (a click's goal is kept) starts when StandUp is done
             if(p.onSofa && (keys || p.goal.HasValue)){StartPetJump(p,false);return;} // any walk starts with a jump down
             if(p.perch!=null && (keys || p.goal.HasValue)){ // up on a perch: counter to fridge and back are one hop, any other walk hops down first (the fridge only to the counter)
-                var gk=p.goal.HasValue?p.goalKind:null;
-                if(gk=="fridge" && p.perch.name=="counter"){p.goal=null;StartHop(p,perches["fridge"]);return;}
-                if(gk=="counter" && p.perch.name=="fridge"){p.goal=null;StartHop(p,perches["counter"]);return;}
-                StartHop(p,p.perch.name=="fridge"?perches["counter"]:null);return;
+                var gk=p.goal.HasValue && perches.ContainsKey(p.goalKind)?p.goalKind:null;
+                p.hopPlan=HopsOff(p.perch.name,gk);
+                if(gk!=null && p.hopPlan.Count==1 && p.hopPlan[0]==gk)p.goal=null; // counter <-> fridge as the goal itself: the one hop is the whole walk
+                Debug.Log("ROOMPLAY_"+p.tag+" hops="+p.perch.name+">"+string.Join(">",p.hopPlan));
+                NextHop(p);return;
             }
             var from=new Vector2(p.root.position.x,p.root.position.z);
             var wish=input.normalized;float pace=run?p.runSpd:p.walkSpd;float reach=float.MaxValue;
@@ -864,7 +886,7 @@ namespace Oddity.RoomTest
             if(arrived){
                 var kind=p.goalKind;var look=p.goalLook;p.goal=null;
                 if(kind=="sofa")StartPetJump(p,true);
-                else if(perches.TryGetValue(kind,out var pr)){p.jobChain=p.chainNext;p.chainNext=null;StartHop(p,pr);}
+                else if(perches.TryGetValue(kind,out var pr)){p.hopPlan.Clear();if(p.chainNext!=null)p.hopPlan.Add(p.chainNext);Debug.Log("ROOMPLAY_"+p.tag+" hops=floor>"+pr.name+(p.chainNext!=null?">"+p.chainNext:""));p.chainNext=null;StartHop(p,pr);}
                 else if(kind=="chair"||kind=="window"||kind=="harin"){if(kind=="harin")look=new Vector2(x,z);var to=look-new Vector2(p.root.position.x,p.root.position.z);if(to.sqrMagnitude>1e-4f)p.faceTo=Mathf.Atan2(to.x,to.y)*Mathf.Rad2Deg;}
             }
         }
@@ -877,7 +899,7 @@ namespace Oddity.RoomTest
         Vector2 PetXZ(Pet p)=>new Vector2(p.root.position.x,p.root.position.z);
         void AiPause(Pet p)
         {
-            p.jobChain=null;p.chainNext=null;p.hopWait=0;
+            p.hopPlan.Clear();p.chainNext=null;p.hopWait=0;
             if(p.job!=0)PetJobTick(p,100);
             p.goal=null;p.faceTo=float.NaN;
             if(p.moving){p.moving=false;SetPetClip(p,0,false);}
@@ -980,7 +1002,7 @@ namespace Oddity.RoomTest
         }
         bool AiArrived(Pet p)
         {
-            if(p.job!=0 || p.hopWait>0 || p.jobChain!=null || p.chainNext!=null || p.goal.HasValue)return false;
+            if(p.job!=0 || p.hopWait>0 || p.hopPlan.Count>0 || p.chainNext!=null || p.goal.HasValue)return false;
             if(p.somali && IsUp(p.sit))return false;
             switch(p.aiAct){
                 case "sofa":return p.onSofa;
@@ -999,7 +1021,7 @@ namespace Oddity.RoomTest
                 case 1:
                     p.aiGo+=dt;
                     if(AiArrived(p)){p.aiPhase=2;p.aiT=p.aiDur;if(p.aiAct=="harin")PetRandomMeow(p,.6f);} // one meow on arriving next to Harin
-                    else if(p.aiGo>45f && p.job==0){p.goal=null;p.chainNext=null;p.jobChain=null;p.hopWait=0;p.aiLast=p.aiAct;p.aiPhase=0;Debug.Log("ROOMPLAY_"+p.tag+" ai=giveup "+p.aiAct);}
+                    else if(p.aiGo>45f && p.job==0){Debug.Log("ROOMPLAY_"+p.tag+" ai=giveup "+p.aiAct+" state: perch="+(p.perch!=null?p.perch.name:"none")+" onSofa="+p.onSofa+" sit="+p.sit+" moving="+p.moving+" goal="+(p.goal.HasValue?p.goalKind+"("+F(p.goal.Value.x)+","+F(p.goal.Value.y)+")":"none")+" hopPlan="+string.Join(">",p.hopPlan)+" hopWait="+F(p.hopWait)+" pos=("+F(p.root.position.x)+","+F(p.root.position.y)+","+F(p.root.position.z)+")");p.goal=null;p.chainNext=null;p.hopPlan.Clear();p.hopWait=0;p.aiLast=p.aiAct;p.aiPhase=0;}
                     break;
                 case 2:
                     p.aiT-=dt;
@@ -1110,7 +1132,7 @@ namespace Oddity.RoomTest
             if(!aiOn || pets.Count<2 || Time.unscaledTime-lastHiss<30f)return;
             for(int i=0;i<pets.Count;i++)for(int j=i+1;j<pets.Count;j++){
                 Pet a=pets[i],b=pets[j];
-                if(a==ctl || b==ctl || a.aiPaused || b.aiPaused || a.root==null || b.root==null || a.job!=0 || b.job!=0)continue;
+                if(a==ctl || b==ctl || a.aiPaused || b.aiPaused || a.root==null || b.root==null || a.job!=0 || b.job!=0 || a.hopWait>0 || b.hopWait>0 || a.hopPlan.Count>0 || b.hopPlan.Count>0)continue;
                 if((PetXZ(a)-PetXZ(b)).magnitude>=.4f || Mathf.Abs(a.root.position.y-b.root.position.y)>.5f)continue;
                 float sa=a.moving?float.MaxValue:a.settledAt,sb=b.moving?float.MaxValue:b.settledAt;
                 var later=sa>sb?a:sb>sa?b:(UnityEngine.Random.value<.5f?a:b);
@@ -1135,18 +1157,56 @@ namespace Oddity.RoomTest
                         mask[v]=bone>=0 && bone<bones.Length && IsTail(bones[bone]);}
                     p.tailMask[i]=mask;}
             }
-            float lo=float.MaxValue;var verts=new List<Vector3>();
+            float lo=float.MaxValue;var verts=new List<Vector3>();p.lowPts.Clear();
+            float f0=float.MaxValue,f1=float.MinValue,s0=float.MaxValue,s1=float.MinValue;var rp=p.root.position;bool fit=p.onSofa && p.fitFront!=Vector3.zero;
             for(int i=0;i<p.smrs.Length;i++){
-                var smr=p.smrs[i];smr.BakeMesh(p.bake,true);p.bake.GetVertices(verts);
-                for(int v=0;v<verts.Count;v++){if(p.tailMask[i][v])continue;lo=Mathf.Min(lo,smr.transform.TransformPoint(verts[v]).y);}
+                var smr=p.smrs[i];smr.BakeMesh(p.bake,true);p.bake.GetVertices(verts);var m=smr.transform.localToWorldMatrix;
+                for(int v=0;v<verts.Count;v++){
+                    if(p.tailMask[i][v])continue;var w=m.MultiplyPoint3x4(verts[v]);
+                    if(w.y<lo+.03f){if(w.y<lo){lo=w.y;}p.lowPts.Add(w);}
+                    if(fit){var d=w-rp;float a=Vector3.Dot(d,p.fitFront),b=Vector3.Dot(d,p.fitSide);if(a<f0)f0=a;if(a>f1)f1=a;if(b<s0)s0=b;if(b>s1)s1=b;}
+                }
             }
+            p.lowPts.RemoveAll(w=>w.y>lo+.03f);
+            if(fit){p.ext[0]=f0;p.ext[1]=f1;p.ext[2]=s0;p.ext[3]=s1;}
             return lo;
+        }
+        // on the sofa the surface under it is the highest cushion point under any of its paws (rays down at each low vertex), not one ray at the body centre: the cushion has seams and a rolled front edge.
+        // Only hits within 6 cm of where it landed count, so an armrest or the backrest under a vertex is not taken for the seat
+        void SofaSurface(Pet p)
+        {
+            float best=p.surfBase;bool any=false;
+            foreach(var w in p.lowPts){
+                var ray=new Ray(new Vector3(w.x,p.surfBase+.2f,w.z),Vector3.down);
+                foreach(var c in propHits)if(c!=null && c.transform.root==sofa && c.Raycast(ray,out var hit,.5f) && hit.point.y>=p.surfBase-.06f && hit.point.y<=p.surfBase+.06f && (!any || hit.point.y>best)){best=hit.point.y;any=true;}
+            }
+            p.surf=best;
+        }
+        const float SofaFitMargin=.03f;
+        // the whole footprint on the seat: from the rump, and from each end of the body along the seat, a horizontal ray (at body height above the cushion) to the backrest and the arms; the root is eased until each has 3 cm
+        void SofaFit(Pet p,float dt)
+        {
+            if(p.job!=0 || p.moving || p.fitFront==Vector3.zero)return;
+            var rp=p.root.position;float h=p.surf+.12f;var shift=Vector3.zero;
+            float Clear(Vector3 dir,float extent){
+                var o=new Vector3(rp.x+dir.x*extent,h,rp.z+dir.z*extent);float best=1f;
+                foreach(var c in propHits)if(c!=null && c.transform.root==sofa && c.Raycast(new Ray(o,dir),out var hit,1f) && hit.distance<best)best=hit.distance;
+                return best;}
+            float back=Clear(-p.fitFront,-p.ext[0]);if(back<SofaFitMargin)shift+=p.fitFront*(SofaFitMargin-back);
+            float pos=Clear(p.fitSide,p.ext[3]);if(pos<SofaFitMargin)shift-=p.fitSide*(SofaFitMargin-pos);
+            float neg=Clear(-p.fitSide,-p.ext[2]);if(neg<SofaFitMargin)shift+=p.fitSide*(SofaFitMargin-neg);
+            if(shift.sqrMagnitude<1e-8f)return;
+            shift=Vector3.ClampMagnitude(shift,.15f);
+            p.root.position=rp+shift*(1-Mathf.Exp(-dt*8));
+            if(Time.unscaledTime-p.lastFit>1f){p.lastFit=Time.unscaledTime;Debug.Log("ROOMPLAY_"+p.tag+" sofafit back="+F(back)+" side+="+F(pos)+" side-="+F(neg)+" shift=("+F(shift.x)+","+F(shift.z)+")");}
         }
         // while a pet rests (not walking, not in a hop) its lowest vertex is eased onto the surface it is on, 0.1 s like Harin's sole lift
         void PetRestTick(Pet p,float dt)
         {
             if(p.root==null || !p.graph.IsValid() || p.job!=0 || p.moving || p.hopWait>0)return;
-            float lo=PetLowest(p),gap=lo-p.surf;
+            float lo=PetLowest(p);
+            if(p.onSofa && p.seat!=null){SofaSurface(p);SofaFit(p,dt);}
+            float gap=lo-p.surf;
             if(Mathf.Abs(gap)<.0005f)return;
             if(Mathf.Abs(gap)<.003f){var key=p.surf.ToString("0.000")+"/"+p.index;if(key!=p.gapKey){p.gapKey=key;Debug.Log("ROOMPLAY_"+p.tag+" rest surface="+F(p.surf)+" clip="+p.clipNames[p.index]+" lowest-vertex gap="+F(gap*1000)+" mm rootY="+F(p.root.position.y));}}
             var pos=p.root.position;pos.y-=Mathf.Clamp(gap,-.25f,.25f)*(1-Mathf.Exp(-dt*30));p.root.position=pos;
@@ -1800,18 +1860,19 @@ namespace Oddity.RoomTest
             Log(key);
         }
         void Log(string key){Debug.Log("ROOMPLAY key="+key+" clip="+Keys[current].clip+" x="+F(x)+" z="+F(z)+" yaw="+F(yaw)+" heading="+F(heading)+" zoom="+F(zoom)+" floor="+F(floorError)+(room?" fov="+F(cameraView.fieldOfView)+" bodyPath="+F(wantPath)+" aimPath="+F(focusPath):""));wantPath=focusPath=0;}
-        const string DefaultLine="6T-N1";
+        const string DefaultLine="6T-O2";
+        static readonly string[] HiddenLines={"6T-I1","6T-O1"}; // hidden for now (2026-11-07): left out of the N / Shift+N cycle, still loadable with ODDITY_MODEL
         // the newest imported vrm of a line in Assets/Models/test, as an asset path
         static string NewestInTest(string line)
         {
-            var f=Directory.GetFiles(Path.Combine(Application.dataPath,"Models/test"),"harin-"+line+"-*.vrm").OrderByDescending(p=>int.TryParse(Path.GetFileNameWithoutExtension(p).Split('-').Last(),out var n)?n:-1).FirstOrDefault();
+            var f=Directory.GetFiles(Path.Combine(Application.dataPath,"Models/test"),"harin-"+(line??"6T-*")+"-*.vrm").OrderByDescending(p=>int.TryParse(Path.GetFileNameWithoutExtension(p).Split('-').Last(),out var n)?n:-1).FirstOrDefault();
             return f==null?null:"Assets/Models/test/"+Path.GetFileName(f);
         }
         // N / Shift+N walk round every line (6T-I1 -> 6T-O1 -> 6T-O2 -> ... -> 6T-I1), each at its newest build; 0 stays on the current line
         string StepLine(int step)
         {
             var dir=Path.GetFullPath(Path.Combine(Application.dataPath,"../../hari/gpt"));
-            var lines=Directory.GetFiles(dir,"harin-6T-*-*.vrm").Concat(Directory.GetFiles(Path.Combine(Application.dataPath,"Models/test"),"harin-6T-*-*.glb")).Select(p=>Path.GetFileNameWithoutExtension(p).Split('-')).Where(a=>a.Length==4).Select(a=>a[1]+"-"+a[2]).Distinct()
+            var lines=Directory.GetFiles(dir,"harin-6T-*-*.vrm").Concat(Directory.GetFiles(Path.Combine(Application.dataPath,"Models/test"),"harin-6T-*-*.glb")).Select(p=>Path.GetFileNameWithoutExtension(p).Split('-')).Where(a=>a.Length==4).Select(a=>a[1]+"-"+a[2]).Where(l=>!HiddenLines.Contains(l)).Distinct()
                 .OrderBy(l=>l[3]=='I'?0:l[3]=='O'?1:2).ThenBy(l=>int.TryParse(l.Substring(4),out var n)?n:0).ToList();
             var parts=(modelName??"").Split('-');string here=parts.Length==4?parts[1]+"-"+parts[2]:DefaultLine;
             if(lines.Count==0)return here;
@@ -1848,7 +1909,7 @@ namespace Oddity.RoomTest
         // and again from OnGUI because the editor's Game view can take Tab for IMGUI focus navigation before the Input System reports it. One press switches once (0.15 s dedupe, OnGUI auto-repeat ignored)
         // O: every cat sound on or off (one-shots and purrs), remembered between runs in EditorPrefs; ODDITY_CATSFX=0|1 overrides it
         const string CatSfxPref="Oddity.RoomPlay.CatSfx";
-        bool catSfxOn=CatSfxInitial();
+        bool catSfxOn=true; // read from EditorPrefs in Start (EditorPrefs cannot be called from a field initializer)
         static bool CatSfxInitial(){var e=PetEnv("ODDITY_CATSFX");if(e=="0")return false;if(e=="1")return true;return EditorPrefs.GetBool(CatSfxPref,true);}
         void ToggleCatSfx()
         {
@@ -1866,24 +1927,38 @@ namespace Oddity.RoomTest
         float lastTabAt=-10;bool tabGuiDown;
         void TabPress(string source)
         {
+            if(scripted && !tabWindow){Debug.Log("ROOMPLAY_TABKEY source="+source+" ignored (scripted run, no realtab step)");return;} // a stray real Tab must not change a scripted run
             if(Time.realtimeSinceStartup-lastTabAt<.15f)return;
             lastTabAt=Time.realtimeSinceStartup;
             Debug.Log("ROOMPLAY_TABKEY source="+source);
             ToggleControl();
         }
+        bool tabPolled;
         void TabPoll()
         {
             var kb=Keyboard.current;
-            if(kb!=null && kb.tabKey.wasPressedThisFrame)TabPress("inputsystem");
+            bool down=kb!=null && kb.tabKey.isPressed;
+            if(down && !tabPolled)TabPress("inputsystem"); // an edge on the held state, so it does not depend on which Input System update saw the event
+            tabPolled=down;
             if(kb!=null && kb.oKey.wasPressedThisFrame)ToggleCatSfx();
         }
         // scripted "realtab": a real Tab press and release queued as Input System state, so it reaches TabPoll the way a keyboard does
+        // The Input System drops keyboard events while the Game view is not focused (editorInputBehaviorInPlayMode / backgroundBehavior), which is always so in a started-by-script editor, so for this one press the
+        // settings are switched to "everything goes to the game view" and put back afterwards. A real user keeps the default settings: there Tab arrives through OnGUI (logged source=ongui).
+        bool tabWindow;
         IEnumerator RealTab()
         {
+            var settings=InputSystem.settings;var editorBefore=settings.editorInputBehaviorInPlayMode;var backBefore=settings.backgroundBehavior;
+            settings.editorInputBehaviorInPlayMode=InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+            settings.backgroundBehavior=InputSettings.BackgroundBehavior.IgnoreFocus;
             var kb=Keyboard.current??InputSystem.AddDevice<Keyboard>();
+            tabWindow=true;
+            Debug.Log("ROOMPLAY_REALTAB press focused="+Application.isFocused+" device="+kb.name+" current="+(Keyboard.current==kb));
             InputSystem.QueueStateEvent(kb,new UnityEngine.InputSystem.LowLevel.KeyboardState(Key.Tab));
             yield return null;yield return null;
             InputSystem.QueueStateEvent(kb,new UnityEngine.InputSystem.LowLevel.KeyboardState());
+            yield return null;yield return null;
+            tabWindow=false;settings.editorInputBehaviorInPlayMode=editorBefore;settings.backgroundBehavior=backBefore;
         }
         void Update()
         {
