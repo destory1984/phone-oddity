@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -67,6 +69,59 @@ namespace Oddity.RoomTest.Tests
             // an opening makes it reachable
             var open = Room(Rect.MinMaxRect(-1, 1, 1, 1.2f), Rect.MinMaxRect(-1, -1.2f, 1, -1), Rect.MinMaxRect(-1.2f, -1, -1, 1));
             Assert.NotNull(open.Find(new Vector2(-2.5f, 0), new Vector2(0, 0), out _));
+        }
+
+        // ---- the apartment: the planner on the real walls (door gaps only), the furniture footprints and the props, every rect grown by the body radius 0.2 like RoomPlay does
+        static FloorPath Flat()
+        {
+            var rects = Apartment.WallBlockers().Concat(Apartment.FurnitureBlockers()).Concat(Apartment.PropFootprints())
+                .Select(r => Rect.MinMaxRect(r.xMin - .2f, r.yMin - .2f, r.xMax + .2f, r.yMax + .2f)).ToList();
+            return new FloorPath(Apartment.LimX0, Apartment.LimX1, Apartment.LimZ0, Apartment.LimZ1, rects);
+        }
+        // where the path crosses a wall line (axis 0: the line z = at, axis 1: x = at); null when it never does
+        static float? CrossAt(List<Vector2> p, int axis, float at)
+        {
+            for (int i = 1; i < p.Count; i++)
+            {
+                float a = axis == 0 ? p[i - 1].y : p[i - 1].x, b = axis == 0 ? p[i].y : p[i].x;
+                if ((a - at) * (b - at) > 0 || Mathf.Approximately(a, b)) continue;
+                float t = (at - a) / (b - a); var q = Vector2.Lerp(p[i - 1], p[i], t);
+                return axis == 0 ? q.x : q.y;
+            }
+            return null;
+        }
+
+        [Test]
+        public void FloorPath_ApartmentEntranceToBalconyGoesThroughTheDoorGaps()
+        {
+            var fp = Flat();
+            var p = fp.Find(new Vector2(3.5f, 9.6f), new Vector2(2.6f, .6f), out var snapped);
+            Assert.NotNull(p, "no path from the entrance to the balcony");
+            Assert.IsFalse(snapped);
+            var arch = CrossAt(p, 0, 8.90f); var slider = CrossAt(p, 0, 5.09f); var glass = CrossAt(p, 0, 1.25f);
+            Assert.NotNull(arch, "does not cross the kitchen entrance wall"); Assert.NotNull(slider, "does not cross the living room wall"); Assert.NotNull(glass, "does not cross the balcony partition");
+            Assert.That(arch.Value, Is.InRange(Apartment.ArchA, Apartment.ArchB), "outside the arch at " + arch);
+            Assert.That(slider.Value, Is.InRange(Apartment.KitSlideA, Apartment.KitSlideB), "outside the kitchen sliding door at " + slider);
+            Assert.That(glass.Value, Is.InRange(Apartment.GlassA, Apartment.GlassB), "outside the balcony glass door at " + glass);
+            // never inside a wall's footprint
+            foreach (var w in Apartment.WallBlockers())
+                for (int i = 1; i < p.Count; i++) for (int k = 0; k <= 50; k++)
+                {
+                    var q = Vector2.Lerp(p[i - 1], p[i], k / 50f);
+                    Assert.IsFalse(q.x > w.xMin && q.x < w.xMax && q.y > w.yMin && q.y < w.yMax, "inside a wall at " + q);
+                }
+        }
+
+        [Test]
+        public void FloorPath_ApartmentBedroomAndBathAreReachedByTheirDoors()
+        {
+            var fp = Flat();
+            var bed = fp.Find(new Vector2(3.4f, 9.4f), new Vector2(1.0f, 8.6f), out _);
+            Assert.NotNull(bed, "no path to the bedroom");
+            Assert.That(CrossAt(bed, 1, 2.26f).Value, Is.InRange(Apartment.BedDoorA, Apartment.BedDoorB));
+            var bath = fp.Find(new Vector2(3.4f, 5.8f), new Vector2(1.5f, 6.2f), out _);
+            Assert.NotNull(bath, "no path to the bath");
+            Assert.That(CrossAt(bath, 1, 2.26f).Value, Is.InRange(Apartment.BathDoorA, Apartment.BathDoorB));
         }
     }
 }

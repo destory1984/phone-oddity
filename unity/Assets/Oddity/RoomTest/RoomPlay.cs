@@ -82,7 +82,7 @@ namespace Oddity.RoomTest
         float[] weights, from;
         float walkTwist, runTwist, bodyFix, speed, runSpeed, x, z, heading=180, yaw=180, turnStart=180, targetYaw=180, turnTime=1, blend=1;
         int current=9, direction, blockedDirection;
-        float Limit=1.08f, ZNear=-.6f, ZFar=15f; // the room view widens these to its floor
+        float Limit=1.08f, LimX0=-1.08f, LimX1=1.08f, ZNear=-.6f, ZFar=15f; // the room view widens these to its floor
         readonly Transform[] feet=new Transform[2], toes=new Transform[2], shins=new Transform[2];
         readonly float[] restPitch=new float[2], plant=new float[2], restAnkle=new float[2];
         readonly Vector3[] shinFront=new Vector3[2];
@@ -119,7 +119,7 @@ namespace Oddity.RoomTest
                 var zeroTwoSource=cam.gameObject.AddComponent<AudioSource>();
                 zeroTwoAudio=new ZeroTwoDanceAudio(zeroTwoSource,zeroTwoTrack);
                 Debug.Log("ZEROTWO_AUDIO loaded="+zeroTwoSource.clip.name+" seconds="+F(zeroTwoSource.clip.samples/(float)zeroTwoSource.clip.frequency)+" samples="+zeroTwoSource.clip.samples+" imported="+(zeroTwoTrack!=null));
-                cameraView=cam;cam.aspect=16f/9;Smooth(cam);Letterbox();cam.gameObject.AddComponent<AudioListener>();room=Environment.GetEnvironmentVariable("ODDITY_ROOM")!="0";if(room)Room(cam);else Background(cam);blob=RoomTestRunner.MakeBlob();blob.localScale=new Vector3(.75f,.4f,1);
+                cameraView=cam;cam.aspect=16f/9;Smooth(cam);Letterbox();cam.gameObject.AddComponent<AudioListener>();room=Environment.GetEnvironmentVariable("ODDITY_ROOM")!="0";apt=room && Environment.GetEnvironmentVariable("ODDITY_HOUSE")!="room";if(room)Room(cam);else Background(cam);blob=RoomTestRunner.MakeBlob();blob.localScale=new Vector3(.75f,.4f,1);
                 SetWalk(Environment.GetEnvironmentVariable("ODDITY_PLAYWALK")??"KaWalk01");
                 var sitClip=Environment.GetEnvironmentVariable("ODDITY_PLAYSIT");if(!string.IsNullOrWhiteSpace(sitClip))Keys[SitIndex].clip=sitClip; // which clip C sits with
                 var curlClip=Environment.GetEnvironmentVariable("ODDITY_PLAYCURL");if(!string.IsNullOrWhiteSpace(curlClip))Keys[CurlIndex].clip=curlClip; // and V
@@ -128,10 +128,11 @@ namespace Oddity.RoomTest
                 PlaceSofa();
                 BuildPerches();
                 SpawnPets();
+                if(apt){heading=yaw=targetYaw=turnStart=45;turnTime=1;Select(9);} // she starts facing the living room's camera (north-east)
                 var text=Environment.GetEnvironmentVariable("ODDITY_PLAYKEYS");scripted=!string.IsNullOrWhiteSpace(text);
                 if(scripted)foreach(var part in text.Split(',')){
                     var pair=part.Split(':');
-                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0]=="realtab" || pair[0]=="wait" || pair[0].StartsWith("click") || pair[0]=="wheelup" || pair[0]=="wheeldown" || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
+                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0]=="realtab" || pair[0]=="wait" || pair[0].StartsWith("click") || pair[0].StartsWith("view") || pair[0]=="wheelup" || pair[0]=="wheeldown" || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
                     script.Add((pair[0],seconds));
                 }
                 Debug.Log("ROOMPLAY_READY model="+modelName);
@@ -247,29 +248,30 @@ namespace Oddity.RoomTest
         static Transform Mark(Transform root,string name)=>root.GetComponentsInChildren<Transform>().FirstOrDefault(t=>t.name==name);
         static Vector3 Facing(Transform root){var f=Mark(root,"Front");var d=f!=null?Vector3.ProjectOnPlane(f.position-root.position,Vector3.up):Vector3.forward;return d.sqrMagnitude>1e-6f?d.normalized:Vector3.forward;}
         // turns a prop about its origin so its Front mark points along dir
-        static void Face(Transform root,Vector3 dir){root.rotation=Quaternion.FromToRotation(Facing(root),dir)*root.rotation;}
+        static void Face(Transform root,Vector3 dir){root.rotation=Quaternion.AngleAxis(Vector3.SignedAngle(Facing(root),dir,Vector3.up),Vector3.up)*root.rotation;} // a turn about the vertical (FromToRotation flips a prop upside down when the two directions are opposite)
         void PlaceSofa()
         {
             if(Environment.GetEnvironmentVariable("ODDITY_SOFA")=="0")return;
             seats.Clear();
             var s=LoadProp("sofa");
-            if(s!=null){sofa=s.transform;sofa.position=room?new Vector3(-.75f,0,1.5f):new Vector3(0,0,SofaZ);Face(sofa,Vector3.back); // the seat faces the camera
+            if(s!=null){sofa=s.transform;sofa.position=apt?Apartment.SofaAt:room?new Vector3(-.75f,0,1.5f):new Vector3(0,0,SofaZ);Face(sofa,apt?Apartment.SofaFace:Vector3.back); // the seat faces the camera
                 Leather(sofa);
                 foreach(var t in sofa.GetComponentsInChildren<Transform>().Where(t=>t.name.StartsWith("Seat")).OrderBy(t=>t.position.x))seats.Add((t,Facing(sofa),StandOff+.2f));} // the sofa seat is deep, she gets up clear of it
             var table=LoadProp("table");
             tableRoot=table!=null?table.transform:null;
-            if(table!=null){table.transform.position=room?new Vector3(.70f,0,-.45f):new Vector3(0,0,TableZ);Face(table.transform,Vector3.right);
+            if(table!=null){table.transform.position=apt?Apartment.TableAt:room?new Vector3(.70f,0,-.45f):new Vector3(0,0,TableZ);Face(table.transform,apt?Apartment.TableFace:Vector3.right);
                 foreach(var spot in table.GetComponentsInChildren<Transform>().Where(t=>t.name.StartsWith("Chair")).OrderBy(t=>t.name).ToList()){
                     var chair=LoadProp("chair");if(chair==null)break;
                     chair.transform.SetPositionAndRotation(spot.position,spot.rotation);chair.name=spot.name;
                     var seat=Mark(chair.transform,"Seat");if(seat!=null)seats.Add((seat,Facing(chair.transform),-StandOff)); // a chair is left from behind, the table is in front
                 }}
-            if(tableRoot!=null)Laptop(tableRoot);
+            if(tableRoot!=null)Laptop(tableRoot,apt?-90:0);
             if(sofa==null && seats.Count>0)sofa=seats[0].mark.root;
             propHits.Clear();foreach(var root in seats.Select(t=>t.mark.root).Distinct())foreach(var mf in root.GetComponentsInChildren<MeshFilter>())if(mf.sharedMesh!=null){var c=mf.gameObject.AddComponent<MeshCollider>();c.sharedMesh=mf.sharedMesh;propHits.Add(c);} // only for PropTop's rays
             clickHits.Clear();clickHits.AddRange(propHits);
             if(tableRoot!=null)foreach(var mf in tableRoot.GetComponentsInChildren<MeshFilter>())if(mf.sharedMesh!=null){var c=mf.gameObject.AddComponent<MeshCollider>();c.sharedMesh=mf.sharedMesh;clickHits.Add(c);}
             clickHits.AddRange(perchCols);
+            if(aptView!=null){if(sofa!=null)aptView.Register(sofa);if(tableRoot!=null)aptView.Register(tableRoot);foreach(var rt in seats.Select(t=>t.mark.root).Distinct())aptView.Register(rt);}
             Blockers();
             BuildSofaSpots();
             Debug.Log("ROOMPLAY_PROPS seats="+string.Join(" ",seats.Select(t=>t.mark.root.name+"/"+t.mark.name+"("+F(t.mark.position.x)+","+F(t.mark.position.y)+","+F(t.mark.position.z)+" face "+F(t.front.x)+","+F(t.front.z)+")")));
@@ -433,7 +435,7 @@ namespace Oddity.RoomTest
             var s=AnimationUtility.GetAnimationClipSettings(c);s.loopTime=loop;s.loopBlend=false;AnimationUtility.SetAnimationClipSettings(c,s);
             c.wrapMode=loop?WrapMode.Loop:WrapMode.ClampForever;return c;
         }
-        Vector2 SomaliSpot(){var a=PetEnv("ODDITY_SOMALISPOT")!=null?PetEnv("ODDITY_SOMALISPOT").Split(',').Select(t=>float.Parse(t,CultureInfo.InvariantCulture)).ToArray():new[]{-1.30f,-.85f};return new Vector2(a[0],a[1]);}
+        Vector2 SomaliSpot(){var a=PetEnv("ODDITY_SOMALISPOT")!=null?PetEnv("ODDITY_SOMALISPOT").Split(',').Select(t=>float.Parse(t,CultureInfo.InvariantCulture)).ToArray():apt?new[]{Apartment.SomaliStart.x,Apartment.SomaliStart.y}:new[]{-1.30f,-.85f};return new Vector2(a[0],a[1]);}
         void SpawnSomali()
         {
             if(SpawnShared("SOMALI","somali",SomaliSharedFile,SomaliYaw,SomaliSpot(),true,SomaliBodyLength,new[]{"SpineRoot_30"},new[]{"Head_22"}))return;
@@ -508,7 +510,7 @@ namespace Oddity.RoomTest
                 }else Debug.LogWarning("ROOMPLAY_WHITE Head or Pelvis bone missing, facing unmeasured");
                 PetSfxSetup(p,wrap);
                 // front left on the open floor in front of the TV stand (z -2 -> -1.62), clear of the Somali (-1.30, -0.85) and the rug cat, turned toward the camera at an angle the other way
-                var spot=PetEnv("ODDITY_WHITESPOT")!=null?PetEnv("ODDITY_WHITESPOT").Split(',').Select(s=>float.Parse(s,CultureInfo.InvariantCulture)).ToArray():new[]{-.25f,-1.05f};
+                var spot=PetEnv("ODDITY_WHITESPOT")!=null?PetEnv("ODDITY_WHITESPOT").Split(',').Select(s=>float.Parse(s,CultureInfo.InvariantCulture)).ToArray():apt?new[]{Apartment.WhiteStart.x,Apartment.WhiteStart.y}:new[]{-.25f,-1.05f};
                 PetPlace(p,new Vector2(spot[0],spot[1]),WhiteYaw,true,WhiteBodyLength);
                 float scale=p.root.localScale.x;p.walkSpd=.70f*scale;p.runSpd=p.walkSpd*1.6f;p.aiSpd=p.walkSpd*.8f;
                 var mat=go.GetComponentsInChildren<Renderer>().SelectMany(r=>r.sharedMaterials).FirstOrDefault(m=>m!=null);
@@ -675,11 +677,11 @@ namespace Oddity.RoomTest
         // the nearest spot that is out of the footprints and in the room's main open area (not a sealed pocket such as the strip between a chair and the wall)
         Vector2 NearestFree(Vector2 p)
         {
-            p=new Vector2(Mathf.Clamp(p.x,-Limit,Limit),Mathf.Clamp(p.y,ZNear,ZFar));
+            p=new Vector2(Mathf.Clamp(p.x,LimX0,LimX1),Mathf.Clamp(p.y,ZNear,ZFar));
             var fp=Plan();
             if(!Blocked(p) && fp.InMainArea(p))return p;
             for(float r=.05f;r<=2.5f;r+=.05f)for(int a=0;a<360;a+=15){
-                var q=p+new Vector2(Mathf.Cos(a*Mathf.Deg2Rad),Mathf.Sin(a*Mathf.Deg2Rad))*r;q=new Vector2(Mathf.Clamp(q.x,-Limit,Limit),Mathf.Clamp(q.y,ZNear,ZFar));
+                var q=p+new Vector2(Mathf.Cos(a*Mathf.Deg2Rad),Mathf.Sin(a*Mathf.Deg2Rad))*r;q=new Vector2(Mathf.Clamp(q.x,LimX0,LimX1),Mathf.Clamp(q.y,ZNear,ZFar));
                 if(!Blocked(q) && fp.InMainArea(q))return q;}
             return p;
         }
@@ -689,8 +691,8 @@ namespace Oddity.RoomTest
         FloorPath floorPlan;Vector4 floorPlanKey;
         FloorPath Plan()
         {
-            var key=new Vector4(Limit,ZNear,ZFar,blockers.Count);
-            if(floorPlan==null || key!=floorPlanKey){floorPlan=new FloorPath(-Limit,Limit,ZNear,ZFar,blockers);floorPlanKey=key;}
+            var key=new Vector4(LimX1,ZNear,ZFar,blockers.Count);
+            if(floorPlan==null || key!=floorPlanKey){floorPlan=new FloorPath(LimX0,LimX1,ZNear,ZFar,blockers);floorPlanKey=key;}
             return floorPlan;
         }
         static string Who(Pet p)=>p.kind;
@@ -751,8 +753,8 @@ namespace Oddity.RoomTest
                 }else if(perchOf.TryGetValue(got,out var pn))PetGoToPerch(p,pn,new Vector2(at.x,at.z));
                 else if(root==tableRoot && perches.ContainsKey("table"))PetGoToPerch(p,"table");
                 else PetGoTo(p,"chair",NearestFree(new Vector2(at.x,at.z)),null,new Vector2(at.x,at.z)); // a chair: walk beside it, turned to it
-            }else if(new Plane(Vector3.right,new Vector3(-RoomHalf,0,0)).Raycast(ray,out var wd) && InWindow(ray.GetPoint(wd))){
-                PetGoTo(p,"window",NearestFree(WindowSpot),null,new Vector2(-RoomHalf,WindowSpot.y));
+            }else if(WindowRay(ray)){
+                PetGoTo(p,"window",NearestFree(WinSpotNow),null,WinLookNow);
             }else{
                 if(!new Plane(Vector3.up,Vector3.zero).Raycast(ray,out var d))return;var pt=ray.GetPoint(d);
                 PetGoTo(p,"floor",NearestFree(new Vector2(pt.x,pt.z)),null,cp);
@@ -850,10 +852,14 @@ namespace Oddity.RoomTest
         {
             perches.Clear();if(!room || perchCols.Count==0)return;
             bool Is(Collider c,string n)=>perchOf.TryGetValue(c,out var v) && v==n;
-            var counterStand=NearestFree(new Vector2(1.05f,1.10f));
-            perches["counter"]=new Perch{name="counter",stand=counterStand,land=new Vector2(1.17f,1.50f),yaw=180,pick=c=>Is(c,"counter")};
-            perches["fridge"]=new Perch{name="fridge",stand=counterStand,land=new Vector2(1.70f,1.62f),yaw=180,pick=c=>Is(c,"fridge")};
-            perches["sill"]=new Perch{name="sill",stand=NearestFree(new Vector2(-1.38f,.2f)),land=new Vector2(-1.88f,.2f),yaw=-90,pick=c=>Is(c,"sill")};
+            var counterStand=NearestFree(apt?Apartment.CounterStand:new Vector2(1.05f,1.10f));
+            float runYaw=apt?-90:180; // the apartment's counter run and fridge are on the east wall: a cat sits on them facing west
+            perches["counter"]=new Perch{name="counter",stand=counterStand,land=apt?Apartment.CounterLand[0]:new Vector2(1.17f,1.50f),yaw=runYaw,pick=c=>Is(c,"counter")};
+            perches["fridge"]=new Perch{name="fridge",stand=counterStand,land=apt?Apartment.FridgeLand:new Vector2(1.70f,1.62f),yaw=runYaw,pick=c=>Is(c,"fridge")};
+            if(apt){
+                perches["sill"]=new Perch{name="sill",stand=NearestFree(new Vector2(Apartment.SillLand[0].x,Apartment.WindowSpot.y)),land=Apartment.SillLand[0],yaw=180,pick=c=>Is(c,"sill")};
+                perches["ledge"]=new Perch{name="ledge",stand=NearestFree(new Vector2(Apartment.LedgeLand[0].x,.75f)),land=Apartment.LedgeLand[0],yaw=180,pick=c=>Is(c,"ledge")};
+            }else perches["sill"]=new Perch{name="sill",stand=NearestFree(new Vector2(-1.38f,.2f)),land=new Vector2(-1.88f,.2f),yaw=-90,pick=c=>Is(c,"sill")};
             if(tableRoot!=null){
                 var lap=tableRoot.Find("Laptop");
                 var rs=tableRoot.GetComponentsInChildren<Renderer>().Where(r=>lap==null || !r.transform.IsChildOf(lap)).ToArray();
@@ -862,13 +868,16 @@ namespace Oddity.RoomTest
                     Debug.Log("ROOMPLAY_PERCH table bounds x "+F(b.min.x)+".."+F(b.max.x)+" y "+F(b.min.y)+".."+F(b.max.y)+" z "+F(b.min.z)+".."+F(b.max.z));
                     var land=new Vector2(b.center.x+Mathf.Min(.28f,b.extents.x-.15f),b.center.z); // the +x half: the laptop sits on the -x half
                     var stand=NearestFree(new Vector2(b.max.x+.35f,b.center.z));
-                    perches["table"]=new Perch{name="table",stand=stand,land=land,yaw=180,pick=c=>c.transform.IsChildOf(tableRoot) && (lap==null || !c.transform.IsChildOf(lap))};
+                    perches["table"]=new Perch{name="table",stand=stand,land=land,yaw=apt?90:180,pick=c=>c.transform.IsChildOf(tableRoot) && (lap==null || !c.transform.IsChildOf(lap))};
                 }
             }
             foreach(var k in perches.Keys)spotsOf.Remove(k);
             void AddSpot(Perch pr,Vector2 land,Vector2 stand){if(!spotsOf.TryGetValue(pr.name,out var l))spotsOf[pr.name]=l=new List<Spot>();l.Add(new Spot{key=pr.name+"#"+l.Count,kind=pr.name,perch=pr,land=land,stand=stand,yaw=pr.yaw});}
             foreach(var pr in perches.Values){
-                if(pr.name=="sill")foreach(float zz in new[]{.05f,.60f,1.15f})AddSpot(pr,new Vector2(-1.88f,zz),NearestFree(new Vector2(-1.38f,zz))); // 0.55 m apart: two cats of 0.46 m do not touch
+                if(apt && pr.name=="sill")foreach(var sl in Apartment.SillLand)AddSpot(pr,sl,NearestFree(new Vector2(sl.x,Apartment.WindowSpot.y))); // 0.5 m apart on the deep sill
+                else if(apt && pr.name=="ledge")foreach(var ll in Apartment.LedgeLand)AddSpot(pr,ll,NearestFree(new Vector2(ll.x,.75f)));
+                else if(apt && pr.name=="counter")foreach(var cl in Apartment.CounterLand)AddSpot(pr,cl,cl==Apartment.CounterLand[0]?pr.stand:NearestFree(new Vector2(Apartment.CounterStand.x,cl.y))); // 1.2 m apart, the cooktop between is not a spot
+                else if(pr.name=="sill")foreach(float zz in new[]{.05f,.60f,1.15f})AddSpot(pr,new Vector2(-1.88f,zz),NearestFree(new Vector2(-1.38f,zz))); // 0.55 m apart: two cats of 0.46 m do not touch
                 else if(pr.name=="counter")foreach(float xx in new[]{.62f,1.17f})AddSpot(pr,new Vector2(xx,1.50f),Mathf.Abs(xx-1.17f)<.01f?pr.stand:NearestFree(new Vector2(xx,1.10f)));
                 else AddSpot(pr,pr.land,pr.stand); // fridge, table: one spot
                 pr.land=spotsOf[pr.name][0].land;
@@ -932,7 +941,7 @@ namespace Oddity.RoomTest
             }
             var from=new Vector2(p.root.position.x,p.root.position.z);
             var wish=input.normalized;float pace=run?p.runSpd:p.walkSpd;float reach=float.MaxValue;
-            if(keys){var fw=Vector3.ProjectOnPlane(cameraView.transform.forward,Vector3.up).normalized;var rt=new Vector3(fw.z,0,-fw.x);var w3=rt*wish.x+fw*wish.y;wish=new Vector2(w3.x,w3.z).normalized;}
+            if(keys){var fw=MoveFwd();var rt=new Vector3(fw.z,0,-fw.x);var w3=rt*wish.x+fw*wish.y;wish=new Vector2(w3.x,w3.z).normalized;}
             bool lastLeg=true;
             if(!keys && p.goal.HasValue){
                 if(!p.pathGoal.HasValue || p.pathGoal.Value!=p.goal.Value)PetPlan(p,false);
@@ -947,7 +956,7 @@ namespace Oddity.RoomTest
                 var d=tgt-from;wish=d.normalized;pace=auto?p.aiSpd:p.walkSpd;run=false;reach=d.magnitude;
             }
             float stepLen=Mathf.Min(pace*dt,reach);
-            var next=Collide(from,new Vector2(Mathf.Clamp(from.x+wish.x*stepLen,-Limit-.1f,Limit+.1f),Mathf.Clamp(from.y+wish.y*stepLen,ZNear-.1f,ZFar+.1f)));
+            var next=Collide(from,new Vector2(Mathf.Clamp(from.x+wish.x*stepLen,LimX0-.1f,LimX1+.1f),Mathf.Clamp(from.y+wish.y*stepLen,ZNear-.1f,ZFar+.1f)));
             next=PetSeparate(p,from,next);
             bool moving=wish!=Vector2.zero && (next-from).sqrMagnitude>1e-10f;
             bool arrived=false;
@@ -1029,15 +1038,15 @@ namespace Oddity.RoomTest
             var cp=PetXZ(p);string place=act;Vector2 at=cp;bool travel=true;
             switch(act){
                 case "wander":case "rug":{
-                    Func<Vector2> gen=act=="rug"?(Func<Vector2>)(()=>new Vector2(Rnd(-1.25f,-.25f),Rnd(.4f,1.0f))):(()=>new Vector2(Rnd(-1.6f,1.6f),Rnd(-1.6f,1.2f)));
+                    Func<Vector2> gen=apt?(act=="rug"?(Func<Vector2>)(()=>new Vector2(Rnd(1.4f,2.7f),Rnd(2.55f,3.8f))):(Func<Vector2>)AptWander):act=="rug"?(Func<Vector2>)(()=>new Vector2(Rnd(-1.25f,-.25f),Rnd(.4f,1.0f))):(()=>new Vector2(Rnd(-1.6f,1.6f),Rnd(-1.6f,1.2f)));
                     var t=AiFloorPoint(p,gen);if(t==null)return false;
                     at=t.Value;place=act=="rug"?"rug":"floor";PetGoTo(p,"floor",at,null,cp);p.aiDur=Rnd(3,8);break;}
                 case "sofa":{
                     var sp=FreeSpot("sofa",p,cp,true);if(sp==null)return false;
                     at=sp.land;PetGoToSofa(p,sp,cp);if(p.somali)p.arriveRest=AiRestKind(p,act);p.aiDur=Rnd(10,25);break;}
                 case "window":{
-                    float wz=Rnd(0f,1.1f);var spot=NearestFree(new Vector2(-1.40f,wz));if(!FarFromOthers(p,spot))return false;
-                    at=spot;PetGoTo(p,"window",spot,null,new Vector2(-RoomHalf,wz));p.aiDur=Rnd(6,15);break;}
+                    float wz=Rnd(0f,1.1f);var spot=NearestFree(apt?new Vector2(Rnd(.8f,1.5f),Apartment.WindowSpot.y):new Vector2(-1.40f,wz));if(!FarFromOthers(p,spot))return false;
+                    at=spot;PetGoTo(p,"window",spot,null,apt?new Vector2(spot.x,Apartment.WindowLook.y):new Vector2(-RoomHalf,wz));p.aiDur=Rnd(6,15);break;}
                 case "harin":{
                     var hp=new Vector2(x,z);var dir=cp-hp;if(dir.sqrMagnitude<1e-4f)dir=Vector2.right;dir.Normalize();
                     Vector2? found=null;
@@ -1072,7 +1081,7 @@ namespace Oddity.RoomTest
             void Add(string n,int w){if(n!=p.aiLast)opts.Add(new KeyValuePair<string,int>(n,w));}
             Add("wander",12);Add("rug",6);if(sofa!=null && spotsOf.TryGetValue("sofa",out var sofaSpots) && sofaSpots.Count>0)Add("sofa",20);Add("window",15);Add("harin",15);Add("clip",15);Add("idle",5);
             if(p.white && p.sit!=0)Add("stretch",8);
-            foreach(var (n,w) in new[]{("sill",15),("counter",8),("table",7),("fridge",5)})if(perches.ContainsKey(n))Add(n,w);
+            foreach(var (n,w) in new[]{("sill",15),("counter",8),("table",7),("fridge",5),("ledge",6)})if(perches.ContainsKey(n))Add(n,w);
             while(opts.Count>0){
                 int total=opts.Sum(o=>o.Value),r=Rng().Next(total),i=0;
                 for(;i<opts.Count-1;i++){if(r<opts[i].Value)break;r-=opts[i].Value;}
@@ -1261,7 +1270,7 @@ namespace Oddity.RoomTest
                     float c=run.a+(run.b-run.a)*(k+.5f)/n;var at=mid+side*c;
                     var seg=(lo:run.a+(run.b-run.a)*k/n,hi:run.a+(run.b-run.a)*(k+1)/n);
                     var mark=mk.OrderBy(t=>(new Vector2(t.mark.position.x,t.mark.position.z)-new Vector2(at.x,at.z)).sqrMagnitude).First();
-                    list.Add(new Spot{key="sofa#"+list.Count,kind="sofa",land=new Vector2(at.x,mid.z),mark=mark.mark,fwd=mark.front,axis=side,lo=s0+seg.lo,hi=s0+seg.hi,top=seat});
+                    list.Add(new Spot{key="sofa#"+list.Count,kind="sofa",land=new Vector2(at.x,at.z),mark=mark.mark,fwd=mark.front,axis=side,lo=s0+seg.lo,hi=s0+seg.hi,top=seat});
                 }
             }
             Debug.Log("ROOMPLAY_SOFASPOTS seat top="+F(seat)+" cushions="+runs.Count+" spots="+string.Join(" ",list.Select(sp=>sp.key+" x="+F(sp.land.x)+" ("+F(sp.lo)+".."+F(sp.hi)+") mark="+sp.mark.name)));
@@ -1460,10 +1469,10 @@ namespace Oddity.RoomTest
             for(int k=1;k<=ActionNames.Length;k++){int a=(start+k)%ActionNames.Length;if(CanDo(p,a)){p.mStep=a;CatAction(p,a);return;}}
         }
         // the computer lives on the dining table: an open laptop in front of the chair on the -x side, screen tilted back and facing that seat
-        static void Laptop(Transform table)
+        static void Laptop(Transform table,float yaw=0) // yaw turns the laptop about the table's middle: the screen faces -x at 0, -z at -90 (the apartment's table has its chairs along z)
         {
             var rs=table.GetComponentsInChildren<Renderer>();if(rs.Length==0)return;var b=rs[0].bounds;foreach(var r in rs)b.Encapsulate(r.bounds);
-            var lap=new GameObject("Laptop").transform;lap.SetParent(table,true);lap.position=new Vector3(b.center.x-.12f,b.max.y,b.center.z);
+            var lap=new GameObject("Laptop").transform;lap.SetParent(table,true);var turn=Quaternion.Euler(0,yaw,0);lap.position=new Vector3(b.center.x,b.max.y,b.center.z)+turn*new Vector3(-.12f,0,0);lap.rotation=turn;
             Color body=new Color(.72f,.73f,.76f),screen=new Color(.10f,.12f,.16f);
             Part(PrimitiveType.Cube,lap,new Vector3(0,.009f,0),new Vector3(.22f,.018f,.32f),body);                                   // base, keys toward -x
             Part(PrimitiveType.Cube,lap,new Vector3(-.01f,.0185f,0),new Vector3(.12f,.002f,.28f),new Color(.25f,.26f,.28f));          // keyboard
@@ -1490,6 +1499,16 @@ namespace Oddity.RoomTest
         // a click on the window walks her to the floor in front of it (between the bedroom door and the sofa) and she looks out
         static readonly Vector2 WindowSpot=new Vector2(-1.45f,.55f);
         static bool InWindow(Vector3 p)=>p.z>WinZ.x-.06f && p.z<WinZ.y+.06f && p.y>WinY.x-.06f && p.y<WinY.y+.06f;
+        Vector2 WinSpotNow=>apt?Apartment.WindowSpot:WindowSpot;
+        Vector2 WinLookNow=>apt?Apartment.WindowLook:new Vector2(-RoomHalf,WindowSpot.y);
+        // the click ray hits the window: the old room's opening in the left wall, or the apartment's living-room window in the partition's inner face (z 1.30)
+        bool WindowRay(Ray ray)
+        {
+            if(apt){
+                if(!new Plane(Vector3.forward,new Vector3(0,0,1.30f)).Raycast(ray,out var d))return false;var q=ray.GetPoint(d);
+                return q.x>Apartment.SillX0-.06f && q.x<Apartment.SillX1+.06f && q.y>Apartment.SillTop-.06f && q.y<Apartment.SillWinTop+.06f;}
+            return new Plane(Vector3.right,new Vector3(-RoomHalf,0,0)).Raycast(ray,out var wd) && InWindow(ray.GetPoint(wd));
+        }
         const float ClickArrive=.05f, ClickGiveUp=.6f;
         void ClickAt(Ray ray)
         {
@@ -1504,13 +1523,13 @@ namespace Oddity.RoomTest
                 if(root!=sofa && root!=tableRoot)pool=seats.Where(t=>t.mark.root==root);
                 var list=pool.ToList();if(list.Count==0)return;
                 var seat=list.OrderBy(t=>new Vector2(t.mark.position.x-at.x,t.mark.position.z-at.z).sqrMagnitude).First();
-                clickWindow=false;clickSeat=seat.mark;var stand=seat.mark.position+seat.front*seat.off;clickGoal=new Vector2(Mathf.Clamp(stand.x,-Limit,Limit),Mathf.Clamp(stand.z,ZNear,ZFar));
+                clickWindow=false;clickSeat=seat.mark;var stand=seat.mark.position+seat.front*seat.off;clickGoal=new Vector2(Mathf.Clamp(stand.x,LimX0,LimX1),Mathf.Clamp(stand.z,ZNear,ZFar));
                 Notice("클릭 "+root.name+"/"+seat.mark.name);
-            }else if(new Plane(Vector3.right,new Vector3(-RoomHalf,0,0)).Raycast(ray,out var wd) && InWindow(ray.GetPoint(wd))){
-                clickSeat=null;clickWindow=true;clickGoal=new Vector2(WindowSpot.x,WindowSpot.y);Notice("클릭 창문");
+            }else if(WindowRay(ray)){
+                clickSeat=null;clickWindow=true;clickGoal=WinSpotNow;Notice("클릭 창문");
             }else{
                 if(!new Plane(Vector3.up,Vector3.zero).Raycast(ray,out var d))return;var p=ray.GetPoint(d);
-                clickWindow=false;clickSeat=null;clickGoal=new Vector2(Mathf.Clamp(p.x,-Limit,Limit),Mathf.Clamp(p.z,ZNear,ZFar));Notice("클릭 바닥 "+F(p.x)+","+F(p.z));
+                clickWindow=false;clickSeat=null;clickGoal=new Vector2(Mathf.Clamp(p.x,LimX0,LimX1),Mathf.Clamp(p.z,ZNear,ZFar));Notice("클릭 바닥 "+F(p.x)+","+F(p.z));
             }
             clickStuck=0;hPathGoal=null;hReplanned=false;
         }
@@ -1529,7 +1548,7 @@ namespace Oddity.RoomTest
         {
             if(!clickGoal.HasValue)return Vector2.zero;
             if(chairSat!=null){if(chairSat.mark==clickSeat){clickGoal=null;clickSeat=null;}else StartChairStand(-1);return Vector2.zero;} // off the dining chair first
-            if(clickSeat!=null && clickSeat.root!=sofa){var seat=clickSeat;clickGoal=null;clickSeat=null;direction=0;Sit(SitIndex,false,seat);return Vector2.zero;} // the chair steps walk her there themselves
+            if(clickSeat!=null && clickSeat.root!=sofa && (!apt || (new Vector2(x,z)-new Vector2(clickSeat.position.x,clickSeat.position.z)).magnitude<1.2f)){var seat=clickSeat;clickGoal=null;clickSeat=null;direction=0;Sit(SitIndex,false,seat);return Vector2.zero;} // the chair steps walk her there themselves
             var p=new Vector2(x,z);
             if(!hPathGoal.HasValue || hPathGoal.Value!=clickGoal.Value){HarinPlan(false);if(!clickGoal.HasValue)return Vector2.zero;}
             var tgt=clickGoal.Value;bool lastLeg=true;
@@ -1545,7 +1564,7 @@ namespace Oddity.RoomTest
             if((lastLeg && d.magnitude<ClickArrive) || (clickStuck>ClickGiveUp && !canReplan)){ // (a path that has not been replanned only gives up after the replan, above)
                 var seat=clickSeat;bool window=clickWindow;clickGoal=null;clickSeat=null;clickWindow=false;direction=0;
                 if(seat!=null)Sit(SitIndex,false,seat);
-                else if(window){Select(9);Turn(-90);heading=-90;Notice("창밖 바라보기");} // faces out of the window, the left wall
+                else if(window){float wy=apt?Apartment.WindowYaw:-90;Select(9);Turn(wy);heading=wy;Notice("창밖 바라보기");} // faces out of the window (the left wall; the apartment's south window)
                 else{Select(9);heading=targetYaw;}
                 return Vector2.zero;
             }
@@ -1553,14 +1572,17 @@ namespace Oddity.RoomTest
         }
         void ScriptClick(string key)
         {
-            Vector3 target=key=="clickwindow"?new Vector3(-RoomHalf,(WinY.x+WinY.y)/2,(WinZ.x+WinZ.y)/2):key=="clicksofa"&&sofa!=null?SeatOf("SeatL",sofa):key=="clicksofar"&&sofa!=null?SeatOf("SeatR",sofa):key=="clicksofac"&&sofa!=null?SeatOf("SeatC",sofa):key=="clicktable"&&tableRoot!=null?tableRoot.position+Vector3.up*.7f:key=="clickcounter"?new Vector3(1.17f,.86f,1.5f):key=="clickfridge"?new Vector3(1.7f,1.2f,1.5f):key=="clicksill"?new Vector3(-1.85f,.85f,.2f):ScriptFloorPoint();
+            Vector3 target=key=="clickwindow"?(apt?new Vector3(1.15f,1.2f,1.3f):new Vector3(-RoomHalf,(WinY.x+WinY.y)/2,(WinZ.x+WinZ.y)/2)):key=="clicksofa"&&sofa!=null?SeatOf("SeatL",sofa):key=="clicksofar"&&sofa!=null?SeatOf("SeatR",sofa):key=="clicksofac"&&sofa!=null?SeatOf("SeatC",sofa):key=="clicktable"&&tableRoot!=null?tableRoot.position+Vector3.up*.7f:key=="clickcounter"?(apt?new Vector3(4.08f,.86f,6.68f):new Vector3(1.17f,.86f,1.5f)):key=="clickfridge"?(apt?new Vector3(4.03f,1.2f,8.5f):new Vector3(1.7f,1.2f,1.5f)):key=="clicksill"?(apt?new Vector3(1.15f,.45f,1.45f):new Vector3(-1.85f,.85f,.2f)):key=="clickledge"?new Vector3(.8f,.9f,.15f):ScriptFloorPoint();
             ClickAt(new Ray(cameraView.transform.position,target-cameraView.transform.position));
         }
         // clickfloor's fixed point (.9, .9); ODDITY_CLICKXZ="x,z" picks another one for a path test
+        static int scriptPoint;
         static Vector3 ScriptFloorPoint()
         {
-            var v=Environment.GetEnvironmentVariable("ODDITY_CLICKXZ");
-            if(!string.IsNullOrWhiteSpace(v)){var q=v.Split(',');if(q.Length==2 && float.TryParse(q[0],NumberStyles.Float,CultureInfo.InvariantCulture,out var cx) && float.TryParse(q[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var cz))return new Vector3(cx,0,cz);}
+            var v=Environment.GetEnvironmentVariable("ODDITY_CLICKXZ"); // "x,z" or several "x,z;x,z;..." that successive clickfloor steps take in turn
+            if(!string.IsNullOrWhiteSpace(v)){
+                var pts=v.Split(';');var q=pts[scriptPoint++%pts.Length].Split(',');
+                if(q.Length==2 && float.TryParse(q[0],NumberStyles.Float,CultureInfo.InvariantCulture,out var cx) && float.TryParse(q[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var cz))return new Vector3(cx,0,cz);}
             return new Vector3(.9f,0,.9f);
         }
         Vector3 SeatOf(string name,Transform root){var t=seats.FirstOrDefault(s=>s.mark.root==root && s.mark.name==name).mark;return t!=null?t.position:root.position;}
@@ -1578,6 +1600,7 @@ namespace Oddity.RoomTest
                 blockers.Add(Rect.MinMaxRect(b.min.x-BodyRadius,b.min.z-BodyRadius,b.max.x+BodyRadius,b.max.z+BodyRadius));
             }
             foreach(var f in furniture)blockers.Add(Rect.MinMaxRect(f.xMin-BodyRadius,f.yMin-BodyRadius,f.xMax+BodyRadius,f.yMax+BodyRadius));
+            if(apt)foreach(var w in Apartment.WallBlockers())blockers.Add(Rect.MinMaxRect(w.xMin-BodyRadius,w.yMin-BodyRadius,w.xMax+BodyRadius,w.yMax+BodyRadius)); // walls with their door gaps
             Debug.Log("ROOMPLAY_BLOCKERS "+string.Join(" ",blockers.Select(r=>"("+F(r.xMin)+".."+F(r.xMax)+","+F(r.yMin)+".."+F(r.yMax)+")")));
         }
         bool Blocked(Vector2 p)=>blockers.Any(r=>r.Contains(p));
@@ -1607,7 +1630,7 @@ namespace Oddity.RoomTest
             if(seat.mark.root!=sofa){StartChairSit(seat.mark,seat.front,index);return;}
             seatAt=seat.mark.position;
             seatFront=seat.front;seatEdge=seat.mark.root==sofa?.36f:.30f; // seat mark to the cushion's front edge: sofa-1 0.36 m, chair-1 0.21 + 0.09 m
-            var stand=seatAt+seat.front*seat.off;x=Mathf.Clamp(stand.x,-Limit,Limit);z=Mathf.Clamp(stand.z,ZNear,ZFar);
+            var stand=seatAt+seat.front*seat.off;x=Mathf.Clamp(stand.x,LimX0,LimX1);z=Mathf.Clamp(stand.z,ZNear,ZFar);
             yaw=heading=targetYaw=turnStart=Mathf.Atan2(seat.front.x,seat.front.z)*Mathf.Rad2Deg+(index==NapIndex?NapTurn:0);turnTime=1;
             Select(index);Notice("앉기 "+seat.mark.root.name+" "+Keys[index].clip);
         }
@@ -1699,6 +1722,11 @@ namespace Oddity.RoomTest
         {
             var root=mark.root;var c=new Chair{chair=root,mark=mark,home=root.position,front=front};
             c.side=Vector3.Cross(Vector3.up,front).normalized;if(Vector3.Dot(new Vector3(x,0,z)-mark.position,c.side)<0)c.side=-c.side; // the side she comes from
+            if(apt){ // the apartment's chairs stand beside a wall: she goes round on the side with more room (further from every wall), whichever side she came from
+                var walls=Apartment.WallBlockers();
+                float Away(Vector3 q)=>walls.Min(r=>{float dx=Mathf.Max(r.xMin-q.x,0,q.x-r.xMax),dz=Mathf.Max(r.yMin-q.z,0,q.z-r.yMax);return Mathf.Sqrt(dx*dx+dz*dz);});
+                if(Away(mark.position+c.side*ChairBeside)<Away(mark.position-c.side*ChairBeside))c.side=-c.side;
+            }
             onFloor=false;chairJob=new ChairWork{c=c,sitting=true,clip=clip};Notice("의자로 "+root.name+" "+Keys[clip].clip);
         }
         void StartChairStand(int then)
@@ -1784,10 +1812,75 @@ namespace Oddity.RoomTest
         float backMax;
         // ODDITY_ROOM (default on; 0 is the old painted dusk): a 4 x 4 m room seen from high in the front right corner, looking down like a doll house
         bool room;float roomZoom;
+        // ODDITY_HOUSE: apt (default) is the 17-pyeong flat in Apartment.cs with one camera per room, room is the old 4 x 4 m room
+        bool apt;Apartment.View aptView;
         static readonly Vector3 RoomEye=new Vector3(2.35f,2.9f,-2.55f), RoomAim=new Vector3(-.25f,.35f,.45f);
+        Vector3 curEye=RoomEye,curAim=RoomAim;float curFov=RoomFov;
         const float RoomHalf=2f, RoomFov=46;
+        // the apartment: the shell, doors and plain-box furniture from Apartment.cs; she starts in the living room, every room has its own camera (AptTick cuts between them)
+        void AptRoom(Camera cam)
+        {
+            cam.clearFlags=CameraClearFlags.SolidColor;cam.backgroundColor=new Color(.16f,.15f,.13f);
+            RenderSettings.ambientLight=new Color(.55f,.53f,.48f);
+            var root=new GameObject("Apartment").transform;
+            furniture.Clear();perchCols.Clear();perchOf.Clear();
+            var holder=new GameObject("PerchCols").transform;holder.SetParent(root,false);
+            void PerchBox(string name,float x0,float x1,float y0,float y1,float z0,float z1)
+            {
+                var g=new GameObject("PerchCol_"+name);g.transform.SetParent(holder,false);g.transform.localPosition=new Vector3((x0+x1)/2,(y0+y1)/2,(z0+z1)/2);
+                var c=g.AddComponent<BoxCollider>();c.size=new Vector3(x1-x0,y1-y0,z1-z0);perchCols.Add(c);perchOf[c]=name;
+            }
+            aptView=Apartment.Build(root,StreetView(),furniture,PerchBox);
+            Sun();
+            LimX0=Apartment.LimX0;LimX1=Apartment.LimX1;ZNear=Apartment.LimZ0;ZFar=Apartment.LimZ1;
+            x=Apartment.HarinStart.x;z=Apartment.HarinStart.y;
+            heading=yaw=targetYaw=turnStart=45;turnTime=1; // she starts facing the living room's camera (north-east)
+            if(PetEnv("ODDITY_SOMALIYAW")==null)SomaliYaw=60;if(PetEnv("ODDITY_WHITEYAW")==null)WhiteYaw=20; // the cats start facing the living room's camera (north-east)
+            var rd=aptView.Room("living");curEye=rd.eye;curAim=rd.aim;curFov=rd.fov;cam.fieldOfView=curFov;
+            cam.transform.position=curEye;cam.transform.LookAt(curAim);
+            Debug.Log("ROOMPLAY_APT walls="+aptView.PieceCount+" rooms="+string.Join(",",aptView.rooms.Select(r=>r.name+"(hidden "+aptView.HiddenCount(r.name)+": "+aptView.HiddenNames(r.name)+")")));
+        }
+        // the camera follows the room of the controlled character (Harin or the cat under control): a cut when its centre is 0.2 m past a door's threshold, the walls between that camera and the room are cut away.
+        // WASD keeps the direction it had before the cut until the keys are let go, so a walk through a door does not turn round in the player's hands
+        Vector3 latchFwd;bool latched;float keysAt=-10;
+        Vector3 MoveFwd()
+        {
+            keysAt=Time.unscaledTime;
+            return latched?latchFwd:Vector3.ProjectOnPlane(cameraView.transform.forward,Vector3.up).normalized;
+        }
+        bool aptForced,faced;
+        void AptForce(string name)
+        {
+            if(aptView==null)return;
+            if(name=="auto"){aptForced=false;return;}
+            if(name=="overview"){aptForced=true;aptView.ShowAll();curEye=new Vector3(2.19f,13f,-3.5f);curAim=new Vector3(2.19f,0,5.2f);curFov=50;roomFocusSet=false;return;} // debug: the whole flat, every wall shown
+            aptForced=true;aptView.Show(name);var rd=aptView.Room(name);curEye=rd.eye;curAim=rd.aim;curFov=rd.fov;roomFocusSet=false;Debug.Log("ROOMPLAY_ROOM view="+name+" forced");
+        }
+        void AptTick()
+        {
+            if(!faced && model!=null && !busy && apt){faced=true;heading=45;Turn(45);yaw=targetYaw=turnStart=45;turnTime=1;} // she starts facing the living room's camera
+            if(aptView==null || aptForced)return;
+            var pos=ctl!=null?PetXZ(ctl):new Vector2(x,z);
+            var oldFwd=Vector3.ProjectOnPlane(cameraView.transform.forward,Vector3.up).normalized;
+            if(aptView.Tick(pos,Time.unscaledTime,out var from)){
+                var rd=aptView.Room(aptView.current);curEye=rd.eye;curAim=rd.aim;curFov=rd.fov;roomFocusSet=false;
+                if(from!=null && Time.unscaledTime-keysAt<.25f && oldFwd.sqrMagnitude>.1f){latchFwd=oldFwd;latched=true;}
+                Debug.Log("ROOMPLAY_ROOM view="+aptView.current+(from!=null?" from="+from:"")+" at=("+F(pos.x)+","+F(pos.y)+") who="+(ctl!=null?ctl.tag:"HARIN"));
+            }
+            if(latched && Time.unscaledTime-keysAt>.25f)latched=false;
+            foreach(var p in pets)if(p.root!=null)foreach(var r in p.root.GetComponentsInChildren<Renderer>())r.enabled=aptView.Near(PetXZ(p)); // a cat outside the shown room is not in the picture
+        }
+        // a random floor point for a wandering cat: the living room most, the kitchen's passage, the balcony
+        Vector2 AptWander()
+        {
+            float r=Rnd(0,100);
+            if(r<60)return new Vector2(Rnd(1.0f,4.0f),Rnd(1.7f,4.8f));
+            if(r<85)return new Vector2(Rnd(2.7f,3.4f),Rnd(5.4f,8.6f));
+            return new Vector2(Rnd(.5f,3.4f),Rnd(.5f,.95f));
+        }
         void Room(Camera cam)
         {
+            if(apt){AptRoom(cam);return;}
             cam.clearFlags=CameraClearFlags.SolidColor;cam.backgroundColor=new Color(.16f,.15f,.13f);cam.fieldOfView=RoomFov;
             RenderSettings.ambientLight=new Color(.55f,.53f,.48f);
             var root=new GameObject("Room").transform;
@@ -1803,7 +1896,7 @@ namespace Oddity.RoomTest
                 var g=Part(PrimitiveType.Cube,root,pos,size,wall);g.GetComponent<Renderer>().shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;}
             Sun();
             Furnish(root);
-            Limit=RoomHalf-.25f;ZNear=-RoomHalf+.25f;ZFar=RoomHalf-.25f;
+            Limit=RoomHalf-.25f;LimX0=-Limit;LimX1=Limit;ZNear=-RoomHalf+.25f;ZFar=RoomHalf-.25f;
             x=-.6f;z=-.3f; // she starts on the open floor between the table and the window
             cam.transform.position=RoomEye;cam.transform.LookAt(RoomAim);
         }
@@ -1908,12 +2001,12 @@ namespace Oddity.RoomTest
         void Sun()
         {
             if(keyLight==null)return;
-            var through=new Vector3(-RoomHalf,(WinY.x+WinY.y)/2,(WinZ.x+WinZ.y)/2);var onto=new Vector3(-.75f,.45f,1.55f); // the window middle to the sofa seat
+            var through=apt?Apartment.SunThrough:new Vector3(-RoomHalf,(WinY.x+WinY.y)/2,(WinZ.x+WinZ.y)/2);var onto=apt?Apartment.SunOnto:new Vector3(-.75f,.45f,1.55f); // the window middle to the sofa seat (the apartment: the balcony window's middle, the sun comes in through the south windows)
             keyLight.transform.rotation=Quaternion.LookRotation(onto-through);keyLight.color=new Color(1f,.9f,.72f);keyLight.intensity=1.6f;
             keyLight.shadows=LightShadows.Soft;keyLight.shadowStrength=.92f;keyLight.shadowBias=.03f;keyLight.shadowNormalBias=.3f;
             // ODDITY_LAMP=1 turns the ceiling lamp on; by default only the window sun lights the room, with a brighter ambient fill
             bool lamp=Environment.GetEnvironmentVariable("ODDITY_LAMP")=="1";
-            RenderSettings.ambientLight=lamp?new Color(.26f,.26f,.27f):new Color(.40f,.39f,.38f);
+            RenderSettings.ambientLight=lamp?new Color(.26f,.26f,.27f):apt?new Color(.55f,.54f,.52f):new Color(.40f,.39f,.38f); // the apartment's rooms away from the sun are lit by this alone: a little brighter
             if(lamp)CeilingLamp();
         }
         // a fluorescent tube on the ceiling: two cool white point lights along its length light the room from above, no shadows
@@ -1924,7 +2017,7 @@ namespace Oddity.RoomTest
         {
             foreach(var dz in new[]{-LampHalf,LampHalf}){
                 var l=new GameObject("CeilingLamp").AddComponent<Light>();l.type=LightType.Point;l.color=LampColor;l.intensity=LampPower;l.range=LampRange;l.shadows=LightShadows.None;
-                l.transform.position=LampAt+new Vector3(0,0,dz);}
+                l.transform.position=(apt?Apartment.LampAt:LampAt)+new Vector3(0,0,dz);}
         }
         // the up arrow closes in on her (narrower lens, aim moves to her chest and up to her face at the closest), the down arrow goes back to the whole room.
         // the aim has slack: it only moves when she leaves a circle around it (RoomSlack of the half frame), so sway and breathing do not shake the view
@@ -1935,20 +2028,21 @@ namespace Oddity.RoomTest
         {
             roomZoom=Mathf.Clamp01(roomZoom-zoomKey*dt*.55f);
             if(wheelZoom!=0){float take=Mathf.MoveTowards(wheelZoom,0,dt*WheelRate);roomZoom=Mathf.Clamp01(roomZoom+wheelZoom-take);wheelZoom=take;if(roomZoom<=0 || roomZoom>=1)wheelZoom=0;} // each notch eases in over about 0.1 s
-            float fov=RoomFov*Mathf.Pow(RoomFovNear/RoomFov,roomZoom); // even steps from 46 to 5 degrees
+            if(apt)AptTick();
+            float fov=curFov*Mathf.Pow(RoomFovNear/curFov,roomZoom); // even steps from the room's lens (46 degrees in the old room) to 5
             Transform chest=null,neck=null;if(anim!=null){chest=anim.GetBoneTransform(HumanBodyBones.Chest)??anim.GetBoneTransform(HumanBodyBones.Hips);neck=anim.GetBoneTransform(HumanBodyBones.Head);}
             bool onCat=ctl!=null;
             if(chest!=null || onCat){
                 var want=onCat?ctl.root.position+Vector3.up*Mathf.Lerp(.15f,.2f,Mathf.InverseLerp(14,RoomFovNear,fov)):neck!=null?Vector3.Lerp(chest.position,neck.position,Mathf.InverseLerp(14,RoomFovNear,fov)):chest.position;
                 if(!roomFocusSet){roomFocus=want;roomFocusSet=true;lastWant=want;}
                 wantPath+=Vector3.Distance(want,lastWant);lastWant=want;var wasFocus=roomFocus;
-                float slack=Vector3.Distance(RoomEye,roomFocus)*Mathf.Tan(fov*.5f*Mathf.Deg2Rad)*RoomSlack;
+                float slack=Vector3.Distance(curEye,roomFocus)*Mathf.Tan(fov*.5f*Mathf.Deg2Rad)*RoomSlack;
                 var off=want-roomFocus;float m=off.magnitude;
                 if(m>slack)roomFocus=Vector3.Lerp(roomFocus,roomFocus+off*(1-slack/m),1-Mathf.Exp(-RoomFollow*dt));
                 focusPath+=Vector3.Distance(roomFocus,wasFocus);
             }
-            var aim=(chest!=null || onCat)?Vector3.Lerp(RoomAim,roomFocus,Mathf.SmoothStep(0,1,Mathf.Min(1,roomZoom*2.5f))):RoomAim;
-            cameraView.fieldOfView=fov;cameraView.transform.position=RoomEye;cameraView.transform.LookAt(aim);
+            var aim=(chest!=null || onCat)?Vector3.Lerp(curAim,roomFocus,Mathf.SmoothStep(0,1,Mathf.Min(1,roomZoom*2.5f))):curAim;
+            cameraView.fieldOfView=fov;cameraView.transform.position=curEye;cameraView.transform.LookAt(aim);
         }
         // L: head and eyes turn to the camera (the player), up to 70 degrees, blended over 0.3 s
         bool lookOn;float lookW;
@@ -2077,6 +2171,7 @@ namespace Oddity.RoomTest
             if(key=="o"){ToggleCatSfx();return;}
             if(key=="realtab"){StartCoroutine(RealTab());return;}
             if(key.StartsWith("click")){ScriptClick(key);return;}
+            if(key.StartsWith("view")){AptForce(key.Substring(4));return;} // script only: a room's camera by name (viewkitchen), viewauto goes back to following the character
             if(key=="wheelup"||key=="wheeldown"){wheelZoom=Mathf.Clamp(wheelZoom+(key=="wheelup"?WheelNotch:-WheelNotch),-1,1);return;} // one notch per script step
             if(ctl!=null && key!="tab" && key!="escape" && key!="m"){CatCommand(key);return;} // the cat has its own keys while it is controlled
             if(key=="n"){bool back=Keyboard.current!=null && Keyboard.current.shiftKey.isPressed;if(!busy)StartCoroutine(Reload(StepLine(back?-1:1),false));}
@@ -2235,8 +2330,8 @@ namespace Oddity.RoomTest
             var goWish=chairJob==null?ClickStep(dt):Vector2.zero;
             if(chairJob!=null){ChairTick(dt);turnTime+=dt/.2f;yaw=Mathf.LerpAngle(turnStart,targetYaw,Mathf.SmoothStep(0,1,turnTime));heading=targetYaw;Evaluate(dt);Frame(dt,zoomKey);return;}
             run=run && clips[11]!=null;float pace=run?runSpeed:speed;
-            var wish=input.normalized;if(goWish!=Vector2.zero){wish=goWish;run=false;pace=speed;}else if(room && wish!=Vector2.zero){var fw=Vector3.ProjectOnPlane(cameraView.transform.forward,Vector3.up).normalized;var rt=new Vector3(fw.z,0,-fw.x);var w3=rt*wish.x+fw*wish.y;wish=new Vector2(w3.x,w3.z);} // W walks away from the camera
-            var next=new Vector2(Mathf.Clamp(x+wish.x*pace*dt,-Limit,Limit),Mathf.Clamp(z+wish.y*pace*dt,ZNear,ZFar));
+            var wish=input.normalized;if(goWish!=Vector2.zero){wish=goWish;run=false;pace=speed;}else if(room && wish!=Vector2.zero){var fw=MoveFwd();var rt=new Vector3(fw.z,0,-fw.x);var w3=rt*wish.x+fw*wish.y;wish=new Vector2(w3.x,w3.z);} // W walks away from the camera
+            var next=new Vector2(Mathf.Clamp(x+wish.x*pace*dt,LimX0,LimX1),Mathf.Clamp(z+wish.y*pace*dt,ZNear,ZFar));
             next=Collide(new Vector2(x,z),next);
             if((next-new Vector2(x,z)).sqrMagnitude<1e-10f||clips[10]==null)wish=Vector2.zero;
             int dir=wish==Vector2.zero?0:run?2:1;
@@ -2524,7 +2619,7 @@ namespace Oddity.RoomTest
             cameraView.transform.position=new Vector3(x*near,Mathf.Lerp(1.13f,1.54f,near),Mathf.Lerp(-zoom,z-zoom,near));
             cameraView.transform.rotation=Quaternion.Euler(Mathf.Lerp(3,-1.5f,Mathf.InverseLerp(6.79f,20f,zoom)),0,0); // the true horizon meets the painted one as she walks into the distance
         }
-        static GameObject Part(PrimitiveType type,Transform parent,Vector3 pos,Vector3 size,Color color)
+        internal static GameObject Part(PrimitiveType type,Transform parent,Vector3 pos,Vector3 size,Color color)
         {
             var go=GameObject.CreatePrimitive(type);Destroy(go.GetComponent<Collider>());
             go.transform.SetParent(parent,false);go.transform.localPosition=pos;go.transform.localScale=size;
@@ -2558,6 +2653,7 @@ namespace Oddity.RoomTest
         }
         static readonly string[] CatCommonKeys={"space  멈추기 (앉았거나 누웠으면 일어서기)","W A S D  걷기, Shift 빠르게","← →  제자리 돌기","↑ ↓, 휠  줌","C V  소파에 올라가 앉기, K  올라가 눕기","클릭  바닥, 소파, 식탁, 조리대, 냉장고, 창","M  다음 동작","O  고양이 소리 켜고 끄기","Tab  하린으로"};
         static string CatRow(Pet p,int i){const string keys="123456789";return i<ActionNames.Length?keys[i]+"  "+ActionNames[i]+(CanDo(p,i)?"":" (없음)"):CatCommonKeys[i-ActionNames.Length];}
+        static readonly bool noHud=Environment.GetEnvironmentVariable("ODDITY_NOHUD")=="1";
         void OnGUI()
         {
             var ev=Event.current;
@@ -2565,6 +2661,7 @@ namespace Oddity.RoomTest
                 if(ev.type==EventType.KeyDown){if(!tabGuiDown){tabGuiDown=true;TabPress("ongui");}ev.Use();GUIUtility.keyboardControl=0;}
                 else if(ev.type==EventType.KeyUp){tabGuiDown=false;ev.Use();}
             }
+            if(noHud)return; // ODDITY_NOHUD=1: clean screenshots
             bool cat=ctl!=null;
             int rows=cat?ActionNames.Length+CatCommonKeys.Length:Keys.Length;
             float listEnd=34+rows*17;GUI.Box(new Rect(10,10,340,listEnd-6),"");var style=new GUIStyle(GUI.skin.label){fontSize=12};
