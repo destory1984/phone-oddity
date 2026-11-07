@@ -3,7 +3,7 @@
   blender.exe -b --python tools/blender/retarget_cats.py -- extract --src SRC.glb --out LANDMARKS.json
   blender.exe -b --python tools/blender/retarget_cats.py -- somali  --src LANDMARKS.json --in somali_cat_lie.glb --out OUT.glb [--shots DIR] [--only a,b] [--frames name:f,f;name:f]
   blender.exe -b --python tools/blender/retarget_cats.py -- cartoon --src LANDMARKS.json --dir CATDIR --out OUT.glb [--shots DIR] [--only a,b]
-  blender.exe -b --python tools/blender/retarget_cats.py -- cat4    --src LANDMARKS.json --in cat4-2.glb --out cat4_shared.glb [--shots DIR] [--only a,b] [--frames name:f,f;name:f]
+  blender.exe -b --python tools/blender/retarget_cats.py -- cat4    --src LANDMARKS.json --in cat4-3.glb --out cat4_shared.glb [--shots DIR] [--only a,b] [--frames name:f,f;name:f]
 
 Stage 'extract' samples every clip of the white cat glb (30 fps) into a json: armature-space
 matrices of its 35 bones plus the floor clearances of its mesh (per paw, torso, whole body).
@@ -11,8 +11,8 @@ The target stages rebuild each pose from those landmarks: spine and tail by chor
 (rotation over the reference pose), head/ears/feet by world rotation deltas, legs by 2-bone IK
 (positions relative to shoulder/hip scaled by leg length), then a per-frame floor solve (pelvis
 height from the torso clearance, each paw from the source paw clearance times the scale).
-Stage 'cat4' (rigged striped tabby, bone names identical to the white cat, rest pose is a mid-stride walk, faces +X, left +Y)
-first builds a neutral standing reference from the white cat's Idle frame 0 (tail by chord directions, legs by IK with
+Stage 'cat4' (rigged striped tabby, bone names identical to the white cat, faces +X, left +Y). cat4-3 rests in a neutral stand and
+uses its own rest pose as the reference. With --legacy (cat4-2, rest pose a mid-stride walk) it first builds a neutral standing reference from the white cat's Idle frame 0 (tail by chord directions, legs by IK with
 the source knee poles, all four paws put on z = 0) and uses that as the reference pose; each leg has its own scale
 because the rig's left and right leg lengths differ.
 Everything is in-place. Coordinates: floor z = 0 for the source (faces -Y, left +X).
@@ -336,6 +336,7 @@ class Retarget:
                 basis, posed = t.solve(self.build_spec(fd, par)); t.apply(basis)
                 m = t.measure()
                 et = wt - m['trunk']; ep = {k: wp[k] - m['paw'][k] for k in wp}
+                if DEBUG: print('   ITER %d pz %.3f trunk %.3f want %.3f paws %s' % (it, par['pz'], m['trunk'], wt, {k: round(v, 3) for k, v in m['paw'].items()}))
                 if abs(et) < 0.002 and max(abs(v) for v in ep.values()) < 0.002: break
                 par['pz'] += et
                 for k, v in ep.items():
@@ -757,7 +758,7 @@ def stand_reference(tgt, SRC, C, legs, tail, front_back=0.0, shoulder_z=None, sp
     return tgt.capture()
 
 def stage_cat4():
-    SRC = Src(apath(arg('--src'))); IN = apath(arg('--in')); OUT = apath(arg('--out')); SHOTS = apath(arg('--shots'))
+    SRC = Src(apath(arg('--src'))); IN = apath(arg('--in', 'C:/_c/test1/blender_demo/output/cat4/cat4-3.glb')); LEGACY = '--legacy' in argv; OUT = apath(arg('--out')); SHOTS = apath(arg('--shots'))
     ONLY = arg('--only').split(',') if arg('--only') else None
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.ops.import_scene.gltf(filepath=IN)
@@ -766,6 +767,16 @@ def stage_cat4():
     for o in list(bpy.data.objects):        # a stray 42-vertex icosphere sits in the Sketchfab file
         if o.type == 'MESH' and o.name == 'Icosphere': bpy.data.objects.remove(o, do_unlink=True)
     meshes = [o for o in bpy.data.objects if o.type == 'MESH' and len(o.vertex_groups)]
+    # cat4-3 comes with parent empties that rotate the armature and mesh by 90 degrees about X (Y-up glTF root), which makes armature
+    # space Y-up while this script works Z-up (up = +Z, floor z): bake that rotation into bone rests and mesh data so world == armature space
+    if max(abs(x) for r in (arm.matrix_world - Matrix.Identity(4)) for x in r) > 1e-4:
+        bpy.ops.object.select_all(action='DESELECT')
+        for o in [arm] + meshes: o.select_set(True)
+        bpy.context.view_layer.objects.active = arm
+        bpy.ops.object.parent_clear(type='CLEAR_KEEP_TRANSFORM')
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+        bpy.context.view_layer.update()
+        print('BAKED object transforms; arm world is now identity:', max(abs(x) for r in (arm.matrix_world - Matrix.Identity(4)) for x in r) < 1e-4)
     arm.animation_data_create()
     C = Rz(90)          # source faces -Y and its left is +X; cat4 faces +X and its left is +Y
     tgt = Target(arm, meshes)
@@ -782,12 +793,16 @@ def stage_cat4():
                              src=('HindUpperLeg.' + sd, 'HindLowerLeg.' + sd, 'HindHock.' + sd),
                              chord=('HindHock.' + sd, 'HindHock.' + sd, 'HindPaw.' + sd),
                              foot_loc=('HindPaw.' + sd, 'HindHock.' + sd), rots={'HindPaw.' + sd: 'HindPaw.' + sd, 'HindToes.' + sd: 'HindToes.' + sd})
-    # the rig's left legs are longer than its right legs (front 0.383 vs 0.328, hind 0.421 vs 0.330 bone chain), so the left
-    # joints sit a little higher and the right ones a little lower; the legs then bend about equally
-    for sd, sg in (('L', 1.0), ('R', -1.0)):
-        legs['F'][sd]['up_dz'] = sg * float(os.environ.get('C4_FDZ', 0.03)); legs['H'][sd]['up_dz'] = sg * float(os.environ.get('C4_HDZ', 0.02))
     tail = ['Tail0%d' % i for i in range(1, 8)]
-    ref_m = stand_reference(tgt, SRC, C, legs, tail, front_back=float(os.environ.get('C4_FB', 0.08)), shoulder_z=float(os.environ.get('C4_HS', 0.385)), spine_level=float(os.environ.get('C4_SL', 1.0)), head_pitch=float(os.environ.get('C4_HP', 0.0)), hip_z=float(os.environ.get('C4_HZ', 0.382)), pelvis_lift=float(os.environ.get('C4_PL', 0.0)), foot_under=float(os.environ.get('C4_FU', 0.01)))   # the mesh's forelegs sit 0.08 ahead of their bones, so the paw targets move back
+    if LEGACY:      # cat4-2 only: mid-stride rest pose and uneven legs, so build a stand from the white cat's Idle frame 0
+        for sd, sg in (('L', 1.0), ('R', -1.0)):
+            legs['F'][sd]['up_dz'] = sg * float(os.environ.get('C4_FDZ', 0.03)); legs['H'][sd]['up_dz'] = sg * float(os.environ.get('C4_HDZ', 0.02))
+        ref_m = stand_reference(tgt, SRC, C, legs, tail, front_back=float(os.environ.get('C4_FB', 0.08)), shoulder_z=float(os.environ.get('C4_HS', 0.385)), spine_level=float(os.environ.get('C4_SL', 1.0)), head_pitch=float(os.environ.get('C4_HP', 0.0)), hip_z=float(os.environ.get('C4_HZ', 0.382)), pelvis_lift=float(os.environ.get('C4_PL', 0.0)), foot_under=float(os.environ.get('C4_FU', 0.01)))
+    else:           # cat4-3: the rig's own rest pose is a neutral stand (even legs, paws on z = 0), like the somali's Idle frame 0
+        arm.animation_data.action = None
+        for pb in arm.pose.bones: pb.rotation_mode = 'QUATERNION'
+        bpy.context.view_layer.update()
+        ref_m = tgt.capture()
     tgt.set_reference(ref_m)
     FLOOR = 0.0
     if DEBUG:
@@ -795,7 +810,7 @@ def stage_cat4():
             h = ref_m[n].translation; print('   REFPT %-16s %.3f %.3f %.3f' % (n, h.x, h.y, h.z))
         for n in ('Pelvis', 'Spine01', 'Spine02', 'Chest', 'Neck', 'Head', 'FrontUpperLeg.L', 'FrontPaw.L', 'HindUpperLeg.L', 'HindHock.L', 'HindPaw.L'):
             h = C @ SRC.ref['H'][n]; print('   SRCPT %-16s %.3f %.3f %.3f' % (n, h.x, h.y, h.z))
-    cfg = dict(C=C, floor=FLOOR, root='Root', rear=['Pelvis'], fwd=['Spine01', 'Spine02', 'Chest', 'Neck'], fwd_end='Head', head=['Head'],
+    cfg = dict(C=C, floor=FLOOR, root=('Root' if 'Root' in tgt.rhead else 'Pelvis'), rear=['Pelvis'], fwd=['Spine01', 'Spine02', 'Chest', 'Neck'], fwd_end='Head', head=['Head'],
                rots={'Ear.L': 'Ear.L', 'Ear.R': 'Ear.R'},
                tail=tail, tail_margin=0.07, legs=legs, pawkeys=['FL', 'FR', 'HL', 'HR'])
     rt = Retarget(tgt, SRC, cfg)

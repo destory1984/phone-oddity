@@ -132,7 +132,7 @@ namespace Oddity.RoomTest
                 var text=Environment.GetEnvironmentVariable("ODDITY_PLAYKEYS");scripted=!string.IsNullOrWhiteSpace(text);
                 if(scripted)foreach(var part in text.Split(',')){
                     var pair=part.Split(':');
-                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0]=="realtab" || pair[0]=="wait" || pair[0].StartsWith("click") || pair[0].StartsWith("view") || pair[0]=="wheelup" || pair[0]=="liftup" || pair[0]=="liftdown" || pair[0]=="swingleft" || pair[0]=="swingright" || pair[0]=="tiltup" || pair[0]=="tiltdown" || pair[0]=="wheeldown" || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
+                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0]=="realtab" || pair[0]=="wait" || pair[0].StartsWith("click") || pair[0].StartsWith("view") || pair[0]=="wheelup" || pair[0]=="liftup" || pair[0]=="liftdown" || pair[0]=="swingleft" || pair[0]=="swingright" || pair[0]=="tiltup" || pair[0]=="tiltdown" || (pair[0].StartsWith("shade") && pair[0].Length==6) || pair[0]=="wheeldown" || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
                     script.Add((pair[0],seconds));
                 }
                 Debug.Log("ROOMPLAY_READY model="+modelName);
@@ -160,6 +160,25 @@ namespace Oddity.RoomTest
             float w=80*Mathf.Tan(7.5f*Mathf.Deg2Rad)*16/9, h=w*tex.height/tex.width;
             q.localPosition=new Vector3(0,(tex.width*9f/32-tex.height/2f)/tex.height*h,40);
             q.localScale=new Vector3(w,h,1);
+        }
+        // Harin's MToon shade: the VRM's shade colours are about 98% of the lit colour and GI equalization is 0.9, so her face never darkens.
+        // ODDITY_SHADE=0..3 (script keys shade0..shade3) darkens it: shade = original x k (warm), GI equalization and shading shift as in the table; 0 = as imported
+        static readonly float[] ShadeK={1f,.85f,.72f,.6f}, ShadeGi={.9f,.7f,.5f,.3f}, ShadeShift={-.25f,-.15f,-.05f,0f};
+        int shadeWant=int.TryParse(Environment.GetEnvironmentVariable("ODDITY_SHADE"),out var sv)?Mathf.Clamp(sv,0,3):0,shadeHave=-1;GameObject shadeFor;
+        readonly Dictionary<Material,(Color shade,float gi,float shift)> shadeOrig=new Dictionary<Material,(Color,float,float)>();
+        void ShadeTick()
+        {
+            if(model==null || (shadeFor==model && shadeHave==shadeWant))return;
+            if(shadeFor!=model){shadeOrig.Clear();shadeFor=model;}
+            int n=0;
+            foreach(var r in model.GetComponentsInChildren<Renderer>(true))foreach(var m in r.materials){
+                if(m==null || !m.HasProperty("_ShadeColor"))continue;
+                if(!shadeOrig.TryGetValue(m,out var o)){o=(m.GetColor("_ShadeColor"),m.GetFloat("_GiEqualization"),m.GetFloat("_ShadingShiftFactor"));shadeOrig[m]=o;}
+                float k=ShadeK[shadeWant];var c=o.shade;
+                m.SetColor("_ShadeColor",shadeWant==0?c:new Color(c.r*k,c.g*k*.96f,c.b*k*.94f,c.a));
+                m.SetFloat("_GiEqualization",shadeWant==0?o.gi:ShadeGi[shadeWant]);
+                m.SetFloat("_ShadingShiftFactor",shadeWant==0?o.shift:ShadeShift[shadeWant]);n++;}
+            shadeHave=shadeWant;Debug.Log("ROOMPLAY_SHADE look="+shadeWant+" materials="+n);
         }
         void LoadModel(string path)
         {
@@ -2214,6 +2233,7 @@ namespace Oddity.RoomTest
             if(key=="realtab"){StartCoroutine(RealTab());return;}
             if(key.StartsWith("click")){ScriptClick(key);return;}
             if(key.StartsWith("view")){AptForce(key.Substring(4));return;} // script only: a room's camera by name (viewkitchen), viewauto goes back to following the character
+            if(key.Length==6 && key.StartsWith("shade") && char.IsDigit(key[5])){shadeWant=Mathf.Clamp(key[5]-'0',0,3);return;} // script only: Harin's shade look
             if(key=="tiltup"||key=="tiltdown"){TiltNotchBy(key=="tiltup"?1:-1);return;} // Alt + wheel, one notch per script step
             if(key=="swingleft"||key=="swingright"){SwingNotchBy(key=="swingleft"?1:-1);return;} // Shift + wheel, one notch per script step
             if(key=="liftup"||key=="liftdown"){LiftNotchBy(key=="liftup"?1:-1);return;} // Ctrl + wheel, one notch per script step
@@ -2343,6 +2363,7 @@ namespace Oddity.RoomTest
             TabPoll();
             PetsTick(Mathf.Min(Time.unscaledDeltaTime,.05f));
             if(statue!=null && !busy){StatueUpdate(Mathf.Min(Time.unscaledDeltaTime,.05f));return;}
+            ShadeTick();
             if(model==null || busy || reviewing)return;float dt=Mathf.Min(Time.unscaledDeltaTime,.05f);var input=Vector2.zero;bool run=false;float zoomKey=0;
             turning=0;
             if(scripted){
