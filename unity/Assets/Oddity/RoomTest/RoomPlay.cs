@@ -293,6 +293,7 @@ namespace Oddity.RoomTest
             public AudioSource shot,purr;
             public int loopCount;public float walkStart,idleTime,nextSoft,purrTarget;public bool purrOn;
             public Perch perch,jobPerch;public string chainNext,jobChain;public float hopWait;public bool auto; // perch: a high place it sits on now (null: floor or sofa); chain: counter first, then the fridge
+            public List<Vector2> path;public int pathI;public Vector2? pathGoal;public Vector2 pathHarin;public bool replanned; // the planned walk to goal (FloorPath): waypoints, next one, the goal it was made for, where Harin was, whether the stuck replan is used
             public float surf;public SkinnedMeshRenderer[] smrs;public bool[][] tailMask;public Mesh bake;public string gapKey=""; // surf: height of the surface it rests on (floor 0); the rest of these measure its lowest vertex
             public bool aiPaused;public float resumeIn;public int aiPhase;public string aiAct="",aiLast="",aiPlace="";public float aiT,aiDur,aiGo;public int aiReps,aiLastClip=-1;public Vector2 aiTarget;public bool aiHasTarget;
             public bool Idleish=>index==0 || (somali && (index==3 || index==6 || index==9 || (white && index==12)));
@@ -610,18 +611,49 @@ namespace Oddity.RoomTest
             Notice("고양이에게 없는 동작");
         }
         Vector2 SofaStand(Transform mark,Vector3 front){var s=mark.position+front*.7f;return NearestFree(new Vector2(s.x,s.z));}
+        // the nearest spot that is out of the footprints and in the room's main open area (not a sealed pocket such as the strip between a chair and the wall)
         Vector2 NearestFree(Vector2 p)
         {
             p=new Vector2(Mathf.Clamp(p.x,-Limit,Limit),Mathf.Clamp(p.y,ZNear,ZFar));
-            if(!Blocked(p))return p;
+            var fp=Plan();
+            if(!Blocked(p) && fp.InMainArea(p))return p;
             for(float r=.05f;r<=2.5f;r+=.05f)for(int a=0;a<360;a+=15){
                 var q=p+new Vector2(Mathf.Cos(a*Mathf.Deg2Rad),Mathf.Sin(a*Mathf.Deg2Rad))*r;q=new Vector2(Mathf.Clamp(q.x,-Limit,Limit),Mathf.Clamp(q.y,ZNear,ZFar));
-                if(!Blocked(q))return q;}
+                if(!Blocked(q) && fp.InMainArea(q))return q;}
             return p;
+        }
+        // the walk to p.goal around the furniture: FloorPath on the floor box and the blockers Collide uses, Harin a 0.35 m circle for the cats.
+        // A goal inside a blocker snaps to the nearest free point (within 0.6 m); an unreachable one is dropped (a cat picks another activity)
+        const float HarinAvoid=.35f;
+        FloorPath floorPlan;Vector4 floorPlanKey;
+        FloorPath Plan()
+        {
+            var key=new Vector4(Limit,ZNear,ZFar,blockers.Count);
+            if(floorPlan==null || key!=floorPlanKey){floorPlan=new FloorPath(-Limit,Limit,ZNear,ZFar,blockers);floorPlanKey=key;}
+            return floorPlan;
+        }
+        static string Who(Pet p)=>p.white?"white":p.somali?"somali":"cat";
+        string PathLog(string who,Vector2 from,Vector2 to,List<Vector2> path)
+            =>"ROOMPLAY_PATH who="+who+" from=("+F(from.x)+","+F(from.y)+") to=("+F(to.x)+","+F(to.y)+") len="+F(path!=null?FloorPath.Length(path):0)+" straight="+F((to-from).magnitude)+" points="+(path!=null?path.Count:0);
+        void PetPlan(Pet p,bool again)
+        {
+            var from=PetXZ(p);var goal=p.goal.Value;var hp=new Vector2(x,z);
+            var path=Plan().Find(from,goal,out bool snapped,hp,HarinAvoid);
+            p.pathHarin=hp;
+            if(path==null){
+                Debug.Log(PathLog(Who(p),from,goal,null)+" unreachable");
+                p.goal=null;p.path=null;p.pathGoal=null;p.chainNext=null;
+                if(p.auto){p.aiLast=p.aiAct;p.aiPhase=0;p.aiHasTarget=false;Debug.Log("ROOMPLAY_"+p.tag+" ai=pick-again "+p.aiAct+" unreachable");}
+                else Notice("갈 수 없는 곳");
+                return;
+            }
+            if(snapped){p.goal=path[path.Count-1];Debug.Log(PathLog(Who(p),from,goal,path)+" snapped to=("+F(p.goal.Value.x)+","+F(p.goal.Value.y)+")");}
+            p.pathGoal=p.goal;p.path=path;p.pathI=path.Count>1?1:0;
+            Debug.Log(PathLog(Who(p),from,p.goal.Value,path)+(again?" replan":""));
         }
         void PetGoTo(Pet p,string kind,Vector2 goal,Transform seat,Vector2 look,string logKind=null)
         {
-            p.goal=goal;p.goalKind=kind;p.goalSeat=seat;p.goalLook=look;p.stuck=0;p.faceTo=float.NaN;p.chainNext=null;p.arriveRest=0;
+            p.pathGoal=null;p.replanned=false;p.goal=goal;p.goalKind=kind;p.goalSeat=seat;p.goalLook=look;p.stuck=0;p.faceTo=float.NaN;p.chainNext=null;p.arriveRest=0;
             Debug.Log("ROOMPLAY_"+p.tag+" goto="+(logKind??kind)+" at=("+F(goal.x)+","+F(goal.y)+")");
         }
         // to a perch (counter, table, fridge, sill): walk to its floor spot and hop up; the fridge goes by the counter. Already on a perch the hop is direct
@@ -794,14 +826,28 @@ namespace Oddity.RoomTest
             var from=new Vector2(p.root.position.x,p.root.position.z);
             var wish=input.normalized;float pace=run?p.runSpd:p.walkSpd;float reach=float.MaxValue;
             if(keys){var fw=Vector3.ProjectOnPlane(cameraView.transform.forward,Vector3.up).normalized;var rt=new Vector3(fw.z,0,-fw.x);var w3=rt*wish.x+fw*wish.y;wish=new Vector2(w3.x,w3.z).normalized;}
-            else if(p.goal.HasValue){var d=p.goal.Value-from;wish=d.normalized;pace=auto?p.aiSpd:p.walkSpd;run=false;reach=d.magnitude;}
+            bool lastLeg=true;
+            if(!keys && p.goal.HasValue){
+                if(!p.pathGoal.HasValue || p.pathGoal.Value!=p.goal.Value)PetPlan(p,false);
+                else if(p.path!=null && (new Vector2(x,z)-p.pathHarin).magnitude>.3f)PetPlan(p,true); // Harin moved: the cat goes around her again
+            }
+            if(!keys && p.goal.HasValue){
+                var tgt=p.goal.Value;
+                if(p.path!=null && p.path.Count>0){
+                    p.pathI=Mathf.Clamp(p.pathI,0,p.path.Count-1);
+                    while(p.pathI<p.path.Count-1 && (p.path[p.pathI]-from).sqrMagnitude<.0025f)p.pathI++;
+                    tgt=p.path[p.pathI];lastLeg=p.pathI==p.path.Count-1;if(lastLeg)tgt=p.goal.Value;}
+                var d=tgt-from;wish=d.normalized;pace=auto?p.aiSpd:p.walkSpd;run=false;reach=d.magnitude;
+            }
             float stepLen=Mathf.Min(pace*dt,reach);
             var next=Collide(from,new Vector2(Mathf.Clamp(from.x+wish.x*stepLen,-Limit-.1f,Limit+.1f),Mathf.Clamp(from.y+wish.y*stepLen,ZNear-.1f,ZFar+.1f)));
             bool moving=wish!=Vector2.zero && (next-from).sqrMagnitude>1e-10f;
             bool arrived=false;
             if(p.goal.HasValue){
                 if(!moving)p.stuck+=dt;else p.stuck=0;
-                if(reach<ClickArrive || p.stuck>ClickGiveUp){arrived=true;moving=false;}
+                bool canReplan=p.path!=null && !p.replanned;
+                if(p.stuck>1f && canReplan){p.replanned=true;p.stuck=0;PetPlan(p,true);} // blocked for 1 s: one replan
+                else if((lastLeg && reach<ClickArrive) || (p.stuck>ClickGiveUp && !canReplan)){arrived=true;moving=false;}
             }
             if(moving){p.heading=Mathf.LerpAngle(p.heading,Mathf.Atan2(wish.x,wish.y)*Mathf.Rad2Deg,1-Mathf.Exp(-12*dt));p.faceTo=float.NaN;
                 p.root.position=new Vector3(next.x,p.root.position.y,next.y);}
@@ -1144,6 +1190,7 @@ namespace Oddity.RoomTest
         // on the floor she walks there. any walk key cancels. scripts: clicksofa, clicktable, clickfloor (a fixed point in the open)
         Transform tableRoot;readonly List<Collider> clickHits=new List<Collider>();
         Vector2? clickGoal;Transform clickSeat;float clickStuck;bool clickWindow;
+        List<Vector2> hPath;int hPathI;Vector2? hPathGoal;bool hReplanned; // her planned walk to clickGoal (FloorPath)
         // a click on the window walks her to the floor in front of it (between the bedroom door and the sofa) and she looks out
         static readonly Vector2 WindowSpot=new Vector2(-1.45f,.55f);
         static bool InWindow(Vector3 p)=>p.z>WinZ.x-.06f && p.z<WinZ.y+.06f && p.y>WinY.x-.06f && p.y<WinY.y+.06f;
@@ -1169,7 +1216,17 @@ namespace Oddity.RoomTest
                 if(!new Plane(Vector3.up,Vector3.zero).Raycast(ray,out var d))return;var p=ray.GetPoint(d);
                 clickWindow=false;clickSeat=null;clickGoal=new Vector2(Mathf.Clamp(p.x,-Limit,Limit),Mathf.Clamp(p.z,ZNear,ZFar));Notice("클릭 바닥 "+F(p.x)+","+F(p.z));
             }
-            clickStuck=0;
+            clickStuck=0;hPathGoal=null;hReplanned=false;
+        }
+        // her walk to clickGoal around the furniture; a goal inside a blocker snaps, an unreachable one is dropped with a notice
+        void HarinPlan(bool again)
+        {
+            var from=new Vector2(x,z);var goal=clickGoal.Value;
+            var path=Plan().Find(from,goal,out bool snapped);
+            if(path==null){Debug.Log(PathLog("harin",from,goal,null)+" unreachable");clickGoal=null;clickSeat=null;clickWindow=false;hPath=null;hPathGoal=null;Notice("갈 수 없는 곳");return;}
+            if(snapped){clickGoal=path[path.Count-1];Debug.Log(PathLog("harin",from,goal,path)+" snapped to=("+F(clickGoal.Value.x)+","+F(clickGoal.Value.y)+")");}
+            hPath=path;hPathI=path.Count>1?1:0;hPathGoal=clickGoal;
+            Debug.Log(PathLog("harin",from,clickGoal.Value,path)+(again?" replan":""));
         }
         // a world direction to walk this frame toward the click goal, or zero; arriving at a seat sits on it
         Vector2 ClickStep(float dt)
@@ -1177,10 +1234,19 @@ namespace Oddity.RoomTest
             if(!clickGoal.HasValue)return Vector2.zero;
             if(chairSat!=null){if(chairSat.mark==clickSeat){clickGoal=null;clickSeat=null;}else StartChairStand(-1);return Vector2.zero;} // off the dining chair first
             if(clickSeat!=null && clickSeat.root!=sofa){var seat=clickSeat;clickGoal=null;clickSeat=null;direction=0;Sit(SitIndex,false,seat);return Vector2.zero;} // the chair steps walk her there themselves
-            var p=new Vector2(x,z);var d=clickGoal.Value-p;
+            var p=new Vector2(x,z);
+            if(!hPathGoal.HasValue || hPathGoal.Value!=clickGoal.Value){HarinPlan(false);if(!clickGoal.HasValue)return Vector2.zero;}
+            var tgt=clickGoal.Value;bool lastLeg=true;
+            if(hPath!=null && hPath.Count>0){
+                hPathI=Mathf.Clamp(hPathI,0,hPath.Count-1);
+                while(hPathI<hPath.Count-1 && (hPath[hPathI]-p).sqrMagnitude<.0025f)hPathI++;
+                lastLeg=hPathI==hPath.Count-1;tgt=lastLeg?clickGoal.Value:hPath[hPathI];}
+            var d=tgt-p;
             var next=Collide(p,p+d.normalized*Mathf.Min(speed*dt,d.magnitude));
             if((next-p).sqrMagnitude<1e-10f)clickStuck+=dt;else clickStuck=0;
-            if(d.magnitude<ClickArrive || clickStuck>ClickGiveUp){
+            bool canReplan=hPath!=null && !hReplanned;
+            if(canReplan && clickStuck>1f){hReplanned=true;clickStuck=0;HarinPlan(true);return Vector2.zero;} // blocked for 1 s: one replan
+            if((lastLeg && d.magnitude<ClickArrive) || (clickStuck>ClickGiveUp && !canReplan)){ // (a path that has not been replanned only gives up after the replan, above)
                 var seat=clickSeat;bool window=clickWindow;clickGoal=null;clickSeat=null;clickWindow=false;direction=0;
                 if(seat!=null)Sit(SitIndex,false,seat);
                 else if(window){Select(9);Turn(-90);heading=-90;Notice("창밖 바라보기");} // faces out of the window, the left wall
@@ -1191,8 +1257,15 @@ namespace Oddity.RoomTest
         }
         void ScriptClick(string key)
         {
-            Vector3 target=key=="clickwindow"?new Vector3(-RoomHalf,(WinY.x+WinY.y)/2,(WinZ.x+WinZ.y)/2):key=="clicksofa"&&sofa!=null?SeatOf("SeatL",sofa):key=="clicktable"&&tableRoot!=null?tableRoot.position+Vector3.up*.7f:key=="clickcounter"?new Vector3(1.17f,.86f,1.5f):key=="clickfridge"?new Vector3(1.7f,1.2f,1.5f):key=="clicksill"?new Vector3(-1.85f,.85f,.2f):new Vector3(.9f,0,.9f);
+            Vector3 target=key=="clickwindow"?new Vector3(-RoomHalf,(WinY.x+WinY.y)/2,(WinZ.x+WinZ.y)/2):key=="clicksofa"&&sofa!=null?SeatOf("SeatL",sofa):key=="clicktable"&&tableRoot!=null?tableRoot.position+Vector3.up*.7f:key=="clickcounter"?new Vector3(1.17f,.86f,1.5f):key=="clickfridge"?new Vector3(1.7f,1.2f,1.5f):key=="clicksill"?new Vector3(-1.85f,.85f,.2f):ScriptFloorPoint();
             ClickAt(new Ray(cameraView.transform.position,target-cameraView.transform.position));
+        }
+        // clickfloor's fixed point (.9, .9); ODDITY_CLICKXZ="x,z" picks another one for a path test
+        static Vector3 ScriptFloorPoint()
+        {
+            var v=Environment.GetEnvironmentVariable("ODDITY_CLICKXZ");
+            if(!string.IsNullOrWhiteSpace(v)){var q=v.Split(',');if(q.Length==2 && float.TryParse(q[0],NumberStyles.Float,CultureInfo.InvariantCulture,out var cx) && float.TryParse(q[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var cz))return new Vector3(cx,0,cz);}
+            return new Vector3(.9f,0,.9f);
         }
         Vector3 SeatOf(string name,Transform root){var t=seats.FirstOrDefault(s=>s.mark.root==root && s.mark.name==name).mark;return t!=null?t.position:root.position;}
         // furniture footprints on the floor (world boxes of each prop's meshes), grown by her body radius; walking into one slides along its side
@@ -1200,7 +1273,7 @@ namespace Oddity.RoomTest
         const float BodyRadius=.2f;
         void Blockers()
         {
-            blockers.Clear();
+            blockers.Clear();floorPlan=null;
             var props=new List<Transform>();if(sofa!=null)props.Add(sofa);
             props.AddRange(FindObjectsByType<Transform>(FindObjectsSortMode.None).Where(t=>t.parent==null && (t.name.StartsWith("table-") || t.name.StartsWith("Chair"))));
             foreach(var t in props.Distinct()){
@@ -1780,7 +1853,7 @@ namespace Oddity.RoomTest
         void ToggleCatSfx()
         {
             catSfxOn=!catSfxOn;
-            if(PetEnv("ODDITY_CATSFX")==null)EditorPrefs.SetBool(CatSfxPref,catSfxOn);
+            if(PetEnv("ODDITY_CATSFX")==null && !scripted)EditorPrefs.SetBool(CatSfxPref,catSfxOn); // a scripted run never changes the user's saved choice
             foreach(var p in pets){
                 if(p.shot!=null && !catSfxOn)p.shot.Stop();
                 if(p.purr!=null && !catSfxOn){p.purr.Stop();p.purr.volume=0;}
