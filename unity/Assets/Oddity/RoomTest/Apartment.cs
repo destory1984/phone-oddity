@@ -83,9 +83,10 @@ namespace Oddity.RoomTest
         };
 
         // ---- the glb props' places (the sofa against the west wall facing east, the dining table on the kitchen's west wall with its two chairs along the wall)
+        public const float TeaX0 = 1.96f, TeaX1 = 2.46f, TeaZ0 = 2.72f, TeaZ1 = 3.62f; // the tea table in front of the sofa (sofa front at x 0.82)
         public static readonly Vector3 SofaAt = new Vector3(.425f, 0, 3.17f), TableAt = new Vector3(2.69f, 0, 7.05f);
         public static readonly Vector3 SofaFace = Vector3.right, TableFace = Vector3.forward;
-        public static readonly Vector2 HarinStart = new Vector2(2.2f, 3.0f), SomaliStart = new Vector2(1.7f, 4.1f), WhiteStart = new Vector2(3.1f, 2.15f), TabbyStart = new Vector2(3.4f, 4.3f);
+        public static readonly Vector2 HarinStart = new Vector2(3.05f, 3.0f), SomaliStart = new Vector2(1.7f, 4.1f), WhiteStart = new Vector2(3.1f, 2.15f), TabbyStart = new Vector2(3.4f, 4.3f);
         public static readonly Vector2 WindowSpot = new Vector2(1.15f, 1.95f), WindowLook = new Vector2(1.15f, 1.3f); // the floor in front of the sill, and what Harin faces there
         public const float WindowYaw = 180;
         public static readonly Vector3 SunThrough = new Vector3(2.2f, 1.5f, -.1f), SunOnto = new Vector3(.45f, .45f, 3.17f); // the balcony window's middle to the sofa seat
@@ -122,7 +123,14 @@ namespace Oddity.RoomTest
                 Fb("tv_foot",4.28f,4.36f,.40f,.44f,3.05f,3.25f,dark),
                 Fb("lamp_base",.15f,.35f,0,.03f,4.15f,4.35f,dark,true),
                 Fb("lamp_pole",.24f,.26f,.03f,1.45f,4.24f,4.26f,dark),
-                Fb("rug",1.25f,2.85f,0,.006f,2.45f,3.9f,new Color(.82f,.76f,.66f)),
+                Fb("rug",1.35f,3.05f,0,.006f,2.45f,3.9f,new Color(.82f,.76f,.66f)),
+                // living: the tea table in front of the sofa (0.90 long along z x 0.50 deep, top at 0.40 m, only the top blocks and is a cat perch)
+                Fb("teatable_top",TeaX0,TeaX1,.37f,.40f,TeaZ0,TeaZ1,oak,true,"teatable"),
+                Fb("teatable_leg1",TeaX0+.03f,TeaX0+.07f,0,.37f,TeaZ0+.03f,TeaZ0+.07f,oak),
+                Fb("teatable_leg2",TeaX1-.07f,TeaX1-.03f,0,.37f,TeaZ0+.03f,TeaZ0+.07f,oak),
+                Fb("teatable_leg3",TeaX0+.03f,TeaX0+.07f,0,.37f,TeaZ1-.07f,TeaZ1-.03f,oak),
+                Fb("teatable_leg4",TeaX1-.07f,TeaX1-.03f,0,.37f,TeaZ1-.07f,TeaZ1-.03f,oak),
+                // balcony: wood deck tiles (4 rows of 5, two tones), a drying rack with hung towels and shirts, a laundry basket and detergent by the washer, a 2-tier plant shelf, a camp chair with a side table and a mug
                 // the living room's deep sill (a bench 0.30 deep, top at the window's bottom edge) and the balcony's window ledge, both for cats
                 Fb("sill",SillX0,SillX1,0,SillTop,1.30f,1.60f,Trim,true,"sill"),
                 Fb("ledge",.3f,1.4f,0,.9f,0,.30f,Trim,true,"ledge"),
@@ -130,6 +138,28 @@ namespace Oddity.RoomTest
                 Fb("washer",3.78f,X1,0,.85f,.30f,.90f,white,true),
                 Fb("washer_door",3.76f,3.78f,.2f,.6f,.45f,.75f,new Color(.55f,.58f,.62f)),
             };
+            for (int row = 0; row < 4; row++) for (int i = 0; i < 5; i++)
+            {
+                float dx0 = i * X1 / 5 + .005f, dx1 = (i + 1) * X1 / 5 - .005f, dz0 = row * .30f + .005f, dz1 = (row + 1) * .30f - .005f;
+                l.Add(Fb("deck", dx0, dx1, 0, .012f, dz0, dz1, (row + i) % 2 == 0 ? new Color(.66f, .50f, .34f) : new Color(.58f, .43f, .29f)));
+            }
+            Color metal = new Color(.78f, .79f, .80f), towelA = new Color(.85f, .35f, .35f), towelB = new Color(.35f, .55f, .80f), shirt = new Color(.92f, .90f, .80f), green = new Color(.55f, .75f, .90f);
+            // drying rack x 2.6..3.3, z .10..0.45, 1.45 high: two end frames, a top bar, hung cloth
+            l.Add(Fb("rack_frame1", 2.60f, 2.63f, 0, 1.45f, .10f, .45f, metal)); l.Add(Fb("rack_frame2", 3.27f, 3.30f, 0, 1.45f, .10f, .45f, metal));
+            l.Add(Fb("rack_bar", 2.60f, 3.30f, 1.42f, 1.45f, .26f, .29f, metal, true)); l.Add(Fb("rack_base", 2.60f, 3.30f, 0, .03f, .26f, .29f, metal));
+            l.Add(Fb("towel1", 2.66f, 2.84f, .85f, 1.42f, .22f, .24f, towelA)); l.Add(Fb("towel2", 2.88f, 3.04f, 1.0f, 1.42f, .30f, .32f, towelB));
+            l.Add(Fb("shirt1", 3.08f, 3.24f, .90f, 1.42f, .22f, .24f, shirt)); l.Add(Fb("shirt2", 2.86f, 2.98f, .75f, 1.42f, .22f, .24f, green));
+            l.Add(Fb("rack_block", 2.60f, 3.30f, 0, .05f, .10f, .45f, metal, true));
+            l.Add(Fb("basket", 3.40f, 3.72f, 0, .40f, .30f, .62f, new Color(.80f, .72f, .55f), true)); l.Add(Fb("basket_cloth", 3.43f, 3.69f, .40f, .44f, .33f, .59f, towelB));
+            l.Add(Fb("detergent", 4.00f, 4.12f, .85f, 1.08f, .38f, .48f, new Color(.25f, .50f, .85f))); l.Add(Fb("detergent_cap", 4.03f, 4.09f, 1.08f, 1.12f, .41f, .45f, white));
+            // plant shelf on the west wall, x .02..0.32, z .35..0.85: posts, tiers at 0.35 and 0.75
+            l.Add(Fb("pshelf_t1", .02f, .32f, .33f, .36f, .35f, .85f, Trim, true)); l.Add(Fb("pshelf_t2", .02f, .32f, .73f, .76f, .35f, .85f, Trim));
+            l.Add(Fb("pshelf_p1", .03f, .06f, 0, .9f, .36f, .39f, Trim)); l.Add(Fb("pshelf_p2", .28f, .31f, 0, .9f, .81f, .84f, Trim));
+            // camp chair (x 1.75..2.15, z .45..0.85, seat 0.30, back 0.55) and side table (x 1.45..1.68, z .52..0.75, 0.40 high) with a mug
+            l.Add(Fb("chair_seat", 1.75f, 2.15f, .28f, .31f, .45f, .85f, new Color(.30f, .45f, .35f), true)); l.Add(Fb("chair_back", 1.75f, 1.79f, .31f, .55f, .45f, .85f, new Color(.30f, .45f, .35f)));
+            l.Add(Fb("chair_leg1", 1.77f, 1.80f, 0, .28f, .47f, .50f, metal)); l.Add(Fb("chair_leg2", 2.10f, 2.13f, 0, .28f, .47f, .50f, metal)); l.Add(Fb("chair_leg3", 1.77f, 1.80f, 0, .28f, .80f, .83f, metal)); l.Add(Fb("chair_leg4", 2.10f, 2.13f, 0, .28f, .80f, .83f, metal));
+            l.Add(Fb("sidetable", 1.45f, 1.68f, .37f, .40f, .52f, .75f, oak, true)); l.Add(Fb("sidetable_leg", 1.55f, 1.58f, 0, .37f, .62f, .65f, oak));
+            l.Add(Fb("mug", 1.53f, 1.60f, .40f, .47f, .60f, .67f, new Color(.90f, .55f, .30f)));
             return l;
         }
 
@@ -312,6 +342,15 @@ namespace Oddity.RoomTest
             Part(fr, PrimitiveType.Cylinder, new Vector3(.25f, 1.52f, 4.25f), new Vector3(.30f, .11f, .30f), new Color(.95f, .90f, .80f));
             Part(fr, PrimitiveType.Cylinder, new Vector3(.40f, .17f, 1.62f), new Vector3(.28f, .17f, .28f), new Color(.80f, .78f, .74f)); furnitureOut.Add(Rect.MinMaxRect(.26f, 1.48f, .54f, 1.76f));
             foreach (var (dx, dy, dz, k) in new[] { (0f, .62f, 0f, .46f), (.08f, .82f, -.06f, .34f), (-.07f, .76f, .07f, .32f) }) Part(fr, PrimitiveType.Sphere, new Vector3(.40f + dx, dy, 1.62f + dz), Vector3.one * k, new Color(.30f, .48f, .28f));
+            // balcony pots (cylinder pot + sphere leaves): a big one in the north-west corner, two on the shelf tiers, a small one by the rack, and one hanging from the ceiling
+            void Pot(float px, float py, float pz, float r, float h, float leaf, bool blocks)
+            {
+                Part(fr, PrimitiveType.Cylinder, new Vector3(px, py + h / 2, pz), new Vector3(r * 2, h / 2, r * 2), new Color(.72f, .42f, .30f));
+                Part(fr, PrimitiveType.Sphere, new Vector3(px, py + h + leaf * .35f, pz), Vector3.one * leaf, new Color(.28f + leaf * .1f, .52f, .30f));
+                if (blocks) furnitureOut.Add(Rect.MinMaxRect(px - r, pz - r, px + r, pz + r));
+            }
+            Pot(.22f, 0, 1.05f, .16f, .34f, .55f, true); Pot(.17f, .36f, .55f, .08f, .13f, .24f, false); Pot(.17f, .76f, .70f, .07f, .11f, .22f, false); Pot(2.40f, 0, .17f, .09f, .20f, .26f, true);
+            Part(fr, PrimitiveType.Cylinder, new Vector3(3.05f, 1.96f, 1.0f), new Vector3(.005f, .12f, .005f), Alu); Pot(3.05f, 1.62f, 1.0f, .09f, .12f, .30f, false);
             var drum = Part(fr, PrimitiveType.Cylinder, new Vector3(3.76f, .42f, .60f), new Vector3(.34f, .01f, .34f), new Color(.45f, .48f, .52f)); drum.transform.localRotation = Quaternion.Euler(0, 0, 90);
             var view = new View(rooms, doors, pieces);
             var wallRenderers = new HashSet<Renderer>(pieces.Select(q => q.r));

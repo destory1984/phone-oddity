@@ -231,6 +231,7 @@ class Retarget:
         self.ref_m = None
         self.pk2leg = {k: k for k in ('FL', 'FR', 'HL', 'HR')}
         self.kf = self.kh = None
+        self.clip = None
         # leg scales from the reference poses
         def dist(a, b): return (t.rhead[a] - t.rhead[b]).length
         L = cfg['legs']
@@ -331,11 +332,13 @@ class Retarget:
         par = {'sf': 1.0, 'sr': 1.0, 'pz': kb * (fd['H']['Pelvis'].z - ref['H']['Pelvis'].z), 'pawdz': {k: 0.0 for k in self.cfg['pawkeys']}}
         wt = max(fl, rm['trunk'] + kb * (fd['torso'] - ref['torso']))
         wp = {k: (fl if fd['paw'][k] < 0.03 else max(fl, rm['paw'][k] + kb * (fd['paw'][k] - ref['paw'][k]))) for k in rm['paw']}   # a source paw within 0.03 of the floor is planted
+        pd = self.clip in self.cfg.get('pelvis_driven', ())
         def inner(par, iters=10):
             for it in range(iters):
                 basis, posed = t.solve(self.build_spec(fd, par)); t.apply(basis)
                 m = t.measure()
                 et = wt - m['trunk']; ep = {k: wp[k] - m['paw'][k] for k in wp}
+                if pd: et = max(0.0, fl + 0.03 - m['trunk'])      # pelvis follows the source pelvis; the trunk only has to stay off the floor
                 if DEBUG: print('   ITER %d pz %.3f trunk %.3f want %.3f paws %s' % (it, par['pz'], m['trunk'], wt, {k: round(v, 3) for k, v in m['paw'].items()}))
                 if abs(et) < 0.002 and max(abs(v) for v in ep.values()) < 0.002: break
                 par['pz'] += et
@@ -358,6 +361,9 @@ class Retarget:
                 if self.fl[kind] < 0.01: lo = mid
                 else: hi = mid
             par[key] = lo; basis = inner(par)
+        if DEBUG:
+            zz = t.verts()[:, 2]; ii = np.where(t.M_trunk)[0][np.argmin(zz[t.M_trunk])]
+            print('   TRUNKMIN group %s z %.3f pelvis z %.3f' % (t.dom[ii], zz[ii], t.arm.pose.bones['Pelvis'].head.z))
         if DEBUG: print('   WANT trunk %.3f paws %s srcpaw %s refpaw %s' % (wt-fl, {k: round(v-fl,3) for k,v in wp.items()}, {k: round(v,3) for k,v in fd['paw'].items()}, {k: round(v,3) for k,v in ref['paw'].items()})); print('   FRAME sf %.2f sr %.2f fl %s pz %.3f pawdz %s clamped %s' % (par['sf'], par['sr'], {k: round(v, 3) for k, v in self.fl.items()}, par['pz'], {k: round(v, 3) for k, v in par['pawdz'].items()}, self.clamped))
         # never sink: the lowest body vertex must not go below the floor
         m = t.measure()
@@ -420,7 +426,7 @@ def build_clips(rt, shots, only, frames_arg, cam):
         prev = None; rf = want.get(cn, default_frames(cn, nf)) if shots else []
         t.over = 0.0; worst = 0.0
         for k in range(nf + 1):
-            fd = rt.S.clips[cn][k]
+            fd = rt.S.clips[cn][k]; rt.clip = cn
             basis, par = rt.solve_frame(fd)
             for n in t.order:
                 l, q = basis[n]; q = q.copy()
@@ -812,7 +818,8 @@ def stage_cat4():
             h = C @ SRC.ref['H'][n]; print('   SRCPT %-16s %.3f %.3f %.3f' % (n, h.x, h.y, h.z))
     cfg = dict(C=C, floor=FLOOR, root=('Root' if 'Root' in tgt.rhead else 'Pelvis'), rear=['Pelvis'], fwd=['Spine01', 'Spine02', 'Chest', 'Neck'], fwd_end='Head', head=['Head'],
                rots={'Ear.L': 'Ear.L', 'Ear.R': 'Ear.R'},
-               tail=tail, tail_margin=0.07, legs=legs, pawkeys=['FL', 'FR', 'HL', 'HR'])
+               tail=tail, tail_margin=0.07, legs=legs, pawkeys=['FL', 'FR', 'HL', 'HR'],
+               pelvis_driven=('Walk',) if '--no-pelvis-fix' not in argv else ())
     rt = Retarget(tgt, SRC, cfg)
     print("LEGSCALE", {k: round(v, 3) for k, v in rt.kl.items()})
     basis, _ = tgt.solve({'loc': {}, 'abs': {}}); tgt.apply(basis)

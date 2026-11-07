@@ -95,7 +95,7 @@ namespace Oddity.RoomTest.Tests
         public void FloorPath_ApartmentEntranceToBalconyGoesThroughTheDoorGaps()
         {
             var fp = Flat();
-            var p = fp.Find(new Vector2(3.5f, 9.6f), new Vector2(2.6f, .6f), out var snapped);
+            var p = fp.Find(new Vector2(3.5f, 9.6f), new Vector2(2.7f, .85f), out var snapped);
             Assert.NotNull(p, "no path from the entrance to the balcony");
             Assert.IsFalse(snapped);
             var arch = CrossAt(p, 0, 8.90f); var slider = CrossAt(p, 0, 5.09f); var glass = CrossAt(p, 0, 1.25f);
@@ -122,6 +122,23 @@ namespace Oddity.RoomTest.Tests
             var bath = fp.Find(new Vector2(3.4f, 5.8f), new Vector2(1.5f, 6.2f), out _);
             Assert.NotNull(bath, "no path to the bath");
             Assert.That(CrossAt(bath, 1, 2.26f).Value, Is.InRange(Apartment.BathDoorA, Apartment.BathDoorB));
+        }
+
+        [Test]
+        public void FloorPath_TeaTableBlocksWalking()
+        {
+            var fp = Flat();
+            float mz = (Apartment.TeaZ0 + Apartment.TeaZ1) / 2;
+            // a goal on the table top is not free and snaps out to the floor beside it
+            Assert.IsFalse(fp.Free(new Vector2((Apartment.TeaX0 + Apartment.TeaX1) / 2, mz)));
+            // the straight line from sofa side to the far side of the table is longer than the direct one
+            var from = new Vector2(Apartment.TeaX0 - .45f, mz); var to = new Vector2(Apartment.TeaX1 + .45f, mz);
+            var p = fp.Find(from, to, out _);
+            Assert.NotNull(p);
+            Assert.Greater(FloorPath.Length(p), Vector2.Distance(from, to) + .3f, "walks straight through the tea table");
+            // the balcony slider to the kitchen slider and the washer front stay open
+            Assert.NotNull(fp.Find(new Vector2(3.0f, .9f), new Vector2(3.4f, 4.6f), out _));
+            Assert.NotNull(fp.Find(new Vector2(3.0f, 1.15f), new Vector2(3.95f, 1.15f), out _));
         }
     }
 }

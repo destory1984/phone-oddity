@@ -923,6 +923,7 @@ namespace Oddity.RoomTest
             if(apt){
                 perches["sill"]=new Perch{name="sill",stand=NearestFree(new Vector2(Apartment.SillLand[0].x,Apartment.WindowSpot.y)),land=Apartment.SillLand[0],yaw=180,pick=c=>Is(c,"sill")};
                 perches["ledge"]=new Perch{name="ledge",stand=NearestFree(new Vector2(Apartment.LedgeLand[0].x,.75f)),land=Apartment.LedgeLand[0],yaw=180,pick=c=>Is(c,"ledge")};
+                perches["teatable"]=new Perch{name="teatable",stand=NearestFree(new Vector2(Apartment.TeaX1+.35f,(Apartment.TeaZ0+Apartment.TeaZ1)/2)),land=new Vector2((Apartment.TeaX0+Apartment.TeaX1)/2,(Apartment.TeaZ0+Apartment.TeaZ1)/2),yaw=-90,pick=c=>Is(c,"teatable")}; // a cat on the tea table faces the sofa
             }else perches["sill"]=new Perch{name="sill",stand=NearestFree(new Vector2(-1.38f,.2f)),land=new Vector2(-1.88f,.2f),yaw=-90,pick=c=>Is(c,"sill")};
             if(tableRoot!=null){
                 var lap=tableRoot.Find("Laptop");
@@ -1145,7 +1146,7 @@ namespace Oddity.RoomTest
             void Add(string n,int w){if(n!=p.aiLast)opts.Add(new KeyValuePair<string,int>(n,w));}
             Add("wander",12);Add("rug",6);if(sofa!=null && spotsOf.TryGetValue("sofa",out var sofaSpots) && sofaSpots.Count>0)Add("sofa",20);Add("window",15);Add("harin",15);Add("clip",15);Add("idle",5);
             if(p.white && p.sit!=0)Add("stretch",8);
-            foreach(var (n,w) in new[]{("sill",15),("counter",8),("table",7),("fridge",5),("ledge",6)})if(perches.ContainsKey(n))Add(n,w);
+            foreach(var (n,w) in new[]{("sill",15),("counter",8),("table",7),("fridge",5),("ledge",6),("teatable",5)})if(perches.ContainsKey(n))Add(n,w);
             while(opts.Count>0){
                 int total=opts.Sum(o=>o.Value),r=Rng().Next(total),i=0;
                 for(;i<opts.Count-1;i++){if(r<opts[i].Value)break;r-=opts[i].Value;}
@@ -1160,7 +1161,7 @@ namespace Oddity.RoomTest
             if(p.somali && IsUp(p.sit))return false;
             switch(p.aiAct){
                 case "sofa":return p.onSofa;
-                case "sill":case "counter":case "table":case "fridge":return p.perch!=null && p.perch.name==p.aiAct;
+                case "sill":case "counter":case "table":case "fridge":case "teatable":return p.perch!=null && p.perch.name==p.aiAct;
                 default:return !p.moving && !p.onSofa && p.perch==null;
             }
         }
@@ -1636,7 +1637,7 @@ namespace Oddity.RoomTest
         }
         void ScriptClick(string key)
         {
-            Vector3 target=key=="clickwindow"?(apt?new Vector3(1.15f,1.2f,1.3f):new Vector3(-RoomHalf,(WinY.x+WinY.y)/2,(WinZ.x+WinZ.y)/2)):key=="clicksofa"&&sofa!=null?SeatOf("SeatL",sofa):key=="clicksofar"&&sofa!=null?SeatOf("SeatR",sofa):key=="clicksofac"&&sofa!=null?SeatOf("SeatC",sofa):key=="clicktable"&&tableRoot!=null?tableRoot.position+Vector3.up*.7f:key=="clickcounter"?(apt?new Vector3(4.08f,.86f,6.68f):new Vector3(1.17f,.86f,1.5f)):key=="clickfridge"?(apt?new Vector3(4.03f,1.2f,8.5f):new Vector3(1.7f,1.2f,1.5f)):key=="clicksill"?(apt?new Vector3(1.15f,.45f,1.45f):new Vector3(-1.85f,.85f,.2f)):key=="clickledge"?new Vector3(.8f,.9f,.15f):ScriptFloorPoint();
+            Vector3 target=key=="clickwindow"?(apt?new Vector3(1.15f,1.2f,1.3f):new Vector3(-RoomHalf,(WinY.x+WinY.y)/2,(WinZ.x+WinZ.y)/2)):key=="clicksofa"&&sofa!=null?SeatOf("SeatL",sofa):key=="clicksofar"&&sofa!=null?SeatOf("SeatR",sofa):key=="clicksofac"&&sofa!=null?SeatOf("SeatC",sofa):key=="clicktable"&&tableRoot!=null?tableRoot.position+Vector3.up*.7f:key=="clickcounter"?(apt?new Vector3(4.08f,.86f,6.68f):new Vector3(1.17f,.86f,1.5f)):key=="clickfridge"?(apt?new Vector3(4.03f,1.2f,8.5f):new Vector3(1.7f,1.2f,1.5f)):key=="clickteatable"?new Vector3((Apartment.TeaX0+Apartment.TeaX1)/2,.4f,(Apartment.TeaZ0+Apartment.TeaZ1)/2):key=="clicksill"?(apt?new Vector3(1.15f,.45f,1.45f):new Vector3(-1.85f,.85f,.2f)):key=="clickledge"?new Vector3(.8f,.9f,.15f):ScriptFloorPoint();
             ClickAt(new Ray(cameraView.transform.position,target-cameraView.transform.position));
         }
         // clickfloor's fixed point (.9, .9); ODDITY_CLICKXZ="x,z" picks another one for a path test
