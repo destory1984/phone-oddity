@@ -132,7 +132,7 @@ namespace Oddity.RoomTest
                 var text=Environment.GetEnvironmentVariable("ODDITY_PLAYKEYS");scripted=!string.IsNullOrWhiteSpace(text);
                 if(scripted)foreach(var part in text.Split(',')){
                     var pair=part.Split(':');
-                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0]=="realtab" || pair[0]=="wait" || pair[0].StartsWith("click") || pair[0].StartsWith("view") || pair[0]=="wheelup" || pair[0]=="liftup" || pair[0]=="liftdown" || pair[0]=="swingleft" || pair[0]=="swingright" || pair[0]=="tiltup" || pair[0]=="tiltdown" || (pair[0].StartsWith("shade") && int.TryParse(pair[0].Substring(5),out _)) || pair[0]=="wheeldown" || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
+                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0]=="realtab" || pair[0]=="wait" || pair[0].StartsWith("click") || pair[0].StartsWith("view") || pair[0]=="wheelup" || pair[0]=="liftup" || pair[0]=="liftdown" || pair[0]=="swingleft" || pair[0]=="swingright" || pair[0]=="tiltup" || pair[0]=="tiltdown" || pair[0]=="freeze" || pair[0]=="unfreeze" || (pair[0].StartsWith("shade") && int.TryParse(pair[0].Substring(5),out _)) || pair[0]=="wheeldown" || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
                     script.Add((pair[0],seconds));
                 }
                 Debug.Log("ROOMPLAY_READY model="+modelName);
@@ -2233,6 +2233,7 @@ namespace Oddity.RoomTest
             if(key=="realtab"){StartCoroutine(RealTab());return;}
             if(key.StartsWith("click")){ScriptClick(key);return;}
             if(key.StartsWith("view")){AptForce(key.Substring(4));return;} // script only: a room's camera by name (viewkitchen), viewauto goes back to following the character
+            if(key=="freeze"||key=="unfreeze"){poseFreeze=key=="freeze";return;} // script only: hold Harin's pose
             if(key.StartsWith("shade") && int.TryParse(key.Substring(5),out var pc)){shadeWant=Mathf.Clamp(pc,40,100);return;} // script only: Harin's shade in percent
             if(key=="tiltup"||key=="tiltdown"){TiltNotchBy(key=="tiltup"?1:-1);return;} // Alt + wheel, one notch per script step
             if(key=="swingleft"||key=="swingright"){SwingNotchBy(key=="swingleft"?1:-1);return;} // Shift + wheel, one notch per script step
@@ -2491,7 +2492,8 @@ namespace Oddity.RoomTest
             }
             vrm.Runtime.Expression.SetWeight(ExpressionKey.Aa,aa*weights[1]);vrm.Runtime.Expression.SetWeight(ExpressionKey.Ou,ou*weights[1]);
         }
-        bool Frozen(int i)=>!scripted && i==current && ((i<9 || i==12 || i==ZeroTwoIndex || i==IdolIndex || i==YawnIndex) && !held || (i==10 || i==11) && direction==0);
+        bool poseFreeze; // script key "freeze": every clip stops where it is (for side-by-side shots), "unfreeze" lets them run again
+        bool Frozen(int i)=>poseFreeze || !scripted && i==current && ((i<9 || i==12 || i==ZeroTwoIndex || i==IdolIndex || i==YawnIndex) && !held || (i==10 || i==11) && direction==0);
         void Evaluate(float dt)
         {
             if(Frozen(current))dt=0;
