@@ -85,7 +85,7 @@ namespace Oddity.RoomTest
         // ---- the glb props' places (the sofa against the west wall facing east, the dining table on the kitchen's west wall with its two chairs along the wall)
         public static readonly Vector3 SofaAt = new Vector3(.425f, 0, 3.17f), TableAt = new Vector3(2.69f, 0, 7.05f);
         public static readonly Vector3 SofaFace = Vector3.right, TableFace = Vector3.forward;
-        public static readonly Vector2 HarinStart = new Vector2(2.2f, 3.0f), SomaliStart = new Vector2(1.7f, 4.1f), WhiteStart = new Vector2(3.1f, 2.15f);
+        public static readonly Vector2 HarinStart = new Vector2(2.2f, 3.0f), SomaliStart = new Vector2(1.7f, 4.1f), WhiteStart = new Vector2(3.1f, 2.15f), TabbyStart = new Vector2(3.4f, 4.3f);
         public static readonly Vector2 WindowSpot = new Vector2(1.15f, 1.95f), WindowLook = new Vector2(1.15f, 1.3f); // the floor in front of the sill, and what Harin faces there
         public const float WindowYaw = 180;
         public static readonly Vector3 SunThrough = new Vector3(2.2f, 1.5f, -.1f), SunOnto = new Vector3(.45f, .45f, 3.17f); // the balcony window's middle to the sofa seat

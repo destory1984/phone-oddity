@@ -132,7 +132,7 @@ namespace Oddity.RoomTest
                 var text=Environment.GetEnvironmentVariable("ODDITY_PLAYKEYS");scripted=!string.IsNullOrWhiteSpace(text);
                 if(scripted)foreach(var part in text.Split(',')){
                     var pair=part.Split(':');
-                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0]=="realtab" || pair[0]=="wait" || pair[0].StartsWith("click") || pair[0].StartsWith("view") || pair[0]=="wheelup" || pair[0]=="wheeldown" || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
+                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0]=="realtab" || pair[0]=="wait" || pair[0].StartsWith("click") || pair[0].StartsWith("view") || pair[0]=="wheelup" || pair[0]=="liftup" || pair[0]=="liftdown" || pair[0]=="swingleft" || pair[0]=="swingright" || pair[0]=="tiltup" || pair[0]=="tiltdown" || pair[0]=="wheeldown" || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
                     script.Add((pair[0],seconds));
                 }
                 Debug.Log("ROOMPLAY_READY model="+modelName);
@@ -334,6 +334,18 @@ namespace Oddity.RoomTest
             if(!room || PetEnv("ODDITY_CAT")=="0")return;
             if(PetEnv("ODDITY_SOMALI")!="0")SpawnSomali();
             if(PetEnv("ODDITY_WHITE")!="0")SpawnWhite();
+            if(PetEnv("ODDITY_TABBY")!="0")SpawnTabby();
+        }
+        // the third cat TABBY: the striped tabby "cat4" (CC BY 4.0, git-ignored), the same 14 shared clips; body length 0.44 m, ODDITY_TABBYLENGTH overrides, ODDITY_TABBY=0 leaves it out
+        const string TabbySharedFile="Assets/Oddity/DevMotion/Cat/Cat4/cat4_shared.glb";
+        static readonly float TabbyBodyLength=PetEnv("ODDITY_TABBYLENGTH")!=null?float.Parse(PetEnv("ODDITY_TABBYLENGTH"),CultureInfo.InvariantCulture):.44f;
+        float TabbyYaw=PetEnv("ODDITY_TABBYYAW")!=null?float.Parse(PetEnv("ODDITY_TABBYYAW"),CultureInfo.InvariantCulture):180+60;
+        void SpawnTabby()
+        {
+            if(!File.Exists(Path.Combine(Application.dataPath,"../"+TabbySharedFile))){Debug.LogWarning("ROOMPLAY_TABBY file missing "+TabbySharedFile+", no tabby cat");return;}
+            if(apt && PetEnv("ODDITY_TABBYYAW")==null)TabbyYaw=30;
+            var a=PetEnv("ODDITY_TABBYSPOT")!=null?PetEnv("ODDITY_TABBYSPOT").Split(',').Select(t=>float.Parse(t,CultureInfo.InvariantCulture)).ToArray():apt?new[]{Apartment.TabbyStart.x,Apartment.TabbyStart.y}:new[]{1.35f,-1.15f};
+            if(!SpawnShared("TABBY","tabby",TabbySharedFile,TabbyYaw,new Vector2(a[0],a[1]),true,TabbyBodyLength,new[]{"Pelvis"},new[]{"Head"}))Debug.LogWarning("ROOMPLAY_TABBY could not be spawned");
         }
         // what the pet measures in the pose now playing, from the baked vertices of its skinned meshes only (a stray static mesh in a glb, like a ground plane, counts for nothing)
         // and without the tail (vertices mainly weighted to a bone named "tail" or below one): length = nose tip to rump along the root's forward axis, minY/maxY = floor to head top
@@ -587,7 +599,7 @@ namespace Oddity.RoomTest
             }
         }
 
-        // Tab hands WASD to the pets and back: HARIN -> SOMALI -> WHITE -> HARIN. A pet walks screen-relative like Harin (0.5 m/s, shift 1.2 m/s with the Walk clip played faster), no root motion,
+        // Tab hands WASD to the pets and back: HARIN -> SOMALI -> WHITE -> TABBY -> HARIN. A pet walks screen-relative like Harin (0.5 m/s, shift 1.2 m/s with the Walk clip played faster), no root motion,
         // inside the room and out of the furniture footprints (the same blockers as Harin's)
         const float AiWalkSpeed=.35f, AiResumeDelay=3f;
         void ToggleControl()
@@ -2023,12 +2035,23 @@ namespace Oddity.RoomTest
         // the aim has slack: it only moves when she leaves a circle around it (RoomSlack of the half frame), so sway and breathing do not shake the view
         Vector3 roomFocus,lastWant;bool roomFocusSet;float wantPath,focusPath; // paths are logged per script step: how far the body point and the aim moved
         float wheelZoom;const float WheelNotch=.08f, WheelRate=.8f; // a wheel notch is 8% of the zoom range
+        // Ctrl + wheel raises or lowers the camera eye (the aim stays, so the view tilts): 0.15 m a notch, from 1.2 m below the room's eye to 3.5 m above, eased like the zoom; it carries over room cuts
+        float camLift,camLiftWant;const float LiftNotch=.15f, LiftDown=-1.2f, LiftUp=3.5f;
+        // Shift + wheel swings the camera left or right round the room's aim point (wheel up = left): 5 degrees a notch, at most 60 either way, eased; it also carries over room cuts
+        float camSwing,camSwingWant;const float SwingNotch=5f, SwingMax=60f;
+        void SwingNotchBy(int dir){camSwingWant=Mathf.Clamp(camSwingWant+dir*SwingNotch,-SwingMax,SwingMax);Debug.Log("ROOMPLAY_CAMSWING deg="+camSwingWant.ToString("0",CultureInfo.InvariantCulture));}
+        // Alt + wheel tilts the view up or down with the eye where it is (wheel up = look up): 2 degrees a notch, at most 30 either way, eased; it also carries over room cuts
+        float camTilt,camTiltWant;const float TiltNotch=2f, TiltMax=30f;
+        void TiltNotchBy(int dir){camTiltWant=Mathf.Clamp(camTiltWant+dir*TiltNotch,-TiltMax,TiltMax);Debug.Log("ROOMPLAY_CAMTILT deg="+camTiltWant.ToString("0",CultureInfo.InvariantCulture));}
+        void LiftNotchBy(int dir){camLiftWant=Mathf.Clamp(camLiftWant+dir*LiftNotch,LiftDown,LiftUp);Debug.Log("ROOMPLAY_CAMLIFT lift="+camLiftWant.ToString("0.00",CultureInfo.InvariantCulture)+" eye="+(curEye.y+camLiftWant).ToString("0.00",CultureInfo.InvariantCulture));}
         const float RoomFovNear=5f, RoomSlack=.3f, RoomFollow=5f;
         void RoomFrame(float dt,float zoomKey)
         {
             roomZoom=Mathf.Clamp01(roomZoom-zoomKey*dt*.55f);
             if(wheelZoom!=0){float take=Mathf.MoveTowards(wheelZoom,0,dt*WheelRate);roomZoom=Mathf.Clamp01(roomZoom+wheelZoom-take);wheelZoom=take;if(roomZoom<=0 || roomZoom>=1)wheelZoom=0;} // each notch eases in over about 0.1 s
             if(apt)AptTick();
+            camLift=Mathf.MoveTowards(camLift,camLiftWant,dt*1.5f);camSwing=Mathf.MoveTowards(camSwing,camSwingWant,dt*60f);camTilt=Mathf.MoveTowards(camTilt,camTiltWant,dt*24f);
+            var eye=curAim+Quaternion.AngleAxis(camSwing,Vector3.up)*(curEye+Vector3.up*camLift-curAim);
             float fov=curFov*Mathf.Pow(RoomFovNear/curFov,roomZoom); // even steps from the room's lens (46 degrees in the old room) to 5
             Transform chest=null,neck=null;if(anim!=null){chest=anim.GetBoneTransform(HumanBodyBones.Chest)??anim.GetBoneTransform(HumanBodyBones.Hips);neck=anim.GetBoneTransform(HumanBodyBones.Head);}
             bool onCat=ctl!=null;
@@ -2036,13 +2059,14 @@ namespace Oddity.RoomTest
                 var want=onCat?ctl.root.position+Vector3.up*Mathf.Lerp(.15f,.2f,Mathf.InverseLerp(14,RoomFovNear,fov)):neck!=null?Vector3.Lerp(chest.position,neck.position,Mathf.InverseLerp(14,RoomFovNear,fov)):chest.position;
                 if(!roomFocusSet){roomFocus=want;roomFocusSet=true;lastWant=want;}
                 wantPath+=Vector3.Distance(want,lastWant);lastWant=want;var wasFocus=roomFocus;
-                float slack=Vector3.Distance(curEye,roomFocus)*Mathf.Tan(fov*.5f*Mathf.Deg2Rad)*RoomSlack;
+                float slack=Vector3.Distance(eye,roomFocus)*Mathf.Tan(fov*.5f*Mathf.Deg2Rad)*RoomSlack;
                 var off=want-roomFocus;float m=off.magnitude;
                 if(m>slack)roomFocus=Vector3.Lerp(roomFocus,roomFocus+off*(1-slack/m),1-Mathf.Exp(-RoomFollow*dt));
                 focusPath+=Vector3.Distance(roomFocus,wasFocus);
             }
             var aim=(chest!=null || onCat)?Vector3.Lerp(curAim,roomFocus,Mathf.SmoothStep(0,1,Mathf.Min(1,roomZoom*2.5f))):curAim;
-            cameraView.fieldOfView=fov;cameraView.transform.position=curEye;cameraView.transform.LookAt(aim);
+            cameraView.fieldOfView=fov;cameraView.transform.position=eye;cameraView.transform.LookAt(aim);
+            if(camTilt!=0)cameraView.transform.rotation=Quaternion.AngleAxis(-camTilt,cameraView.transform.right)*cameraView.transform.rotation;
         }
         // L: head and eyes turn to the camera (the player), up to 70 degrees, blended over 0.3 s
         bool lookOn;float lookW;
@@ -2172,6 +2196,9 @@ namespace Oddity.RoomTest
             if(key=="realtab"){StartCoroutine(RealTab());return;}
             if(key.StartsWith("click")){ScriptClick(key);return;}
             if(key.StartsWith("view")){AptForce(key.Substring(4));return;} // script only: a room's camera by name (viewkitchen), viewauto goes back to following the character
+            if(key=="tiltup"||key=="tiltdown"){TiltNotchBy(key=="tiltup"?1:-1);return;} // Alt + wheel, one notch per script step
+            if(key=="swingleft"||key=="swingright"){SwingNotchBy(key=="swingleft"?1:-1);return;} // Shift + wheel, one notch per script step
+            if(key=="liftup"||key=="liftdown"){LiftNotchBy(key=="liftup"?1:-1);return;} // Ctrl + wheel, one notch per script step
             if(key=="wheelup"||key=="wheeldown"){wheelZoom=Mathf.Clamp(wheelZoom+(key=="wheelup"?WheelNotch:-WheelNotch),-1,1);return;} // one notch per script step
             if(ctl!=null && key!="tab" && key!="escape" && key!="m"){CatCommand(key);return;} // the cat has its own keys while it is controlled
             if(key=="n"){bool back=Keyboard.current!=null && Keyboard.current.shiftKey.isPressed;if(!busy)StartCoroutine(Reload(StepLine(back?-1:1),false));}
@@ -2314,7 +2341,8 @@ namespace Oddity.RoomTest
                 input=new Vector2((kb.dKey.isPressed?1:0)-(kb.aKey.isPressed?1:0),(kb.wKey.isPressed?1:0)-(kb.sKey.isPressed?1:0));run=kb.shiftKey.isPressed;zoomKey=(kb.downArrowKey.isPressed?1:0)-(kb.upArrowKey.isPressed?1:0);
                 turning=(kb.leftArrowKey.isPressed?1:0)-(kb.rightArrowKey.isPressed?1:0);
                 var mouse=Mouse.current;if(mouse!=null && mouse.leftButton.wasPressedThisFrame && room)ClickAt(cameraView.ScreenPointToRay(mouse.position.ReadValue()));
-                if(mouse!=null){float wheel=mouse.scroll.ReadValue().y;if(wheel!=0)wheelZoom=Mathf.Clamp(wheelZoom+Mathf.Sign(wheel)*WheelNotch,-1,1);} // wheel up zooms in
+                if(mouse!=null){var sc=mouse.scroll.ReadValue();float wheel=sc.y!=0?sc.y:kb.shiftKey.isPressed?sc.x:0; // Windows may turn Shift + wheel into a sideways scroll
+                    if(wheel!=0){if(kb.altKey.isPressed)TiltNotchBy(wheel>0?1:-1);else if(kb.shiftKey.isPressed)SwingNotchBy(wheel>0?1:-1);else if(kb.ctrlKey.isPressed)LiftNotchBy(wheel>0?1:-1);else wheelZoom=Mathf.Clamp(wheelZoom+Mathf.Sign(wheel)*WheelNotch,-1,1);}} // wheel up zooms in, Ctrl + wheel up raises the camera
                 foreach(var entry in Keys)if(!Walk(entry.key) && entry.key!="left" && entry.key!="right" && entry.key!="tab" && entry.key!="o"){ // Tab and O have their own poll (TabPoll)
                     if(kb[KeyOf(entry.key)].wasPressedThisFrame && (input==Vector2.zero || !char.IsDigit(entry.key[0])))Command(entry.key);
                 }
@@ -2651,7 +2679,7 @@ namespace Oddity.RoomTest
             Part(PrimitiveType.Cylinder,shield.transform,Vector3.zero,new Vector3(.5f,.012f,.5f),new Color(.45f,.27f,.13f));
             Part(PrimitiveType.Cylinder,shield.transform,new Vector3(0,.015f,0),new Vector3(.12f,.012f,.12f),new Color(.78f,.8f,.84f));
         }
-        static readonly string[] CatCommonKeys={"space  멈추기 (앉았거나 누웠으면 일어서기)","W A S D  걷기, Shift 빠르게","← →  제자리 돌기","↑ ↓, 휠  줌","C V  소파에 올라가 앉기, K  올라가 눕기","클릭  바닥, 소파, 식탁, 조리대, 냉장고, 창","M  다음 동작","O  고양이 소리 켜고 끄기","Tab  하린으로"};
+        static readonly string[] CatCommonKeys={"space  멈추기 (앉았거나 누웠으면 일어서기)","W A S D  걷기, Shift 빠르게","← →  제자리 돌기","↑ ↓, 휠  줌, Ctrl+휠  카메라 높이","Shift+휠  카메라 좌우, Alt+휠  기울기","C V  소파에 올라가 앉기, K  올라가 눕기","클릭  바닥, 소파, 식탁, 조리대, 냉장고, 창","M  다음 동작","O  고양이 소리 켜고 끄기","Tab  하린으로"};
         static string CatRow(Pet p,int i){const string keys="123456789";return i<ActionNames.Length?keys[i]+"  "+ActionNames[i]+(CanDo(p,i)?"":" (없음)"):CatCommonKeys[i-ActionNames.Length];}
         static readonly bool noHud=Environment.GetEnvironmentVariable("ODDITY_NOHUD")=="1";
         void OnGUI()
@@ -2665,7 +2693,7 @@ namespace Oddity.RoomTest
             bool cat=ctl!=null;
             int rows=cat?ActionNames.Length+CatCommonKeys.Length:Keys.Length;
             float listEnd=34+rows*17;GUI.Box(new Rect(10,10,340,listEnd-6),"");var style=new GUIStyle(GUI.skin.label){fontSize=12};
-            GUI.Label(new Rect(16,13,330,20),cat?(ctl.kind=="white"?"흰 고양이":"소말리 고양이"):modelName??"준비 중",style);
+            GUI.Label(new Rect(16,13,330,20),cat?(ctl.kind=="white"?"흰 고양이":ctl.kind=="tabby"?"줄무늬 고양이":"소말리 고양이"):modelName??"준비 중",style);
             for(int i=0;i<rows;i++){
                 if(cat){
                     bool on=i<ActionNames.Length && i==CurAction(ctl);style.normal.textColor=on?Color.yellow:i<ActionNames.Length && !CanDo(ctl,i)?Color.gray:Color.white;
@@ -2679,7 +2707,7 @@ namespace Oddity.RoomTest
             if(Time.realtimeSinceStartup<messageUntil)GUI.Label(new Rect(16,listEnd+4,900,40),message,new GUIStyle(GUI.skin.label){fontSize=24});
             // who is controlled: top right, white with a dark outline; it pops (1.3 -> 1 in 0.2 s) and flashes when Tab hands control over
             float age=Time.realtimeSinceStartup-labelPop;
-            var flash=cat?(ctl.kind=="white"?new Color(.62f,.80f,1f):new Color(1f,.62f,.30f)):Color.yellow;
+            var flash=cat?(ctl.kind=="white"?new Color(.62f,.80f,1f):ctl.kind=="tabby"?new Color(.72f,.50f,.22f):new Color(1f,.62f,.30f)):Color.yellow;
             string who=cat?ctl.tag:"HARIN";
             var tint=age<.35f?Color.Lerp(flash,Color.white,Mathf.Clamp01(age/.35f)):Color.white;
             var big=new GUIStyle(GUI.skin.label){fontSize=18,fontStyle=FontStyle.Bold,alignment=TextAnchor.MiddleRight};
