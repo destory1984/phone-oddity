@@ -11,6 +11,7 @@ namespace Oddity.EditorTools
     public class MotionImport : AssetPostprocessor
     {
         public const string Folder = "Assets/Oddity/DevMotion/";
+        const string CatFolder = Folder + "Cat/"; // the cat models are not Humanoid: left alone
         // task 62: the skin-true export carries a T-pose bind, so its Avatar is symmetric; the skin-false files build an Avatar from the
         // clip's first frame (the left leg comes out bent). These files borrow the skinned Avatar instead (ODDITY_SKINAVATAR=0 turns it off).
         const string SkinFile = Folder + "Resources/Motion/WalkStandardSkin.fbx";
@@ -23,7 +24,7 @@ namespace Oddity.EditorTools
 
         void OnPreprocessModel()
         {
-            if (!assetPath.StartsWith(Folder) || assetPath.StartsWith(CatImport.Folder)) return;
+            if (!assetPath.StartsWith(Folder) || assetPath.StartsWith(CatFolder)) return;
             var importer = (ModelImporter)assetImporter;
             importer.animationType = ModelImporterAnimationType.Human;
             importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
@@ -51,7 +52,7 @@ namespace Oddity.EditorTools
 
         void OnPreprocessAnimation()
         {
-            if (!assetPath.StartsWith(Folder) || assetPath.StartsWith(CatImport.Folder)) return;
+            if (!assetPath.StartsWith(Folder) || assetPath.StartsWith(CatFolder)) return;
             var importer = (ModelImporter)assetImporter;
             var clips = importer.defaultClipAnimations;
             foreach (var c in clips)
