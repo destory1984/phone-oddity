@@ -153,6 +153,16 @@ namespace Oddity.RoomTest
         {
             var data=cam.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>()??cam.gameObject.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
             data.antialiasing=UnityEngine.Rendering.Universal.AntialiasingMode.SubpixelMorphologicalAntiAliasing;data.antialiasingQuality=UnityEngine.Rendering.Universal.AntialiasingQuality.High;
+            // Neutral tonemapping: without it the sun plus the ambient pushed her skin past 1, red clipped first and the skin went orange (cheek 255,226,169).
+            // A global volume of our own keeps only the tonemapping (the pipeline's default profile also has bloom and a vignette). ODDITY_TONEMAP=0 turns it off
+            if(Environment.GetEnvironmentVariable("ODDITY_TONEMAP")=="0")return;
+            data.renderPostProcessing=true;
+            var profile=ScriptableObject.CreateInstance<UnityEngine.Rendering.VolumeProfile>();
+            var tone=profile.Add<UnityEngine.Rendering.Universal.Tonemapping>(true);tone.mode.value=UnityEngine.Rendering.Universal.TonemappingMode.Neutral;
+            var bloom=profile.Add<UnityEngine.Rendering.Universal.Bloom>(true);bloom.intensity.value=0;
+            var vig=profile.Add<UnityEngine.Rendering.Universal.Vignette>(true);vig.intensity.value=0;
+            var vol=new GameObject("RoomVolume").AddComponent<UnityEngine.Rendering.Volume>();vol.isGlobal=true;vol.priority=100;vol.sharedProfile=profile;
+            Debug.Log("ROOMPLAY_TONEMAP neutral");
         }
         void Background(Camera cam)
         {
@@ -2056,7 +2066,7 @@ namespace Oddity.RoomTest
         {
             if(keyLight==null)return;
             var through=apt?Apartment.SunThrough:new Vector3(-RoomHalf,(WinY.x+WinY.y)/2,(WinZ.x+WinZ.y)/2);var onto=apt?Apartment.SunOnto:new Vector3(-.75f,.45f,1.55f); // the window middle to the sofa seat (the apartment: the balcony window's middle, the sun comes in through the south windows)
-            keyLight.transform.rotation=Quaternion.LookRotation(onto-through);keyLight.color=new Color(1f,.9f,.72f);keyLight.intensity=1.6f;
+            keyLight.transform.rotation=Quaternion.LookRotation(onto-through);keyLight.color=new Color(1f,.95f,.88f);keyLight.intensity=1.2f; // was (1,.9,.72) at 1.6: too yellow and too strong, her skin clipped to orange
             keyLight.shadows=LightShadows.Soft;keyLight.shadowStrength=.92f;keyLight.shadowBias=.03f;keyLight.shadowNormalBias=.3f;
             // ODDITY_LAMP=1 turns the ceiling lamp on; by default only the window sun lights the room, with a brighter ambient fill
             bool lamp=Environment.GetEnvironmentVariable("ODDITY_LAMP")=="1";
