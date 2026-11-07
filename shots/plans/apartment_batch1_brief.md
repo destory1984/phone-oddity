@@ -2,7 +2,7 @@
 
 Project: C:\_c\oddity-phone (read CLAUDE.md, TESTING.md). Do NOT commit, ship or push. One Unity at a time.
 READ FIRST: `shots/plans/apartment_36a_layout.md` (the plan, the user's choices and GPT's advice). The plan is the spec; numbers below repeat its key parts.
-Code: `unity/Assets/Oddity/RoomTest/RoomPlay.cs` (+ `FloorPath.cs`). Today it builds one 4 x 4 m room (`Room`, `Furnish`, `LeftWall`, window, sill, perches, rug, sofa/table/chairs glb props, `RoomEye`/`RoomAim` camera with zoom/follow). Harin, three cats, autonomy, perches, FloorPath, sounds, keys must keep working.
+Code: `unity/Assets/Oddity/RoomTest/RoomPlay.cs` (+ `FloorPath.cs`). Today it builds one 4 x 4 m room (`Room`, `Furnish`, `LeftWall`, window, sill, perches, rug, sofa/table/chairs glb props, `RoomEye`/`RoomAim` camera with zoom/follow). Harin, the two cats (SOMALI, WHITE), autonomy, perches, FloorPath, sounds, keys must keep working.
 
 ## Keep it switchable
 Build the apartment behind `ODDITY_HOUSE` = `apt` (new default) or `room` (today's 4 x 4 room, unchanged, for comparison). Put the apartment geometry in a new file `unity/Assets/Oddity/RoomTest/Apartment.cs` (data + builder: rooms, walls, doors, windows, cameras, furniture spots), so RoomPlay.cs only calls into it.
