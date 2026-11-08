@@ -2646,6 +2646,7 @@ namespace Oddity.RoomTest
         bool Frozen(int i)=>poseFreeze || !scripted && i==current && ((i<9 || i==12 || i==ZeroTwoIndex || i==IdolIndex || i==YawnIndex) && !held || (i==10 || i==11) && direction==0);
         void Evaluate(float dt)
         {
+            float faceDt=dt; // the face keeps real time while the body holds a frozen pose (Shift+digit faces, nap eyes, smile)
             if(Frozen(current))dt=0;
             blend=Mathf.Min(1,blend+dt/blendTime);Vector3 baseHip=Vector3.zero, drift=Vector3.zero;float sum=0;
             bool musicAdvancing=current==ZeroTwoIndex && !busy && (zeroTwoInputReady || reviewing) && !Frozen(ZeroTwoIndex);
@@ -2667,7 +2668,7 @@ namespace Oddity.RoomTest
             zeroTwoDance?.Apply(zeroTwoPhase,weights[ZeroTwoIndex]);
             zeroTwoAudio?.SetState(current==ZeroTwoIndex,musicAdvancing,zeroTwoAudioSeconds);
             Meow();
-            Smile(dt);
+            Smile(faceDt);
             GestureTick();
             Ground(dt);
             PinToSeat();
