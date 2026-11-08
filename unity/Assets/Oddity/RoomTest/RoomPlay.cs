@@ -1784,6 +1784,57 @@ namespace Oddity.RoomTest
                 TwoBone(upper,lower,foot,target,lower.position+seatFront*.3f+Vector3.up*.1f,w);
             }
         }
+        // a hand resting on a sofa cushion must lie on top of it: the clips put the hand about where a chair seat or the hip is, the sofa's cushion is soft and higher.
+        // After the pose, a hand whose palm is under the cushion's top is lifted by a two-bone arm IK to 7 mm above it, the wrist keeping its world rotation (palm down).
+        const float HandThick=.02f, HandAbove=.007f; // the wrist bone to the underside of the palm; the gap left over the cushion
+        static readonly bool SitHandOn=Environment.GetEnvironmentVariable("ODDITY_SITHAND")!="0";
+        readonly bool[] sitHandLogged=new bool[2];
+        // the cushion's top under a point and its surface normal (NaN top when the ray misses the sofa)
+        float PropTopNormal(Vector3 p,out Vector3 normal)
+        {
+            var ray=new Ray(new Vector3(p.x,seatAt.y+.3f,p.z),Vector3.down);float top=float.NaN;normal=Vector3.up;
+            foreach(var c in propHits)if(c!=null && c.Raycast(ray,out var hit,1f) && !(hit.point.y<=top)){top=hit.point.y;normal=hit.normal;}
+            return top;
+        }
+        readonly Vector3[] handFingersLocal=new Vector3[2],handPalmLocal=new Vector3[2];bool handAxesDone;
+        const float PropOut=25; // degrees the fingers point outward, away from the body, from the seat's forward direction
+        void SitHands()
+        {
+            float w=Mathf.Clamp01(weights[SitIndex]+(onFloor?0:weights[CurlIndex]));
+            if(!SitHandOn || w<=0 || sofa==null || chairSat!=null || chairJob!=null || onFloor)return;
+            var along0=Vector3.Cross(Vector3.up,seatFront).normalized; // her right, as she faces the seat's front
+            for(int side=0;side<2;side++){
+                var upper=anim.GetBoneTransform(side==0?HumanBodyBones.LeftUpperArm:HumanBodyBones.RightUpperArm);
+                var lower=anim.GetBoneTransform(side==0?HumanBodyBones.LeftLowerArm:HumanBodyBones.RightLowerArm);
+                var hand=anim.GetBoneTransform(side==0?HumanBodyBones.LeftHand:HumanBodyBones.RightHand);
+                if(upper==null || lower==null || hand==null)continue;
+                float total=0;var normal=Vector3.up;
+                for(int pass=0;pass<2;pass++){
+                    var along=(hand.position-lower.position).normalized;float need=0;
+                    foreach(float k in new[]{0f,.05f,.10f}){ // the wrist and two points along the palm
+                        var pt=hand.position+along*k;float top=PropTopNormal(pt,out var n);if(float.IsNaN(top))continue;
+                        if(top+HandAbove-(pt.y-HandThick)>need){need=top+HandAbove-(pt.y-HandThick);normal=n;}
+                    }
+                    if(need<.002f || need>.25f)break; // already on top, or far below (behind the cushion): leave it
+                    TwoBone(upper,lower,hand,hand.position+Vector3.up*need,lower.position,w);total+=need*w;
+                }
+                if(total<=.002f)continue;
+                // lean on it: palm flat on the cushion (palm normal down along the surface), fingers forward and a little outward
+                var down=-normal;var outward=side==0?-along0:along0;
+                var fwd=Vector3.ProjectOnPlane(seatFront,normal).normalized;
+                var fingersWant=(Quaternion.AngleAxis(side==0?-PropOut:PropOut,normal)*fwd); // turns toward her left for the left hand, right for the right hand
+                if(Vector3.Dot(fingersWant,outward)<Vector3.Dot(fwd,outward))fingersWant=Quaternion.AngleAxis(side==0?PropOut:-PropOut,normal)*fwd; // whichever way is away from the body
+                var fingersNow=(hand.rotation*handFingersLocal[side]).normalized;var palmNow=(hand.rotation*handPalmLocal[side]).normalized;
+                var wantRot=Quaternion.LookRotation(fingersWant,down)*Quaternion.Inverse(Quaternion.LookRotation(fingersNow,palmNow))*hand.rotation;
+                var keepRot=hand.rotation;
+                hand.rotation=wantRot; // measure the palm's underside in its new direction and re-place the wrist 3-8 mm above the cushion
+                float shift=float.MinValue;var fw=(hand.rotation*handFingersLocal[side]).normalized;var pn=(hand.rotation*handPalmLocal[side]).normalized;
+                foreach(float k in new[]{0f,.05f,.10f}){var pt=hand.position+fw*k+pn*HandThick;float top=PropTopNormal(pt,out _);if(float.IsNaN(top))continue;shift=Mathf.Max(shift,top+.005f-pt.y);}
+                if(shift>float.MinValue){shift=Mathf.Clamp(shift,-.06f,.06f);hand.rotation=keepRot;TwoBone(upper,lower,hand,hand.position+Vector3.up*shift,lower.position,w);total+=shift*w;}
+                hand.rotation=Quaternion.Slerp(keepRot,wantRot,w);
+                if(w>.9f && !sitHandLogged[side]){sitHandLogged[side]=true;Debug.Log("ROOMPLAY_SITHAND side="+(side==0?"L":"R")+" lift="+F(total)+" m");}
+            }
+        }
         // a dining chair is tucked under the table and moves by itself: it slides out while she walks beside it, she steps in front of it, sits and it slides in with her;
         // getting up it slides out with her, she stands and steps aside, and it slides back under the table as she walks off. no hands on the chair
         class Chair{public Transform chair,mark;public Vector3 home,front,side;}
@@ -2188,6 +2239,11 @@ namespace Oddity.RoomTest
         }
         void BuildMotion()
         {
+            for(int hs=0;hs<2;hs++){ // the T-pose: palms down, fingers along the arm (for SitHands; the loaded rig has no finger bones)
+                var hb=anim.GetBoneTransform(hs==0?HumanBodyBones.LeftHand:HumanBodyBones.RightHand);var lb=anim.GetBoneTransform(hs==0?HumanBodyBones.LeftLowerArm:HumanBodyBones.RightLowerArm);
+                if(hb==null || lb==null)continue;
+                handFingersLocal[hs]=Quaternion.Inverse(hb.rotation)*(hb.position-lb.position).normalized;handPalmLocal[hs]=Quaternion.Inverse(hb.rotation)*Vector3.down;
+            }
             graph=PlayableGraph.Create("RoomPlayMotion");graph.SetTimeUpdateMode(DirectorUpdateMode.Manual);
             mixer=AnimationMixerPlayable.Create(graph,MotionCount);
             AnimationPlayableOutput.Create(graph,"Harin",anim).SetSourcePlayable(mixer);
@@ -2248,6 +2304,7 @@ namespace Oddity.RoomTest
         void SelectRaw(int index)
         {
             if(clips[index]==null || current==index)return;
+            if(index==SitIndex || index==CurlIndex)sitHandLogged[0]=sitHandLogged[1]=false;
             Array.Copy(weights,from,weights.Length);current=index;blend=0;plays[index].SetTime(0);
             if(index==ZeroTwoIndex){zeroTwoPhase=0;zeroTwoAudioSeconds=0;}
         }
@@ -2615,6 +2672,7 @@ namespace Oddity.RoomTest
             Ground(dt);
             PinToSeat();
             FeetClear();
+            SitHands();
             ChinRest(dt);
             LookAtPlayer(dt);
             if(sword!=null){sword.SetActive(current==12);shield.SetActive(current==12);if(current==12)PlaceShield();}
