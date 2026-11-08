@@ -130,7 +130,7 @@ namespace Oddity.RoomTest
                 Fb("teatable_leg2",TeaX1-.07f,TeaX1-.03f,0,.37f,TeaZ0+.03f,TeaZ0+.07f,oak),
                 Fb("teatable_leg3",TeaX0+.03f,TeaX0+.07f,0,.37f,TeaZ1-.07f,TeaZ1-.03f,oak),
                 Fb("teatable_leg4",TeaX1-.07f,TeaX1-.03f,0,.37f,TeaZ1-.07f,TeaZ1-.03f,oak),
-                // balcony: wood deck tiles (4 rows of 5, two tones), a drying rack with hung towels and shirts, a laundry basket and detergent by the washer, a 2-tier plant shelf, a camp chair with a side table and a mug
+                // balcony: wood deck tiles (4 rows of 5, two tones), a drying rack with hung towels and shirts, a laundry basket and detergent by the washer, a 2-tier plant shelf
                 // the living room's deep sill (a bench 0.30 deep, top at the window's bottom edge) and the balcony's window ledge, both for cats
                 Fb("sill",SillX0,SillX1,0,SillTop,1.30f,1.60f,Trim,true,"sill"),
                 Fb("ledge",.3f,1.4f,0,.9f,0,.30f,Trim,true,"ledge"),
@@ -155,11 +155,6 @@ namespace Oddity.RoomTest
             // plant shelf on the west wall, x .02..0.32, z .35..0.85: posts, tiers at 0.35 and 0.75
             l.Add(Fb("pshelf_t1", .02f, .32f, .33f, .36f, .35f, .85f, Trim, true)); l.Add(Fb("pshelf_t2", .02f, .32f, .73f, .76f, .35f, .85f, Trim));
             l.Add(Fb("pshelf_p1", .03f, .06f, 0, .9f, .36f, .39f, Trim)); l.Add(Fb("pshelf_p2", .28f, .31f, 0, .9f, .81f, .84f, Trim));
-            // camp chair (x 1.75..2.15, z .45..0.85, seat 0.30, back 0.55) and side table (x 1.45..1.68, z .52..0.75, 0.40 high) with a mug
-            l.Add(Fb("chair_seat", 1.75f, 2.15f, .28f, .31f, .45f, .85f, new Color(.30f, .45f, .35f), true)); l.Add(Fb("chair_back", 1.75f, 1.79f, .31f, .55f, .45f, .85f, new Color(.30f, .45f, .35f)));
-            l.Add(Fb("chair_leg1", 1.77f, 1.80f, 0, .28f, .47f, .50f, metal)); l.Add(Fb("chair_leg2", 2.10f, 2.13f, 0, .28f, .47f, .50f, metal)); l.Add(Fb("chair_leg3", 1.77f, 1.80f, 0, .28f, .80f, .83f, metal)); l.Add(Fb("chair_leg4", 2.10f, 2.13f, 0, .28f, .80f, .83f, metal));
-            l.Add(Fb("sidetable", 1.45f, 1.68f, .37f, .40f, .52f, .75f, oak, true)); l.Add(Fb("sidetable_leg", 1.55f, 1.58f, 0, .37f, .62f, .65f, oak));
-            l.Add(Fb("mug", 1.53f, 1.60f, .40f, .47f, .60f, .67f, new Color(.90f, .55f, .30f)));
             return l;
         }
 
