@@ -121,6 +121,7 @@ namespace Oddity.RoomTest
                 var zeroTwoTrack=Resources.Load<AudioClip>("Sfx/ZeroTwoTrack");
                 var zeroTwoSource=cam.gameObject.AddComponent<AudioSource>();
                 zeroTwoAudio=new ZeroTwoDanceAudio(zeroTwoSource,zeroTwoTrack);
+                zeroTwoSource.mute=Environment.GetEnvironmentVariable("ODDITY_DANCEMUSIC")!="1"; // the dance music is muted by default (the track still runs, so the dance keeps its timing); ODDITY_DANCEMUSIC=1 plays it
                 Debug.Log("ZEROTWO_AUDIO loaded="+zeroTwoSource.clip.name+" seconds="+F(zeroTwoSource.clip.samples/(float)zeroTwoSource.clip.frequency)+" samples="+zeroTwoSource.clip.samples+" imported="+(zeroTwoTrack!=null));
                 cameraView=cam;cam.aspect=16f/9;Smooth(cam);Letterbox();cam.gameObject.AddComponent<AudioListener>();room=Environment.GetEnvironmentVariable("ODDITY_ROOM")!="0";apt=room && Environment.GetEnvironmentVariable("ODDITY_HOUSE")!="room";if(room)Room(cam);else Background(cam);blob=RoomTestRunner.MakeBlob();blob.localScale=new Vector3(.75f,.4f,1);
                 SetWalk(Environment.GetEnvironmentVariable("ODDITY_PLAYWALK")??"KaWalk01");
