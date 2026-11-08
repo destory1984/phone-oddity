@@ -29,7 +29,7 @@ namespace Oddity.RoomTest
             ("5", "KaIdle24Dance04"), ("6", "KaIdle89CheekPointPose"),
             ("7", "KaIdle41CuteShyPose"), ("8", "KaIdle44GreetingBow"),
             ("9", "BlowKissSkin"), ("space", "CatwalkIdleSkin"),
-            ("a", "CatwalkSkin"), ("shift", "KaRun01"), ("f", "UAL1Standard#Sword_Attack"), ("z", "ZeroTwoDance"), ("0", "KaIdle73IdolPose"), ("c", "KaSitPutHandBetweensLoop"), ("v", "KaSitWithBothLegsUpLoop"), ("y", "MxYawn"), ("k", "KaSleepTurnToTheSideLoop"), ("d", "CatwalkSkin"), ("w", "CatwalkSkin"), ("s", "CatwalkSkin"), ("left", "누르는 동안 시계 방향 회전"), ("right", "누르는 동안 반시계 회전"), ("n", "다음 모델, Shift+N 이전 모델"),("r", "현재 모델 다시 불러오기"), ("l", "주인공(카메라) 바라보기 켜고 끄기"), ("h", "식탁 의자에서 턱 괴기 켜고 끄기"), ("g", "다음 걷기"), ("escape", "재생 끝내기"), ("up", "줌 인"), ("down", "줌 아웃"), ("m", "고양이(소말리) 동작 바꾸기"), ("tab", "Tab 하린, 고양이, 소말리, 흰 고양이 번갈아 조종"), ("o", "O 고양이 소리 켜고 끄기")
+            ("a", "CatwalkSkin"), ("shift", "KaRun01"), ("f", "UAL1Standard#Sword_Attack"), ("z", "ZeroTwoDance"), ("0", "KaIdle73IdolPose"), ("c", "KaSitPutHandBetweensLoop"), ("v", "KaSitWithBothLegsUpLoop"), ("y", "MxYawn"), ("k", "KaSleepTurnToTheSideLoop"), ("j", "HairSweep"), ("u", "HairToss"), ("d", "CatwalkSkin"), ("w", "CatwalkSkin"), ("s", "CatwalkSkin"), ("left", "누르는 동안 시계 방향 회전"), ("right", "누르는 동안 반시계 회전"), ("n", "다음 모델, Shift+N 이전 모델"),("r", "현재 모델 다시 불러오기"), ("l", "주인공(카메라) 바라보기 켜고 끄기"), ("h", "식탁 의자에서 턱 괴기 켜고 끄기"), ("g", "다음 걷기"), ("escape", "재생 끝내기"), ("up", "줌 인"), ("down", "줌 아웃"), ("m", "고양이(소말리) 동작 바꾸기"), ("tab", "Tab 하린, 고양이, 소말리, 흰 고양이 번갈아 조종"), ("o", "O 고양이 소리 켜고 끄기")
         };
         // G cycles the walk; ODDITY_PLAYWALK picks the first one
         static readonly string[] Walks={"CatwalkSkin","KaWalk01","KaWalk02","KaWalk03","KaWalk04","KaWalk05","KaWalk06","KaWalk07","WalkFemale","WalkFeminine","WalkStandardSkin"};
@@ -54,9 +54,11 @@ namespace Oddity.RoomTest
             var view = EditorWindow.GetWindow(typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView"));
             view.position = new Rect(80,80,1280,720); view.Focus();
         }
-        public const int MotionCount=19;
-        public const int ZeroTwoIndex=13, IdolIndex=14, SitIndex=15, CurlIndex=16, YawnIndex=17, NapIndex=18; // index 9 is the idle, on space only
+        public const int MotionCount=21;
+        public const int ZeroTwoIndex=13, IdolIndex=14, SitIndex=15, CurlIndex=16, YawnIndex=17, NapIndex=18, SweepIndex=19, TossIndex=20; // index 9 is the idle, on space only
         ZeroTwoDance zeroTwoDance;
+        HairSweepRig hairRig; // j: puts the right hand on the head during the hair sweep
+        int gestureOn=-1; // the hair gesture playing now (SweepIndex or TossIndex), -1 none
         ZeroTwoDanceAudio zeroTwoAudio;
         float zeroTwoPhase;
         float zeroTwoAudioSeconds;
@@ -206,16 +208,16 @@ namespace Oddity.RoomTest
             var a=candidate.GetComponent<Animator>();
             if(a==null || a.avatar==null || !a.avatar.isHuman){ShowStatue(candidate,path);return;} // a bare mesh (no rig yet) stands still so its shape can be seen
             var puppet=candidate.AddComponent<HarinPuppet>();puppet.SetFace("neutral");puppet.enabled=false;
-            var oldDance=zeroTwoDance;var oldModel=model;var oldGraph=graph;var oldMixer=mixer;var oldPlays=plays;
+            var oldDance=zeroTwoDance;var oldHair=hairRig;var oldModel=model;var oldGraph=graph;var oldMixer=mixer;var oldPlays=plays;
             var oldClips=clips;var oldAnchors=anchors;var oldTravels=travels;var oldWeights=weights;var oldFrom=from;
             float oldSpeed=speed, oldBlend=blend;
             double phase=plays!=null && clips[current]!=null ? plays[current].GetTime()/clips[current].length : 0;
             soleMesh=null;model=candidate;anim=a;RestFeet();Arm();anim.applyRootMotion=false;
-            try{zeroTwoDance=new ZeroTwoDance(anim);BuildMotion();if(clips[current]!=null)plays[current].SetTime(phase*clips[current].length);Evaluate(0);}
-            catch{zeroTwoDance?.Dispose();zeroTwoDance=oldDance;if(graph.IsValid())graph.Destroy();graph=oldGraph;mixer=oldMixer;plays=oldPlays;clips=oldClips;anchors=oldAnchors;travels=oldTravels;weights=oldWeights;from=oldFrom;speed=oldSpeed;blend=oldBlend;model=oldModel;anim=oldModel!=null?oldModel.GetComponent<Animator>():null;Destroy(candidate);throw;}
+            try{zeroTwoDance=new ZeroTwoDance(anim);try{hairRig=new HairSweepRig(anim);}catch(Exception e){hairRig=null;Debug.LogWarning("ROOMPLAY_HAIR rig failed: "+e.Message);}BuildMotion();if(clips[current]!=null)plays[current].SetTime(phase*clips[current].length);Evaluate(0);}
+            catch{zeroTwoDance?.Dispose();zeroTwoDance=oldDance;hairRig=oldHair;if(graph.IsValid())graph.Destroy();graph=oldGraph;mixer=oldMixer;plays=oldPlays;clips=oldClips;anchors=oldAnchors;travels=oldTravels;weights=oldWeights;from=oldFrom;speed=oldSpeed;blend=oldBlend;model=oldModel;anim=oldModel!=null?oldModel.GetComponent<Animator>():null;Destroy(candidate);throw;}
             modelName=Path.GetFileNameWithoutExtension(path);modelPath=path;LogSprings(candidate);
             if(statue!=null){Destroy(statue);statue=null;}
-            oldDance?.Dispose();if(oldGraph.IsValid())oldGraph.Destroy();if(oldClips!=null && oldClips[ZeroTwoIndex]!=null)Destroy(oldClips[ZeroTwoIndex]);if(oldModel!=null)Destroy(oldModel);
+            oldDance?.Dispose();if(oldGraph.IsValid())oldGraph.Destroy();if(oldClips!=null && oldClips[ZeroTwoIndex]!=null)Destroy(oldClips[ZeroTwoIndex]);DestroyGestureClips(oldClips);if(oldModel!=null)Destroy(oldModel);
         }
         // a mesh without a Humanoid Avatar (a fresh Tripo glb): no motion, it stands on the floor at its own size (scaled to 1.6 m when it is far off),
         // left and right arrows turn it, up and down arrows zoom, N, Shift+N and R still step through the lines, Esc ends
@@ -223,7 +225,7 @@ namespace Oddity.RoomTest
         void ShowStatue(GameObject candidate,string path)
         {
             zeroTwoDance?.Dispose();zeroTwoDance=null;if(graph.IsValid())graph.Destroy();
-            if(clips!=null && clips[ZeroTwoIndex]!=null)Destroy(clips[ZeroTwoIndex]);clips=null;plays=null;
+            if(clips!=null && clips[ZeroTwoIndex]!=null)Destroy(clips[ZeroTwoIndex]);DestroyGestureClips(clips);clips=null;plays=null;
             if(model!=null)Destroy(model);model=null;anim=null;direction=0;
             if(statue!=null)Destroy(statue);
             var renderers=candidate.GetComponentsInChildren<Renderer>();
@@ -2182,7 +2184,7 @@ namespace Oddity.RoomTest
             AnimationPlayableOutput.Create(graph,"Harin",anim).SetSourcePlayable(mixer);
             clips=new AnimationClip[MotionCount];plays=new AnimationClipPlayable[MotionCount];anchors=new Vector3[MotionCount];travels=new Vector3[MotionCount];weights=new float[MotionCount];from=new float[MotionCount];
             for(int i=0;i<MotionCount;i++){
-                try{clips[i]=i==ZeroTwoIndex?ZeroTwoDance.CreateClip():RoomTestRunner.Clip(Keys[i].clip);}catch{if(i==ZeroTwoIndex)throw;Debug.LogWarning("ROOMPLAY missing clip="+Keys[i].clip);continue;}
+                try{clips[i]=i==ZeroTwoIndex?ZeroTwoDance.CreateClip():i==SweepIndex?HairGestures.CreateSweepClip(clips[9]):i==TossIndex?HairGestures.CreateTossClip(clips[9]):RoomTestRunner.Clip(Keys[i].clip);}catch(Exception e){if(i==ZeroTwoIndex)throw;Debug.LogWarning("ROOMPLAY missing clip="+Keys[i].clip+(HairGestures.IsGesture(i)?" "+e.Message:""));continue;}
                 plays[i]=AnimationClipPlayable.Create(graph,clips[i]);plays[i].SetApplyFootIK(false);
                 graph.Connect(plays[i],0,mixer,i);mixer.SetInputWeight(i,1);graph.Evaluate(0);
                 anchors[i]=anim.GetBoneTransform(HumanBodyBones.Hips).localPosition;
@@ -2195,6 +2197,7 @@ namespace Oddity.RoomTest
                 plays[i].SetTime(0);mixer.SetInputWeight(i,0);
             }
             if(clips[current]==null){int available=Array.FindIndex(clips,c=>c!=null);if(available<0)throw new Exception("no available motion clips");current=available;}
+            try{MeasureHair();}catch(Exception e){Debug.LogWarning("ROOMPLAY_HAIR measure failed: "+e);}
             speed=MeasureWalk(10);walkTwist=lastTwist;runSpeed=Mathf.Clamp(MeasureWalk(11),speed*1.5f,speed*3);runTwist=lastTwist;weights[current]=from[current]=1;blend=1;graph.Play();Evaluate(0);
         }
         float lastTwist;
@@ -2272,7 +2275,7 @@ namespace Oddity.RoomTest
             else if(key=="tab")ToggleControl();
             else if(key=="escape")EditorApplication.ExitPlaymode();
             else if(key=="left"||key=="right"){heading+=key=="left"?45:-45;if(direction==0)Turn(heading);}
-            else if(direction==0){int i=Array.FindIndex(Keys,k=>k.key==key);if(i>=0 && (i<9 || key=="f" || key=="z" || key=="0" || key=="y"))Select(i);}
+            else if(direction==0){int i=Array.FindIndex(Keys,k=>k.key==key);if(i>=0 && (i<9 || key=="f" || key=="z" || key=="0" || key=="y"))Select(i);else if(i>=0 && HairGestures.IsGesture(i))StartGesture(i);}
             Log(key);
         }
         void Log(string key){Debug.Log("ROOMPLAY key="+key+" clip="+Keys[current].clip+" x="+F(x)+" z="+F(z)+" yaw="+F(yaw)+" heading="+F(heading)+" zoom="+F(zoom)+" floor="+F(floorError)+(room?" fov="+F(cameraView.fieldOfView)+" bodyPath="+F(wantPath)+" aimPath="+F(focusPath):""));wantPath=focusPath=0;}
@@ -2496,9 +2499,47 @@ namespace Oddity.RoomTest
         void Smile(float dt)
         {
             var vrm=model.GetComponent<Vrm10Instance>();if(vrm==null || vrm.Runtime==null)return;
-            smile=Mathf.MoveTowards(smile,current==9?IdleSmile:SmileWeight,dt*SmileWeight/.3f);
+            smile=Mathf.MoveTowards(smile,current==9 || HairGestures.IsGesture(current)?IdleSmile:SmileWeight,dt*SmileWeight/.3f);
             vrm.Runtime.Expression.SetWeight(ExpressionKey.Relaxed,smile);
-            nap=Mathf.MoveTowards(nap,current==NapIndex?1:0,dt/.6f);vrm.Runtime.Expression.SetWeight(ExpressionKey.Blink,nap); // asleep: eyes shut
+            nap=Mathf.MoveTowards(nap,current==NapIndex?1:0,dt/.6f);vrm.Runtime.Expression.SetWeight(ExpressionKey.Blink,Mathf.Max(nap,clips[TossIndex]!=null?HairGestures.TossBlink((float)plays[TossIndex].GetTime())*weights[TossIndex]:0)); // asleep: eyes shut; the head toss blinks once
+        }
+        // J hair sweep and U head toss: one shot each, back to the idle (space) by themselves; pressing again restarts, walking or another key cancels
+        void StartGesture(int index)
+        {
+            if(clips[index]==null)return;
+            if(current==index){GestureEnd("restart");plays[index].SetTime(0);gestureOn=index;Debug.Log("ROOMPLAY_HAIR start="+(index==SweepIndex?"sweep":"toss"));return;}
+            Select(index);
+        }
+        void GestureEnd(string why){if(gestureOn>=0)Debug.Log("ROOMPLAY_HAIR end="+(gestureOn==SweepIndex?"sweep":"toss")+" "+why);gestureOn=-1;}
+        void GestureTick()
+        {
+            int g=HairGestures.IsGesture(current)?current:-1;
+            if(g!=gestureOn){GestureEnd("cancel");if(g>=0)Debug.Log("ROOMPLAY_HAIR start="+(g==SweepIndex?"sweep":"toss"));gestureOn=g;}
+            if(g>=0 && !poseFreeze && plays[g].GetTime()>=clips[g].length-1e-4f){GestureEnd("done");Select(9);}
+        }
+        static void DestroyGestureClips(AnimationClip[] c){if(c==null)return;if(c.Length>SweepIndex && c[SweepIndex]!=null)Destroy(c[SweepIndex]);if(c.Length>TossIndex && c[TossIndex]!=null)Destroy(c[TossIndex]);}
+        // plays both gestures once in the graph and logs how the hand clears the head (HAIRGESTURE ...) and how far the toss turns the head
+        void MeasureHair()
+        {
+            if(hairRig==null)return;
+            var head=anim.GetBoneTransform(HumanBodyBones.Head);var rig=hairRig;
+            if(clips[SweepIndex]!=null){
+                mixer.SetInputWeight(SweepIndex,1);rig.MinBone=rig.MinCenter=rig.MinMesh=float.MaxValue;rig.MaxPalmForward=-1;
+                plays[SweepIndex].SetTime(0);graph.Evaluate(0);var rest=head.rotation;float tilt=0;
+                for(float t=0;t<=HairGestures.SweepLength+1e-4f;t+=1f/60){plays[SweepIndex].SetTime(Mathf.Min(t,HairGestures.SweepLength));graph.Evaluate(0);rig.Apply(t,1);rig.Sample(t);tilt=Mathf.Max(tilt,Quaternion.Angle(rest,head.rotation));}
+                Debug.Log("HAIRGESTURE sweep minDist="+F(rig.MinBone)+" headRadius="+F(rig.HeadRadius)+" minCenter="+F(rig.MinCenter)+" meshClear="+F(rig.MinMesh)+" radii="+F(rig.Radii.x)+","+F(rig.Radii.y)+","+F(rig.Radii.z)+" headTurnMax="+F(tilt)+" deg palmForwardMax="+F(rig.MaxPalmForward)+" at "+F(rig.PalmForwardAt)+" s");
+                mixer.SetInputWeight(SweepIndex,0);plays[SweepIndex].SetTime(0);
+            }
+            if(clips[TossIndex]!=null){
+                mixer.SetInputWeight(TossIndex,1);plays[TossIndex].SetTime(0);graph.Evaluate(0);var rest=head.rotation;var up0=head.up;float most=0,roll=0,nod=0;float t1=0;
+                var rootT=anim.transform;
+                for(float t=0;t<=HairGestures.TossLength+1e-4f;t+=1f/60){plays[TossIndex].SetTime(Mathf.Min(t,HairGestures.TossLength));graph.Evaluate(0);
+                    float a=Quaternion.Angle(rest,head.rotation);if(a>most){most=a;t1=t;}
+                    var side=Vector3.Dot(head.up,rootT.right)-Vector3.Dot(up0,rootT.right);roll=Mathf.Max(roll,Mathf.Abs(Mathf.Asin(Mathf.Clamp(side,-1,1))*Mathf.Rad2Deg));
+                    var fwd=Vector3.Dot(head.up,rootT.forward)-Vector3.Dot(up0,rootT.forward);nod=Mathf.Max(nod,Mathf.Abs(Mathf.Asin(Mathf.Clamp(fwd,-1,1))*Mathf.Rad2Deg));}
+                Debug.Log("HAIRGESTURE toss swingMax="+F(most)+" deg at "+F(t1)+" s, sideLean="+F(roll)+" deg, frontBack="+F(nod)+" deg, length="+F(clips[TossIndex].length)+" s");
+                mixer.SetInputWeight(TossIndex,0);plays[TossIndex].SetTime(0);
+            }
         }
         // the cat pose (key 2) mouths "meow" on its two paw strokes, without a sound: the mouth opens to aa and closes through ou
         static readonly (float from,float to)[] Meows={(.35f,.95f),(3.55f,4.15f)};
@@ -2523,7 +2564,7 @@ namespace Oddity.RoomTest
             else if(current!=ZeroTwoIndex && dt>0)zeroTwoPhase=Mathf.Repeat(zeroTwoPhase+dt,ZeroTwoMusic.Duration);
             for(int i=0;i<MotionCount;i++)if(clips[i]!=null){
                 weights[i]=Mathf.Lerp(from[i],i==current?1:0,blend);mixer.SetInputWeight(i,weights[i]);
-                plays[i].SetTime(i==ZeroTwoIndex?zeroTwoPhase:(plays[i].GetTime()+(Frozen(i)?0:dt))%clips[i].length);baseHip+=anchors[i]*weights[i];drift+=travels[i]*(float)(plays[i].GetTime()/clips[i].length)*weights[i];sum+=weights[i];
+                plays[i].SetTime(i==ZeroTwoIndex?zeroTwoPhase:HairGestures.IsGesture(i)?Mathf.Min(clips[i].length,(float)plays[i].GetTime()+(Frozen(i)?0:dt)):(plays[i].GetTime()+(Frozen(i)?0:dt))%clips[i].length);baseHip+=anchors[i]*weights[i];drift+=travels[i]*(float)(plays[i].GetTime()/clips[i].length)*weights[i];sum+=weights[i];
             }
             bodyFix=walkTwist*weights[10]+runTwist*weights[11];
             model.transform.SetPositionAndRotation(new Vector3(x,0,z),Quaternion.Euler(0,yaw-bodyFix,0));graph.Evaluate(0);
@@ -2531,12 +2572,14 @@ namespace Oddity.RoomTest
             if(sum>0){p-=drift/sum;p.x=Mathf.Clamp(p.x,baseHip.x/sum-.2f,baseHip.x/sum+.2f);p.z=Mathf.Clamp(p.z,baseHip.z/sum-.2f,baseHip.z/sum+.2f);hips.localPosition=p;}
             model.transform.SetPositionAndRotation(new Vector3(x,0,z),Quaternion.Euler(0,yaw-bodyFix,0));
             DeepenBow();
+            if(hairRig!=null && clips[SweepIndex]!=null)hairRig.Apply((float)plays[SweepIndex].GetTime(),weights[SweepIndex]);
             LimitWrists();
             if(weights[SitIndex]+weights[CurlIndex]+weights[NapIndex]<.5f)LevelFeet(dt);
             zeroTwoDance?.Apply(zeroTwoPhase,weights[ZeroTwoIndex]);
             zeroTwoAudio?.SetState(current==ZeroTwoIndex,musicAdvancing,zeroTwoAudioSeconds);
             Meow();
             Smile(dt);
+            GestureTick();
             Ground(dt);
             PinToSeat();
             FeetClear();
@@ -2782,6 +2825,6 @@ namespace Oddity.RoomTest
             if(!catSfxOn){var small=new GUIStyle(GUI.skin.label){fontSize=13,alignment=TextAnchor.MiddleRight};var r2=new Rect(Screen.width-230,46,220,22);
                 small.normal.textColor=new Color(0,0,0,.9f);GUI.Label(new Rect(r2.x+1,r2.y+1,r2.width,r2.height),"고양이 소리 끔",small);small.normal.textColor=new Color(1f,.85f,.6f);GUI.Label(r2,"고양이 소리 끔",small);}
         }
-        void OnDestroy(){foreach(var pet in pets)if(pet.graph.IsValid())pet.graph.Destroy();zeroTwoAudio?.Dispose();zeroTwoDance?.Dispose();if(clips!=null && clips[ZeroTwoIndex]!=null)Destroy(clips[ZeroTwoIndex]);if(graph.IsValid())graph.Destroy();if(boundsMesh!=null)Destroy(boundsMesh);if(soleBake!=null)Destroy(soleBake);EditorSettings.enterPlayModeOptionsEnabled=oldEnabled;EditorSettings.enterPlayModeOptions=oldOptions;}
+        void OnDestroy(){foreach(var pet in pets)if(pet.graph.IsValid())pet.graph.Destroy();zeroTwoAudio?.Dispose();zeroTwoDance?.Dispose();if(clips!=null && clips[ZeroTwoIndex]!=null)Destroy(clips[ZeroTwoIndex]);DestroyGestureClips(clips);if(graph.IsValid())graph.Destroy();if(boundsMesh!=null)Destroy(boundsMesh);if(soleBake!=null)Destroy(soleBake);EditorSettings.enterPlayModeOptionsEnabled=oldEnabled;EditorSettings.enterPlayModeOptions=oldOptions;}
     }
 }
