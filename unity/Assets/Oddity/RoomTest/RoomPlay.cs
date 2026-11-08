@@ -201,6 +201,7 @@ namespace Oddity.RoomTest
             if(prefab==null && File.Exists(path)){AssetDatabase.ImportAsset(path,ImportAssetOptions.ForceSynchronousImport|ImportAssetOptions.ForceUpdate);prefab=AssetDatabase.LoadAssetAtPath<GameObject>(path);} // a model dropped in while the editor was closed may not be imported yet
             if(prefab==null)throw new Exception("model asset missing: "+Path.GetFileName(path));
             var candidate=Instantiate(prefab);
+            Oddity.Game.FaceSdfShading.Attach(candidate); // anime two-tone face shadow test (ODDITY_FACESDF=0 turns it off)
             foreach(var renderer in candidate.GetComponentsInChildren<SkinnedMeshRenderer>())renderer.updateWhenOffscreen=true; // the close shot culls the head on its stale bounds
             var a=candidate.GetComponent<Animator>();
             if(a==null || a.avatar==null || !a.avatar.isHuman){ShowStatue(candidate,path);return;} // a bare mesh (no rig yet) stands still so its shape can be seen
@@ -2490,10 +2491,12 @@ namespace Oddity.RoomTest
         // a blank face in the idle (key 0, space), a held smile in every other clip; it eases in and out over 0.3 s
         const float SmileWeight=.7f; // relaxed, the closed-mouth smile the room test films use
         float smile;
+        // ODDITY_SMILE=w: the idle keeps a slight smile of weight w too (test shots of Harin's face are taken smiling, e.g. 0.5)
+        static readonly float IdleSmile=float.TryParse(Environment.GetEnvironmentVariable("ODDITY_SMILE"),NumberStyles.Float,CultureInfo.InvariantCulture,out var s)?Mathf.Clamp01(s):0;
         void Smile(float dt)
         {
             var vrm=model.GetComponent<Vrm10Instance>();if(vrm==null || vrm.Runtime==null)return;
-            smile=Mathf.MoveTowards(smile,current==9?0:SmileWeight,dt*SmileWeight/.3f);
+            smile=Mathf.MoveTowards(smile,current==9?IdleSmile:SmileWeight,dt*SmileWeight/.3f);
             vrm.Runtime.Expression.SetWeight(ExpressionKey.Relaxed,smile);
             nap=Mathf.MoveTowards(nap,current==NapIndex?1:0,dt/.6f);vrm.Runtime.Expression.SetWeight(ExpressionKey.Blink,nap); // asleep: eyes shut
         }
