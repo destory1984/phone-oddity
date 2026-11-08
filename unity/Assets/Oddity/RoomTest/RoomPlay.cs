@@ -137,7 +137,7 @@ namespace Oddity.RoomTest
                 var text=Environment.GetEnvironmentVariable("ODDITY_PLAYKEYS");scripted=!string.IsNullOrWhiteSpace(text);
                 if(scripted)foreach(var part in text.Split(',')){
                     var pair=part.Split(':');
-                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0]=="realtab" || pair[0]=="wait" || pair[0].StartsWith("click") || pair[0].StartsWith("view") || pair[0]=="wheelup" || pair[0]=="liftup" || pair[0]=="liftdown" || pair[0]=="swingleft" || pair[0]=="swingright" || pair[0]=="tiltup" || pair[0]=="tiltdown" || pair[0]=="freeze" || pair[0]=="unfreeze" || (pair[0].StartsWith("gi") && int.TryParse(pair[0].Substring(2),out _)) || (pair[0].StartsWith("shade") && int.TryParse(pair[0].Substring(5),out _)) || pair[0]=="wheeldown" || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
+                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0]=="realtab" || pair[0]=="wait" || pair[0].StartsWith("click") || pair[0].StartsWith("view") || pair[0]=="wheelup" || pair[0]=="liftup" || pair[0]=="liftdown" || pair[0]=="swingleft" || pair[0]=="swingright" || pair[0]=="tiltup" || pair[0]=="tiltdown" || pair[0]=="freeze" || pair[0]=="unfreeze" || (pair[0].StartsWith("gi") && int.TryParse(pair[0].Substring(2),out _)) || (pair[0].StartsWith("shade") && int.TryParse(pair[0].Substring(5),out _)) || pair[0]=="wheeldown" || FaceKeys.ScriptDigit(pair[0])>=0 || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
                     script.Add((pair[0],seconds));
                 }
                 Debug.Log("ROOMPLAY_READY model="+modelName);
@@ -324,7 +324,7 @@ namespace Oddity.RoomTest
             public Transform root;public PlayableGraph graph;public AnimationPlayableOutput outp;
             public int index;public bool moving;public float heading=-1000;
             public bool onSofa;public Transform seat;public float baseY;
-            public Vector2? goal;public string goalKind;public Transform goalSeat;public Vector2 goalLook;public float faceTo=float.NaN,stuck;
+            public bool sofaTurn;public Vector3 sofaFront;public int pendingRest;public Vector2? goal;public string goalKind;public Transform goalSeat;public Vector2 goalLook;public float faceTo=float.NaN,stuck;
             public int job;public float jobT,jobDur,jobArc,jobHead;public Vector3 jobFrom,jobTo;public Transform jobSeat;
             public bool groomAfter; // white: the SitDown that is playing leads into Groom
             public int sit; // Somali and white only (10 grooming, 11 stretching): 0 standing, 1 SitDown playing, 2 sitting (SittingIdle), 3 StandUp playing, 4 LieDown, 5 lying (LyingIdle, sphinx), 6 GetUp, 7 LoafDown, 8 loafing (LoafIdle), 9 LoafUp
@@ -955,6 +955,7 @@ namespace Oddity.RoomTest
             foreach(var pr in perches.Values)PerchTop(pr);
             Debug.Log("ROOMPLAY_SPOTS "+string.Join(" ",spotsOf.SelectMany(kv=>kv.Value).Select(sp=>sp.key+"("+F(sp.land.x)+","+F(sp.land.y)+(sp.perch!=null?" top "+F(SpotTop(sp)):" x "+F(sp.lo)+".."+F(sp.hi))+")")));
         }
+        const float SofaTurnRate=180;
         void PetJobTick(Pet p,float dt)
         {
             p.jobT+=dt;float k=Mathf.Clamp01(p.jobT/p.jobDur);
@@ -979,10 +980,10 @@ namespace Oddity.RoomTest
             if(up){p.seat=p.jobSeat;var front=seats.First(t=>t.mark==p.seat).front;
                 var side=Vector3.Cross(Vector3.up,front).normalized;var mid=SofaCentre();var toMid=new Vector3(mid.x-p.root.position.x,0,mid.z-p.root.position.z);
                 if(Vector3.Dot(side,toMid)<0)side=-side; // along the seat, towards the middle of the sofa: parallel to the backrest, the whole body on the cushion
-                p.fitFront=front;p.fitSide=side;p.surfBase=p.jobTo.y-p.baseY;p.faceTo=Mathf.Atan2(side.x,side.z)*Mathf.Rad2Deg;if(p.goalKind=="sofa")p.goal=null;}
+                p.fitFront=front;p.fitSide=side;p.surfBase=p.jobTo.y-p.baseY;p.faceTo=Mathf.Atan2(front.x,front.z)*Mathf.Rad2Deg;p.sofaTurn=true;p.sofaFront=front;if(p.goalKind=="sofa")p.goal=null;} // after the landing it turns to face the front of the seat (toward the table and TV), then rests
             else{p.fitFront=p.fitSide=Vector3.zero;}
             SetPetClip(p,0,true);
-            if(up && p.somali && !p.goal.HasValue){int rk=p.arriveRest>0?p.arriveRest:1;p.arriveRest=0;PetRest(p,rk);} // the Somali rests on the cushion
+            if(up && p.somali && !p.goal.HasValue){int rk=p.arriveRest>0?p.arriveRest:1;p.arriveRest=0;p.pendingRest=rk;} // the Somali rests on the cushion, once it has turned to face the front
             Debug.Log("ROOMPLAY_"+p.tag+" onsofa="+(up?1:0)+" pos=("+F(p.jobTo.x)+","+F(p.jobTo.y)+","+F(p.jobTo.z)+")");
         }
         void CatTick(float dt,Vector2 input,bool run,float turn)=>PetMove(ctl,dt,input,run,turn,false);
@@ -994,6 +995,7 @@ namespace Oddity.RoomTest
             if(p.hopWait>0){p.hopWait-=dt;if(p.hopWait<=0)NextHop(p);return;} // a beat on the intermediate perch, then the next planned hop
             if(p.job!=0){PetJobTick(p,dt);return;}
             bool keys=input!=Vector2.zero;
+            if(keys || turn!=0){p.sofaTurn=false;p.pendingRest=0;} // steering cancels the turn on the sofa
             if(keys){p.goal=null;p.chainNext=null;} // the keys take over from a click
             if(p.onSofa && p.goal.HasValue && p.goalKind=="sofa" && p.goalSeat==p.seat)p.goal=null; // already on that seat
             if(p.perch!=null && p.goal.HasValue && p.goalKind==p.perch.name && p.spot!=null && AtSpot(p,p.spot))p.goal=null; // already up there, on that spot
@@ -1038,7 +1040,14 @@ namespace Oddity.RoomTest
                 p.root.position=new Vector3(next.x,p.root.position.y,next.y);}
             else{
                 if(turn!=0){p.heading+=turn*TurnRate*dt;p.faceTo=float.NaN;} // held arrows turn it in place like Harin
-                if(!float.IsNaN(p.faceTo)){p.heading=Mathf.LerpAngle(p.heading,p.faceTo,1-Mathf.Exp(-10*dt));if(Mathf.Abs(Mathf.DeltaAngle(p.heading,p.faceTo))<1)p.faceTo=float.NaN;}
+                if(p.sofaTurn && !float.IsNaN(p.faceTo)){ // the turn on the sofa: 180 degrees a second at most, then it settles
+                    p.heading=Mathf.MoveTowardsAngle(p.heading,p.faceTo,SofaTurnRate*dt);
+                    if(Mathf.Abs(Mathf.DeltaAngle(p.heading,p.faceTo))<1){p.heading=p.faceTo;p.faceTo=float.NaN;p.sofaTurn=false;
+                        Debug.Log("ROOMPLAY_"+p.tag+" sofaface yaw="+F(p.heading)+" front="+F(Mathf.Atan2(p.sofaFront.x,p.sofaFront.z)*Mathf.Rad2Deg));
+                        if(p.pendingRest>0){int rk=p.pendingRest;p.pendingRest=0;PetRest(p,rk);}}
+                }
+                else if(!float.IsNaN(p.faceTo)){p.heading=Mathf.LerpAngle(p.heading,p.faceTo,1-Mathf.Exp(-10*dt));if(Mathf.Abs(Mathf.DeltaAngle(p.heading,p.faceTo))<1)p.faceTo=float.NaN;}
+                else if(p.sofaTurn){p.sofaTurn=false;p.pendingRest=0;}
             }
             p.root.rotation=Quaternion.Euler(0,p.heading,0);
             if(moving!=p.moving){
@@ -2249,6 +2258,7 @@ namespace Oddity.RoomTest
         }
         void Command(string key)
         {
+            if(FaceKeys.ScriptDigit(key)>=0){SetFace(FaceKeys.ScriptDigit(key));return;} // Shift+digit: the face only, before the body and cat keys
             if(key=="o"){ToggleCatSfx();return;}
             if(key=="realtab"){StartCoroutine(RealTab());return;}
             if(key.StartsWith("click")){ScriptClick(key);return;}
@@ -2406,7 +2416,11 @@ namespace Oddity.RoomTest
                 if(mouse!=null){var sc=mouse.scroll.ReadValue();float wheel=sc.y!=0?sc.y:kb.shiftKey.isPressed?sc.x:0; // Windows may turn Shift + wheel into a sideways scroll
                     if(wheel!=0){if(kb.altKey.isPressed)TiltNotchBy(wheel>0?1:-1);else if(kb.shiftKey.isPressed)SwingNotchBy(wheel>0?1:-1);else if(kb.ctrlKey.isPressed)LiftNotchBy(wheel>0?1:-1);else wheelZoom=Mathf.Clamp(wheelZoom+Mathf.Sign(wheel)*WheelNotch,-1,1);}} // wheel up zooms in, Ctrl + wheel up raises the camera
                 foreach(var entry in Keys)if(!Walk(entry.key) && entry.key!="left" && entry.key!="right" && entry.key!="tab" && entry.key!="o"){ // Tab and O have their own poll (TabPoll)
-                    if(kb[KeyOf(entry.key)].wasPressedThisFrame && (input==Vector2.zero || !char.IsDigit(entry.key[0])))Command(entry.key);
+                    bool digit=char.IsDigit(entry.key[0]);
+                    if(kb[KeyOf(entry.key)].wasPressedThisFrame){
+                        if(digit && kb.shiftKey.isPressed)Command("face"+entry.key); // Shift+digit is a face, not the digit's body motion
+                        else if(input==Vector2.zero || !digit)Command(entry.key);
+                    }
                 }
                 // an action moves while its key is held and holds the pose the moment it is let go; space returns to the idle
                 bool action=current<9 || current==12 || current==ZeroTwoIndex || current==IdolIndex || current==YawnIndex;bool pressed=action && kb[KeyOf(Keys[current].key)].isPressed;
@@ -2496,10 +2510,28 @@ namespace Oddity.RoomTest
         float smile;
         // the idle (key 0, space) keeps a slight smile of weight 0.5 by default; ODDITY_SMILE=w changes it (0 = blank face)
         static readonly float IdleSmile=float.TryParse(Environment.GetEnvironmentVariable("ODDITY_SMILE"),NumberStyles.Float,CultureInfo.InvariantCulture,out var s)?Mathf.Clamp01(s):.5f;
+        // Shift+1 .. Shift+0: one custom expression held at weight 1 (fades in over 0.2 s, the old one fades out) until cleared; the automatic smile fades out under it
+        string faceHeld;readonly Dictionary<string,float> faceW=new Dictionary<string,float>();readonly HashSet<string> faceWarned=new HashSet<string>();
+        void SetFace(int digit)
+        {
+            faceHeld=FaceKeys.Press(digit,faceHeld);
+            if(faceHeld!=null)Debug.Log("ROOMPLAY_FACE set="+faceHeld);else Debug.Log("ROOMPLAY_FACE clear");
+            Notice(faceHeld!=null?"표정 "+faceHeld:"표정 원래대로");
+        }
+        void FaceTick(Vrm10Instance vrm,float dt)
+        {
+            foreach(var name in FaceKeys.Names){
+                faceW.TryGetValue(name,out float w);w=Mathf.MoveTowards(w,name==faceHeld?1:0,dt/.2f);faceW[name]=w;
+                var key=ExpressionKey.CreateCustom(name);
+                if(!vrm.Runtime.Expression.ExpressionKeys.Contains(key)){if(name==faceHeld && faceWarned.Add(name))Debug.LogWarning("ROOMPLAY_FACE model has no expression "+name);continue;}
+                vrm.Runtime.Expression.SetWeight(key,w);
+            }
+        }
         void Smile(float dt)
         {
             var vrm=model.GetComponent<Vrm10Instance>();if(vrm==null || vrm.Runtime==null)return;
-            smile=Mathf.MoveTowards(smile,current==9 || HairGestures.IsGesture(current)?IdleSmile:SmileWeight,dt*SmileWeight/.3f);
+            smile=Mathf.MoveTowards(smile,faceHeld!=null?0:current==9 || HairGestures.IsGesture(current)?IdleSmile:SmileWeight,dt*SmileWeight/.3f);
+            FaceTick(vrm,dt);
             vrm.Runtime.Expression.SetWeight(ExpressionKey.Relaxed,smile);
             nap=Mathf.MoveTowards(nap,current==NapIndex?1:0,dt/.6f);vrm.Runtime.Expression.SetWeight(ExpressionKey.Blink,Mathf.Max(nap,clips[TossIndex]!=null?HairGestures.TossBlink((float)plays[TossIndex].GetTime())*weights[TossIndex]:0)); // asleep: eyes shut; the head toss blinks once
         }
@@ -2796,7 +2828,7 @@ namespace Oddity.RoomTest
             }
             if(noHud)return; // ODDITY_NOHUD=1: clean screenshots
             bool cat=ctl!=null;
-            int rows=cat?ActionNames.Length+CatCommonKeys.Length:Keys.Length;
+            int rows=cat?ActionNames.Length+CatCommonKeys.Length:Keys.Length+1;
             float listEnd=34+rows*17;GUI.Box(new Rect(10,10,340,listEnd-6),"");var style=new GUIStyle(GUI.skin.label){fontSize=12};
             GUI.Label(new Rect(16,13,330,20),cat?(ctl.kind=="white"?"흰 고양이":ctl.kind=="tabby"?"줄무늬 고양이":"소말리 고양이"):modelName??"준비 중",style);
             for(int i=0;i<rows;i++){
@@ -2805,6 +2837,7 @@ namespace Oddity.RoomTest
                     GUI.Label(new Rect(16,34+i*17,330,18),(on?"> ":"  ")+CatRow(ctl,i),style);
                     continue;
                 }
+                if(i==Keys.Length){style.normal.textColor=faceHeld!=null?Color.yellow:Color.white;GUI.Label(new Rect(16,34+i*17,330,18),"  Shift+1→0  표정 "+(faceHeld??"(0 원래대로)"),style);continue;}
                 bool selected=i==current;
                 style.normal.textColor=selected?Color.yellow:clips!=null && i<MotionCount && clips[i]==null?Color.gray:Color.white;
                 GUI.Label(new Rect(16,34+i*17,330,18),(selected?"> ":"  ")+Keys[i].key+"  "+Keys[i].clip,style);
