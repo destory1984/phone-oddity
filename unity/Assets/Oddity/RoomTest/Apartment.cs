@@ -13,7 +13,7 @@ namespace Oddity.RoomTest
         public const float H = 2.4f, X1 = 4.38f, ZN = 10.15f;
         // the walkable box: 0.2 m inside the outer walls (the old room kept the same margin)
         public const float LimX0 = .2f, LimX1 = X1 - .2f, LimZ0 = .2f, LimZ1 = ZN - .2f;
-        static readonly Color Cream = new Color(.93f, .91f, .72f), Trim = new Color(.62f, .42f, .26f), Alu = new Color(.74f, .75f, .77f);
+        static readonly Color Wall = new Color(.90f, .86f, .79f), CeilCol = new Color(.96f, .95f, .93f), BaseCol = new Color(.95f, .94f, .90f), Trim = new Color(.62f, .42f, .26f), Alu = new Color(.74f, .75f, .77f);
 
         public struct Opening { public float a, b, y0, y1; public bool door, window, slider; public string name; }
         public sealed class WallDef
@@ -194,6 +194,76 @@ namespace Oddity.RoomTest
         }
         public static List<Rect> FurnitureBlockers() => Furniture().Where(f => f.block).Select(f => Rect.MinMaxRect(f.x0, f.z0, f.x1, f.z1)).ToList();
 
+
+        // ---- finishing: door leaves, sliding panels, LED ceiling fixtures and the orbit shot's numbers (data, so the tests can read them)
+        public sealed class LeafDef { public string name, wall; public Vector2 hinge, dir; public float w; public Color color; }
+        const float LeafAngle = 95f, LeafThick = .04f;
+        static LeafDef Leaf(string name, string wall, float hx, float hz, Vector2 closed, Vector2 into, float gap, Color c)
+        {
+            float a = LeafAngle * Mathf.Deg2Rad; var dir = closed * Mathf.Cos(a) + into * Mathf.Sin(a);
+            return new LeafDef { name = name, wall = wall, hinge = new Vector2(hx, hz), dir = dir.normalized, w = gap - .08f, color = c };
+        }
+        // hinged leaves swung open about 95 degrees into their room, hinge on the low-coordinate jamb, so each gap keeps 0.4 m of clear floor beside the leaf
+        public static List<LeafDef> Leaves() => new List<LeafDef> {
+            Leaf("bath_door", "kit_W_bath", 2.21f, BathDoorA + .04f, new Vector2(0, 1), new Vector2(-1, 0), BathDoorB - BathDoorA, new Color(.94f, .93f, .90f)),
+            Leaf("bedroom_door", "kit_W_bed", 2.21f, BedDoorA + .04f, new Vector2(0, 1), new Vector2(-1, 0), BedDoorB - BedDoorA, new Color(.94f, .93f, .90f)),
+            Leaf("front_door", "ent_N", FrontA + .04f, ZN, new Vector2(1, 0), new Vector2(0, -1), FrontB - FrontA, new Color(.84f, .80f, .74f)),
+        };
+        static Rect LeafRect(LeafDef l)
+        {
+            var n = new Vector2(-l.dir.y, l.dir.x) * LeafThick / 2; var tip = l.hinge + l.dir * l.w;
+            var pts = new[] { l.hinge + n, l.hinge - n, tip + n, tip - n };
+            return Rect.MinMaxRect(pts.Min(q => q.x), pts.Min(q => q.y), pts.Max(q => q.x), pts.Max(q => q.y));
+        }
+        public static float PanelW(float a, float b) => (b - a) / 2 + .04f;
+        // the two panels of a sliding door are stacked at its east end, the west part of the gap stays open
+        public static List<Rect> SliderStacks()
+        {
+            var res = new List<Rect>();
+            foreach (var w in Walls()) foreach (var o in w.openings.Where(o => o.slider))
+            { float mid = (w.z0 + w.z1) / 2; res.Add(Rect.MinMaxRect(o.b - PanelW(o.a, o.b), mid - .03f, o.b, mid + .03f)); }
+            return res;
+        }
+        public static List<Rect> LeafBlockers() => Leaves().Select(LeafRect).Concat(SliderStacks()).ToList();
+
+        public struct Fixture { public string name, room; public float x, z, sx, sz; public bool round; public float power, range; }
+        // Korean flush LED lights on the 2.40 m ceiling (0.04 thick): a 1.0 x 0.5 panel in the living room, a bar over the kitchen counter, small flushes elsewhere (sx, sz: size along x and z, round ones use sx as the diameter)
+        public static List<Fixture> Fixtures() => new List<Fixture> {
+            new Fixture{name="led_living",room="living",x=2.19f,z=3.17f,sx=1.0f,sz=.5f,power=2.4f,range=7f},
+            new Fixture{name="led_kitchen",room="kitchen",x=3.80f,z=6.70f,sx=.12f,sz=1.4f,power=1.5f,range=5f},
+            new Fixture{name="led_balcony",room="balcony",x=2.19f,z=.60f,sx=.24f,sz=.24f,round=true,power=.9f,range=4f},
+            new Fixture{name="led_bath",room="bath",x=1.46f,z=6.21f,sx=.26f,sz=.26f,round=true,power=.9f,range=4f},
+            new Fixture{name="led_bedroom",room="bedroom",x=1.10f,z=8.40f,sx=.36f,sz=.36f,power=1.2f,range=5f},
+            new Fixture{name="led_entrance",room="entrance",x=3.50f,z=9.55f,sx=.24f,sz=.24f,round=true,power=.9f,range=4f},
+        };
+
+        // the orbit shot: Harin stands at OrbitCentre facing south-west, the camera goes round her at eye height inside the living room (0.25 m off every wall, out of anything tall enough to be in its way)
+        public static readonly Vector2 OrbitCentre = new Vector2(2.95f, 3.17f);
+        public const float OrbitMargin = .25f, OrbitCamY = 1.35f, OrbitAim = 1.25f, OrbitMaxR = 1.4f, OrbitFacingYaw = 225f;
+        public static Rect OrbitBox() => Rect.MinMaxRect(OrbitMargin, 1.30f + OrbitMargin, X1 - OrbitMargin, 5.04f - OrbitMargin);
+        // furniture the camera would hit at its height (tall, in the living room), grown by the margin
+        public static List<Rect> OrbitObstacles()
+        {
+            var l = Furniture().Where(f => f.y1 > OrbitCamY - .15f && f.z0 > 1.3f && f.z1 < 5.04f).Select(f => Rect.MinMaxRect(f.x0, f.z0, f.x1, f.z1)).ToList();
+            l.Add(Rect.MinMaxRect(.10f, 4.10f, .40f, 4.40f)); // the lamp shade
+            return l.Select(r => Rect.MinMaxRect(r.xMin - OrbitMargin, r.yMin - OrbitMargin, r.xMax + OrbitMargin, r.yMax + OrbitMargin)).ToList();
+        }
+        static bool OrbitFree(Vector2 p, Rect box, List<Rect> obs) => box.Contains(p) && !obs.Any(r => p.x > r.xMin && p.x < r.xMax && p.y > r.yMin && p.y < r.yMax);
+        static float OrbitRaw(float deg, Rect box, List<Rect> obs)
+        {
+            float a = deg * Mathf.Deg2Rad; var d = new Vector2(Mathf.Sin(a), Mathf.Cos(a));
+            for (float r = OrbitMaxR; r > .3f; r -= .02f) if (OrbitFree(OrbitCentre + d * r, box, obs)) return r;
+            return .3f;
+        }
+        // the camera's radius at an angle (0 = north of her, clockwise seen from above): the smallest free radius within 20 degrees either side, so the radius changes gently
+        public static float OrbitRadius(float deg)
+        {
+            var box = OrbitBox(); var obs = OrbitObstacles(); float m = OrbitMaxR;
+            for (float o = -20; o <= 20.01f; o += 4) m = Mathf.Min(m, OrbitRaw(deg + o, box, obs));
+            return m;
+        }
+        public static Vector3 OrbitCamera(float deg) { float r = OrbitRadius(deg), a = deg * Mathf.Deg2Rad; return new Vector3(OrbitCentre.x + Mathf.Sin(a) * r, OrbitCamY, OrbitCentre.y + Mathf.Cos(a) * r); }
+
         // ---- the builder
         public sealed class WallPiece { public string name, wall; public Renderer r; public Vector3 min, max; }
         static GameObject Box(Transform p, string name, float x0, float x1, float y0, float y1, float z0, float z1, Color c)
@@ -207,6 +277,12 @@ namespace Oddity.RoomTest
             public readonly List<RoomDef> rooms; public readonly List<DoorDef> doors; readonly List<WallPiece> pieces;
             readonly Dictionary<string, bool[]> hiddenOf = new Dictionary<string, bool[]>();
             public string current; public float lastCut = -10;
+            Renderer ceilR; readonly List<Renderer> ceilParts = new List<Renderer>(); readonly List<(string room, Light l)> lamps = new List<(string, Light)>(); bool showAll, showCeil;
+            public void SetCeiling(Renderer ceil, List<Renderer> parts) { ceilR = ceil; ceilParts.AddRange(parts); SetCeilingShown(false); }
+            public void AddLamp(string room, Light l) { lamps.Add((room, l)); }
+            void SetCeilingShown(bool on) { showCeil = on; if (ceilR != null) ceilR.shadowCastingMode = on ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly; foreach (var r in ceilParts) if (r != null) r.enabled = on; }
+            public string LampInfo() => string.Join(" ", lamps.Select(q => q.room + "=" + q.l.intensity.ToString("0.0#", System.Globalization.CultureInfo.InvariantCulture) + "/r" + q.l.range));
+            public void SetLamps(bool on) { foreach (var (_, l) in lamps) l.enabled = on; }
             public View(List<RoomDef> r, List<DoorDef> d, List<WallPiece> p) { rooms = r; doors = d; pieces = p; }
             public RoomDef Room(string name) => rooms.First(r => r.name == name);
             static float Gap(Rect r, Vector2 p) { float dx = Mathf.Max(r.xMin - p.x, 0, p.x - r.xMax), dz = Mathf.Max(r.yMin - p.y, 0, p.y - r.yMax); return Mathf.Sqrt(dx * dx + dz * dz); }
@@ -251,10 +327,11 @@ namespace Oddity.RoomTest
             public void AddStatic(Renderer r) { statics.Add(r); }
             readonly List<(string wall, Renderer r)> frames = new List<(string, Renderer)>(); readonly Dictionary<string, HashSet<string>> cutOf = new Dictionary<string, HashSet<string>>();
             public void AddFrame(string wall, Renderer r) { frames.Add((wall, r)); }
-            public void Register(Transform t) { foreach (var r in t.GetComponentsInChildren<Renderer>(true)) if (!statics.Contains(r)) statics.Add(r); if (current != null) Apply(); }
+            public void Register(Transform t) { foreach (var r in t.GetComponentsInChildren<Renderer>(true)) if (!statics.Contains(r) && !ceilParts.Contains(r)) statics.Add(r); if (showAll) ShowAll(showCeil); else if (current != null) Apply(); }
             public bool Near(Vector2 p) { var f = Room(current).floor; return p.x > f.xMin - .35f && p.x < f.xMax + .35f && p.y > f.yMin - .35f && p.y < f.yMax + .35f; }
             void Apply()
             {
+                showAll = false; SetCeilingShown(false);
                 var rd = Room(current); var h = HiddenFor(rd); var f = rd.floor; var g = Rect.MinMaxRect(f.xMin - .35f, f.yMin - .35f, f.xMax + .35f, f.yMax + .35f);
                 for (int k = 0; k < pieces.Count; k++)
                 {
@@ -275,7 +352,7 @@ namespace Oddity.RoomTest
             {
                 current = room; Apply();
             }
-            public void ShowAll() { foreach (var pc in pieces) if (pc.r != null) pc.r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On; foreach (var r in statics) if (r != null && r.name != "ceiling") r.enabled = true; foreach (var (wn, r) in frames) if (r != null) r.enabled = true; }
+            public void ShowAll(bool ceiling = false) { showAll = true; SetCeilingShown(ceiling); foreach (var pc in pieces) if (pc.r != null) pc.r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On; foreach (var r in statics) if (r != null && r.name != "ceiling") r.enabled = true; foreach (var (wn, r) in frames) if (r != null) r.enabled = true; }
             public string HiddenNames(string room) { var h = HiddenFor(Room(room)); return string.Join(" ", pieces.Where((q, k) => h[k]).Select(q => q.name)); }
             public int HiddenCount(string room) => HiddenFor(Room(room)).Count(b => b);
             public int PieceCount => pieces.Count;
@@ -296,7 +373,7 @@ namespace Oddity.RoomTest
         // builds the shell under root (floors, walls with their openings, frames, thresholds, rails, the ceiling that only casts shadows, the sky card) and returns the view logic
         public static View Build(Transform root, Texture2D streetView, List<Rect> furnitureOut, Action<string, float, float, float, float, float, float> perchBox)
         {
-            var rooms = Rooms(); var doors = Doors(); var pieces = new List<WallPiece>(); var frames = new List<(string, Renderer)>();
+            var rooms = Rooms(); var doors = Doors(); var pieces = new List<WallPiece>(); var frames = new List<(string, Renderer)>(); var ceilParts = new List<Renderer>();
             Box(root, "slab", -.4f, X1 + .4f, -.3f, -.07f, -.4f, ZN + .4f, new Color(.30f, .30f, .31f)); // under everything, so door gaps and the margin read as a dark edge
             foreach (var r in rooms)
             {
@@ -311,15 +388,17 @@ namespace Oddity.RoomTest
                 var holder = new GameObject("wall_" + w.name).transform; holder.SetParent(root, false);
                 foreach (var p in Pieces(w))
                 {
-                    var g = Box(holder, "piece", p.x0, p.x1, p.y0, p.y1, p.z0, p.z1, Cream);
+                    var g = Box(holder, "piece", p.x0, p.x1, p.y0, p.y1, p.z0, p.z1, Wall);
                     pieces.Add(new WallPiece { wall = w.name, name = w.name + (p.y0 > 0 ? "^" : p.y1 < H ? "_" : ""), r = g.GetComponent<Renderer>(), min = new Vector3(p.x0, p.y0, p.z0), max = new Vector3(p.x1, p.y1, p.z1) });
                 }
-                Frames(holder, w);
+                Frames(holder, w); Baseboards(holder, w, rooms, ceilParts, root);
                 foreach (Transform c in holder) if (c.name != "piece" && !c.name.EndsWith("_threshold") && !c.name.EndsWith("_rail1") && !c.name.EndsWith("_rail2")) frames.Add((w.name, c.GetComponent<Renderer>()));
             }
             // the entrance: a step 0.05 m down at the arch, the doorway floors are wood thresholds on the wall's thickness (frames builds them)
-            var ceil = Box(root, "ceiling", -.3f, X1 + .3f, H, H + .05f, -.3f, ZN + .3f, Cream);
+            var ceil = Box(root, "ceiling", -.3f, X1 + .3f, H, H + .05f, -.3f, ZN + .3f, CeilCol);
             ceil.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
+            var lampList = new List<(string, Light)>();
+            foreach (var fx in Fixtures()) MakeFixture(root, fx, ceilParts, lampList);
             // the view out of the balcony window: a painted card 1.2 m outside, facing in
             var sky = GameObject.CreatePrimitive(PrimitiveType.Quad); UnityEngine.Object.Destroy(sky.GetComponent<Collider>()); sky.name = "Sky"; sky.transform.SetParent(root, false);
             float ww = (X1 - .4f), hh = 1.3f;
@@ -347,14 +426,126 @@ namespace Oddity.RoomTest
             Pot(.22f, 0, 1.05f, .16f, .34f, .55f, true); Pot(.17f, .36f, .55f, .08f, .13f, .24f, false); Pot(.17f, .76f, .70f, .07f, .11f, .22f, false); Pot(2.40f, 0, .17f, .09f, .20f, .26f, true);
             Part(fr, PrimitiveType.Cylinder, new Vector3(3.05f, 1.96f, 1.0f), new Vector3(.005f, .12f, .005f), Alu); Pot(3.05f, 1.62f, 1.0f, .09f, .12f, .30f, false);
             var drum = Part(fr, PrimitiveType.Cylinder, new Vector3(3.76f, .42f, .60f), new Vector3(.34f, .01f, .34f), new Color(.45f, .48f, .52f)); drum.transform.localRotation = Quaternion.Euler(0, 0, 90);
+            Finishing(fr);
             var view = new View(rooms, doors, pieces);
+            foreach (var (rn, lt) in lampList) view.AddLamp(rn, lt);
             var wallRenderers = new HashSet<Renderer>(pieces.Select(q => q.r));
             var frameSet = new HashSet<Renderer>(frames.Select(q => q.Item2));
-            foreach (var r in root.GetComponentsInChildren<Renderer>(true)) if (!wallRenderers.Contains(r) && !frameSet.Contains(r)) view.AddStatic(r);
+            var ceilSet = new HashSet<Renderer>(ceilParts);
+            foreach (var r in root.GetComponentsInChildren<Renderer>(true)) if (!wallRenderers.Contains(r) && !frameSet.Contains(r) && !ceilSet.Contains(r) && r != ceil.GetComponent<Renderer>()) view.AddStatic(r);
+            view.SetCeiling(ceil.GetComponent<Renderer>(), ceilParts);
             foreach (var (wn, r) in frames) view.AddFrame(wn, r);
             return view;
         }
         static GameObject Part(Transform p, PrimitiveType t, Vector3 pos, Vector3 size, Color c) => RoomPlayRunner.Part(t, p, pos, size, c);
+
+
+        // ---- finishing helpers
+        static Material GlassMat(Color c)
+        {
+            var m = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            m.SetFloat("_Surface", 1); m.SetFloat("_Blend", 0); m.SetOverrideTag("RenderType", "Transparent");
+            m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha); m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha); m.SetInt("_ZWrite", 0);
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT"); m.renderQueue = 3000; m.SetColor("_BaseColor", c); m.color = c; m.SetFloat("_Smoothness", .85f);
+            return m;
+        }
+        static GameObject Glass(GameObject g, Color c)
+        {
+            var r = g.GetComponent<Renderer>(); r.sharedMaterial = GlassMat(c); r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; return g;
+        }
+        static void NoShadow(GameObject g) { g.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; }
+        // a rotated box (yaw about y) at a centre inside a holder
+        static GameObject Rot(Transform p, string name, Vector3 centre, float yaw, Vector3 size, Color c)
+        {
+            var g = RoomPlayRunner.Part(PrimitiveType.Cube, p, centre, size, c); g.name = name; g.transform.localRotation = Quaternion.Euler(0, yaw, 0); return g;
+        }
+        static void HingedLeaf(Transform holder, LeafDef l)
+        {
+            float yaw = Mathf.Atan2(l.dir.x, l.dir.y) * Mathf.Rad2Deg;
+            var mid = l.hinge + l.dir * (l.w / 2);
+            Rot(holder, l.name + "_leaf", new Vector3(mid.x, 1.025f, mid.y), yaw, new Vector3(LeafThick, 2.05f, l.w), l.color);
+            var hp = l.hinge + l.dir * (l.w - .07f);
+            Rot(holder, l.name + "_lever", new Vector3(hp.x, 1.0f, hp.y), yaw, new Vector3(.10f, .02f, .12f), new Color(.72f, .73f, .75f));
+            foreach (var hy in new[] { .25f, 1.0f, 1.75f }) Rot(holder, l.name + "_hinge", new Vector3(l.hinge.x, hy, l.hinge.y), yaw, new Vector3(.03f, .09f, .03f), new Color(.6f, .6f, .62f));
+        }
+        // two panels of a sliding door, stacked at the east end of the gap: a frame (white for the frosted kitchen door, aluminium for the balcony) round a glass pane
+        static void SliderPanels(Transform holder, WallDef w, Opening o, Func<string, float, float, float, float, float, float, Color, GameObject> Bx)
+        {
+            bool frosted = o.name == "kitchen_slider"; var fc = frosted ? new Color(.95f, .95f, .93f) : Alu;
+            var gc = frosted ? new Color(.90f, .93f, .95f, .55f) : new Color(.70f, .85f, .95f, .14f);
+            float pw = PanelW(o.a, o.b), x0 = o.b - pw, x1 = o.b, top = o.y1 - .045f, bot = .02f;
+            for (int i = 0; i < 2; i++)
+            {
+                float c0 = (i == 0 ? -.025f : .025f) - .0175f, c1 = c0 + .035f; string n = o.name + "_p" + i;
+                NoShadow(Bx(n + "_l", x0, x0 + .04f, bot, top, c0, c1, fc)); NoShadow(Bx(n + "_r", x1 - .04f, x1, bot, top, c0, c1, fc));
+                NoShadow(Bx(n + "_t", x0, x1, top - .05f, top, c0, c1, fc)); NoShadow(Bx(n + "_b", x0, x1, bot, bot + .07f, c0, c1, fc));
+                Glass(Bx(n + "_glass", x0 + .04f, x1 - .04f, bot + .07f, top - .05f, (c0 + c1) / 2 - .004f, (c0 + c1) / 2 + .004f, Color.white), gc);
+            }
+        }
+        // skirting boards (0.08 m, 15 mm) on every wall face that looks into a room, in chunks of at most 1 m so each is tested against the rooms, broken at door gaps (pieces that touch the floor only);
+        // and a crown strip on the pieces that touch the ceiling (a ceiling part: shown only when the ceiling is)
+        static void Baseboards(Transform holder, WallDef w, List<RoomDef> rooms, List<Renderer> ceilParts, Transform root)
+        {
+            bool ax = w.AlongX;
+            bool InRoom(Vector2 q) => rooms.Any(r => r.floor.xMin - .02f <= q.x && q.x <= r.floor.xMax + .02f && r.floor.yMin - .02f <= q.y && q.y <= r.floor.yMax + .02f);
+            foreach (var p in Pieces(w))
+                foreach (var crown in new[] { false, true })
+                {
+                    if (crown ? p.y1 < H - 1e-3f : p.y0 > 1e-3f) continue;
+                    float lo = ax ? p.x0 : p.z0, hi = ax ? p.x1 : p.z1; int chunks = Mathf.Max(1, Mathf.CeilToInt((hi - lo) / 1f));
+                    for (int k = 0; k < chunks; k++)
+                    {
+                        float a = Mathf.Lerp(lo, hi, k / (float)chunks), b = Mathf.Lerp(lo, hi, (k + 1) / (float)chunks), m = (a + b) / 2;
+                        for (int side = 0; side < 2; side++)
+                        {
+                            float face = ax ? (side == 0 ? w.z0 : w.z1) : (side == 0 ? w.x0 : w.x1), dir = side == 0 ? -1 : 1;
+                            if (!InRoom(ax ? new Vector2(m, face + dir * .05f) : new Vector2(face + dir * .05f, m))) continue;
+                            float t0 = dir < 0 ? face - (crown ? .02f : .015f) : face, t1 = dir < 0 ? face : face + (crown ? .02f : .015f);
+                            float y0 = crown ? H - .05f : 0, y1 = crown ? H : .08f; GameObject g;
+                            if (crown) g = ax ? Box(root, "crown", a, b, y0, y1, t0, t1, CeilCol) : Box(root, "crown", t0, t1, y0, y1, a, b, CeilCol);
+                            else g = ax ? Box(holder, "baseboard", a, b, y0, y1, t0, t1, BaseCol) : Box(holder, "baseboard", t0, t1, y0, y1, a, b, BaseCol);
+                            NoShadow(g); if (crown) ceilParts.Add(g.GetComponent<Renderer>());
+                        }
+                    }
+                }
+        }
+        // an LED fixture: a white frame 0.04 thick on the ceiling with an emissive face under it, and a soft point light (off until the lamp is on)
+        static void MakeFixture(Transform root, Fixture f, List<Renderer> ceilParts, List<(string, Light)> lamps)
+        {
+            var grp = new GameObject(f.name).transform; grp.SetParent(root, false);
+            var emit = new Color(1f, .97f, .90f);
+            GameObject frame, face;
+            if (f.round)
+            {
+                frame = RoomPlayRunner.Part(PrimitiveType.Cylinder, grp, new Vector3(f.x, H - .02f, f.z), new Vector3(f.sx, .02f, f.sz), new Color(.93f, .93f, .92f));
+                face = RoomPlayRunner.Part(PrimitiveType.Cylinder, grp, new Vector3(f.x, H - .042f, f.z), new Vector3(f.sx - .04f, .003f, f.sz - .04f), emit);
+            }
+            else
+            {
+                frame = Box(grp, "frame", f.x - f.sx / 2, f.x + f.sx / 2, H - .04f, H, f.z - f.sz / 2, f.z + f.sz / 2, new Color(.93f, .93f, .92f));
+                face = Box(grp, "face", f.x - f.sx / 2 + .02f, f.x + f.sx / 2 - .02f, H - .046f, H - .04f, f.z - f.sz / 2 + .02f, f.z + f.sz / 2 - .02f, emit);
+            }
+            var m = face.GetComponent<Renderer>().material; m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", emit * 2.2f);
+            NoShadow(frame); NoShadow(face); ceilParts.Add(frame.GetComponent<Renderer>()); ceilParts.Add(face.GetComponent<Renderer>());
+            var lg = new GameObject(f.name + "_light"); lg.transform.SetParent(grp, false); lg.transform.position = new Vector3(f.x, H - (f.room == "living" ? .45f : .2f), f.z);
+            var l = lg.AddComponent<Light>(); l.type = LightType.Point; l.color = new Color(1f, .96f, .90f); l.intensity = f.power; l.range = f.range; l.shadows = LightShadows.None; l.enabled = false;
+            lamps.Add((f.room, l));
+        }
+        // a light switch plate by the kitchen door, a wall air conditioner and a curtain bunched at the east end of the balcony glass (the sun comes in over the west half)
+        static void Finishing(Transform fr)
+        {
+            Box(fr, "switch_plate", 2.30f, 2.38f, 1.15f, 1.27f, 5.04f - .012f, 5.04f, new Color(.95f, .95f, .93f));
+            Box(fr, "switch_btn", 2.32f, 2.36f, 1.19f, 1.23f, 5.04f - .018f, 5.04f - .012f, new Color(.88f, .88f, .86f));
+            Box(fr, "ac_body", 1.00f, 1.85f, 1.95f, 2.30f, 5.04f - .21f, 5.04f, new Color(.94f, .94f, .93f));
+            Box(fr, "ac_vent", 1.04f, 1.81f, 1.97f, 2.00f, 5.04f - .215f, 5.04f - .18f, new Color(.55f, .56f, .58f));
+            Box(fr, "ac_light", 1.70f, 1.74f, 2.21f, 2.23f, 5.04f - .212f, 5.04f - .21f, new Color(.4f, .8f, .5f));
+            var curtain = new Color(.78f, .80f, .84f);
+            Part(fr, PrimitiveType.Cylinder, new Vector3(4.0f, 2.14f, 1.36f), new Vector3(.02f, .27f, .02f), Alu).transform.localRotation = Quaternion.Euler(0, 0, 90);
+            for (int i = 0; i < 4; i++)
+            {
+                float cx = 3.95f + i * .075f, h = 2.06f; var g = Part(fr, PrimitiveType.Cylinder, new Vector3(cx, h / 2 + .02f, 1.36f + (i % 2) * .03f), new Vector3(.08f, h / 2, .08f), curtain * (i % 2 == 0 ? 1f : .92f)); NoShadow(g);
+            }
+        }
 
         // frames of a wall's openings: jambs, a lintel, a sill strip for windows, bars; thresholds and rails for doors (they stay when the wall is cut away)
         static void Frames(Transform holder, WallDef w)
@@ -374,6 +565,7 @@ namespace Oddity.RoomTest
                     int n = Mathf.Max(1, Mathf.RoundToInt((o.b - o.a) / 1.1f));
                     for (int i = 1; i < n; i++) { float c = Mathf.Lerp(o.a, o.b, i / (float)n); Bx(o.name + "_bar" + i, c - .015f, c + .015f, o.y0, o.y1, -.02f, .02f, col); }
                     float yc = (o.y0 + o.y1) / 2; Bx(o.name + "_rail", o.a, o.b, yc - .015f, yc + .015f, -.02f, .02f, col);
+                    Glass(Bx(o.name + "_glass", o.a + .04f, o.b - .04f, o.y0 + .04f, o.y1 - .04f, -.004f, .004f, Color.white), new Color(.70f, .85f, .95f, .14f));
                 }
                 if (o.door)
                 {
@@ -381,8 +573,12 @@ namespace Oddity.RoomTest
                     if (o.slider)
                     {
                         Bx(o.name + "_rail1", o.a, o.b, .012f, .02f, -.03f, -.02f, Alu); Bx(o.name + "_rail2", o.a, o.b, .012f, .02f, .02f, .03f, Alu);
-                        int n = Mathf.Max(2, Mathf.RoundToInt((o.b - o.a) / 1.1f));
-                        for (int i = 1; i < n; i++) { float c = Mathf.Lerp(o.a, o.b, i / (float)n); Bx(o.name + "_stile" + i, c - .02f, c + .02f, 0, o.y1, -.03f, .03f, Alu); }
+                        SliderPanels(holder, w, o, Bx);
+                    }
+                    else
+                    {
+                        var lf = Leaves().FirstOrDefault(q => q.name == o.name);
+                        if (lf != null) HingedLeaf(holder, lf);
                     }
                 }
             }
