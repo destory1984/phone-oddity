@@ -2194,8 +2194,8 @@ namespace Oddity.RoomTest
         float camSwing,camSwingWant;const float SwingNotch=5f, SwingMax=60f;
         void SwingNotchBy(int dir){camSwingWant=Mathf.Clamp(camSwingWant+dir*SwingNotch,-SwingMax,SwingMax);Debug.Log("ROOMPLAY_CAMSWING deg="+camSwingWant.ToString("0",CultureInfo.InvariantCulture));}
         // Alt + wheel tilts the view up or down with the eye where it is (wheel up = look up): 2 degrees a notch, at most 30 either way, eased; it also carries over room cuts
-        float camTilt,camTiltWant;const float TiltNotch=2f, TiltMax=30f;
-        void TiltNotchBy(int dir){camTiltWant=Mathf.Clamp(camTiltWant+dir*TiltNotch,-TiltMax,TiltMax);Debug.Log("ROOMPLAY_CAMTILT deg="+camTiltWant.ToString("0",CultureInfo.InvariantCulture));}
+        float camTilt,camTiltWant;const float TiltNotch=2f, TiltMax=30f, TiltUpMax=80f; // Alt + wheel: up to 80 deg up (the ceiling and its lights), 30 deg down
+        void TiltNotchBy(int dir){camTiltWant=Mathf.Clamp(camTiltWant+dir*TiltNotch,-TiltMax,TiltUpMax);Debug.Log("ROOMPLAY_CAMTILT deg="+camTiltWant.ToString("0",CultureInfo.InvariantCulture));}
         void LiftNotchBy(int dir){camLiftWant=Mathf.Clamp(camLiftWant+dir*LiftNotch,LiftDown,LiftUp);Debug.Log("ROOMPLAY_CAMLIFT lift="+camLiftWant.ToString("0.00",CultureInfo.InvariantCulture)+" eye="+(curEye.y+camLiftWant).ToString("0.00",CultureInfo.InvariantCulture));}
         const float RoomFovNear=5f, RoomSlack=.3f, RoomFollow=5f;
         void RoomFrame(float dt,float zoomKey)
