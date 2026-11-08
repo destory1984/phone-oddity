@@ -2488,11 +2488,11 @@ namespace Oddity.RoomTest
             bool resumed=audio.isPlaying && Mathf.Abs(zeroTwoAudioSeconds-5.30f)<.0001f && Mathf.Abs(audio.timeSamples/(float)audio.clip.frequency-5.30f)<.15f;
             if(resumed)Debug.Log("ZEROTWO_AUDIO full_track resume PASS");else Debug.LogError("ZEROTWO_AUDIO full_track resume FAIL");
         }
-        // a blank face in the idle (key 0, space), a held smile in every other clip; it eases in and out over 0.3 s
+        // a slight smile in the idle (key 0, space), a held smile in every other clip; it eases in and out over 0.3 s
         const float SmileWeight=.7f; // relaxed, the closed-mouth smile the room test films use
         float smile;
-        // ODDITY_SMILE=w: the idle keeps a slight smile of weight w too (test shots of Harin's face are taken smiling, e.g. 0.5)
-        static readonly float IdleSmile=float.TryParse(Environment.GetEnvironmentVariable("ODDITY_SMILE"),NumberStyles.Float,CultureInfo.InvariantCulture,out var s)?Mathf.Clamp01(s):0;
+        // the idle (key 0, space) keeps a slight smile of weight 0.5 by default; ODDITY_SMILE=w changes it (0 = blank face)
+        static readonly float IdleSmile=float.TryParse(Environment.GetEnvironmentVariable("ODDITY_SMILE"),NumberStyles.Float,CultureInfo.InvariantCulture,out var s)?Mathf.Clamp01(s):.5f;
         void Smile(float dt)
         {
             var vrm=model.GetComponent<Vrm10Instance>();if(vrm==null || vrm.Runtime==null)return;
