@@ -21,6 +21,7 @@ namespace Oddity.RoomTest
         public static readonly Vector2[] TowerLand = { new Vector2(2.54f, .58f), new Vector2(2.66f, .52f), new Vector2(2.60f, .55f) };
         public static readonly Vector2 TowerStand = new Vector2(2.08f, .55f);
         // where Q (coffee) stands: 0.62 m from the glass, to the east of the sill plant (x 1.50) and 0.3 m clear of the cat tower, facing south through the window
+        public static readonly Vector2 CurtainSpot = new Vector2(1.5f, .40f); // mid-window, about 0.2 m from the curtain plane (CurtainPanel.PlaneZ)
         public static readonly Vector2 CoffeeSpot = new Vector2(1.85f, .62f);
         static Apartment.Layout layout;
         public static Apartment.Layout Layout => layout ?? (layout = MakeLayout());
@@ -129,16 +130,11 @@ namespace Oddity.RoomTest
             Apartment.Box(g, "facade_win_up", WinA, WinB, 3.0f, 4.8f, z0 - .01f, z0, glassC); // the flat above
             Apartment.Box(g, "facade_win_up_bar", 1.48f, 1.52f, 3.0f, 4.8f, z0 - .02f, z0, alu);
         }
-        // the curtain bunched at the window's east end, the rod, a plant on the sill
+        // a plant on the sill (the curtain is CurtainPanel)
         static void Window(Transform fr, List<Rect> furnitureOut)
         {
             Color sheer = new Color(.90f, .90f, .92f), pot = new Color(.80f, .78f, .74f);
-            Apartment.NoShadow(Apartment.Part(fr, PrimitiveType.Cylinder, new Vector3(1.5f, 2.26f, .12f), new Vector3(.02f, 1.22f, .02f), new Color(.74f, .75f, .77f)));
-            fr.GetChild(fr.childCount - 1).localRotation = Quaternion.Euler(0, 0, 90);
-            for (int i = 0; i < 3; i++)
-            {
-                float cx = .36f + i * .055f; var c = Apartment.Part(fr, PrimitiveType.Cylinder, new Vector3(cx, 1.30f, .12f + (i % 2) * .03f), new Vector3(.06f, .9f, .06f), sheer * (i % 2 == 0 ? 1f : .94f)); Apartment.NoShadow(c);
-            }
+            // the curtain and its rod are CurtainPanel (Curtain.cs), built by RoomPlay
             // the pillow: an ellipsoid whose lower half is inside the mattress, so the visible part is a soft dome (pillowSize.y high at the centre)
             var pl = Layout; var pg = Apartment.Part(fr, PrimitiveType.Sphere, pl.pillowAt, new Vector3(pl.pillowSize.x, pl.pillowSize.y * 2, pl.pillowSize.z), new Color(.95f, .94f, .92f)); pg.name = "bed_pillow";
             Apartment.Part(fr, PrimitiveType.Cylinder, new Vector3(1.50f, .45f, .14f), new Vector3(.14f, .05f, .14f), pot);
