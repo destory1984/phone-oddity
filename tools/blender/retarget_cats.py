@@ -225,6 +225,13 @@ class Target:
                 'paw': {k: float(z[m].min()) for k, m in self.M_paws.items()}}
 
 # =============================================================== retargeter (shared by both targets)
+LOAF6 = ('LoafDown', 'LoafIdle', 'LoafUp', 'SleepLoafDozeDown', 'SleepLoafDozeIdle', 'SleepLoafDozeUp')
+def _smooth(x): x = max(0.0, min(1.0, x)); return x * x * (3 - 2 * x)
+def _slerp3(a, b, w):
+    if w <= 0: return a
+    return a.to_quaternion().slerp(b.to_quaternion(), min(w, 1.0)).to_matrix()
+def _rd(a, b): return V(a).normalized().rotation_difference(V(b).normalized()).to_matrix()
+
 SPINE_SRC = ['Pelvis', 'Spine01', 'Spine02', 'Chest', 'Neck', 'Head']
 TAIL_SRC = ['Tail0%d' % i for i in range(1, 8)]
 
@@ -255,6 +262,35 @@ class Retarget:
         self.tail_r = []
         print("SCALE kf %.3f kh %.3f kb %.3f" % (self.kf, self.kh, self.kb))
 
+    # ---- SOMALI only: a hand-authored loaf (belly down, front legs folded under the chest, hind legs folded, tail along the body)
+    LP = dict(rear=(( 0.0, -1.0, 0.00), (0.10, -1.0, -0.30)),         # LowerSpine, Butt: heading (target frame, nose = +Y)
+              fwd=((0.0, 1.0, 0.04), (0.0, 1.0, -0.14), (0.0, 1.0, 1.3)),   # UpperSpine, Collarbone, Neck
+              head=(0.0, 1.0, -0.25),
+              tail=((0.55, -0.83, 0.0), (0.75, 0.66, 0.0), (0.15, 1.0, 0.0), (0.0, 1.0, 0.0)),
+              front_t=(0.35, -0.10), front_wz=0.45, front_pole=(0.5, -1.0, -0.2),     # paw offset from the shoulder inward / forward, min vertex above floor
+              hind_t=(-0.12, -0.10), hind_wz=0.25, hind_pole=(0.8, 1.0, 0.3), foot=(0.0, 0.45, -0.15))
+    def loaf_weight(self, fd):
+        if not self.cfg.get('loaf_pose') or self.clip not in LOAF6: return 0.0
+        S = self.S; pr = S.ref['H']['Pelvis'].z; pl = S.clips['LoafIdle'][0]['H']['Pelvis'].z
+        return max(0.0, min(1.0, (pr - fd['H']['Pelvis'].z) / max(pr - pl, 1e-6)))
+    def loaf_head_nod(self, fd):
+        S = self.S; b = S.clips['LoafIdle'][0]
+        def py(f):
+            v = (f['R']['Head'] @ S.ref['R']['Head'].inverted()) @ V((0, -1, 0))
+            return math.degrees(math.asin(max(-1, min(1, v.z)))), math.degrees(math.atan2(v.x, -v.y))
+        p, y = py(fd); p0, y0 = py(b)
+        return p - p0, y - y0
+    def loaf_abs(self, fd):
+        t = self.t; cfg = self.cfg; LP = self.LP; out = {}
+        rd = lambda b: t.rrot[b] @ V((0, 1, 0))
+        for b, d in zip(cfg['rear'], LP['rear']): out[b] = _rd(rd(b), d)
+        for b, d in zip(cfg['fwd'], LP['fwd']): out[b] = _rd(rd(b), d)
+        nod, yaw = self.loaf_head_nod(fd)
+        Dh = Matrix.Rotation(math.radians(yaw), 3, 'Z') @ Matrix.Rotation(math.radians(nod), 3, 'X') @ _rd(rd(cfg['head'][0]), LP['head'])
+        for b in cfg['head']: out[b] = Dh
+        for b in cfg['rots']: out[b] = Dh
+        return out
+
     def build_spec(self, fd, par):
         t = self.t; S = self.S; cfg = self.cfg; C = self.C; ref = S.ref
         H, R, RH, RR = fd['H'], fd['R'], ref['H'], ref['R']
@@ -276,6 +312,9 @@ class Retarget:
                 spec['abs'][b] = rdelta(C, RR[sb], R[sb])
         for b in cfg['head']: spec['abs'][b] = rdelta(C, RR['Head'], R['Head'])
         for b, sb in cfg['rots'].items(): spec['abs'][b] = rdelta(C, RR[sb], R[sb])
+        lw = self.loaf_weight(fd); self.lw = lw
+        if lw > 0:
+            for b, M in self.loaf_abs(fd).items(): spec['abs'][b] = _slerp3(spec['abs'][b], M, lw)
         # tail
         tl = cfg['tail']
         if tl:
@@ -283,15 +322,16 @@ class Retarget:
             def ext(P):
                 pts = [P[n] for n in TAIL_SRC]; pts.append(pts[-1] + (pts[-1] - pts[-2])); return pts
             sr, sc_ = ext(RH), ext(H)
-            sleep = str(self.clip).startswith('Sleep') and self.tail_r
+            sleep = str(self.clip).startswith('Sleep') and self.tail_r and self.clip not in LOAF6
             for i, (b, (u0, u1)) in enumerate(zip(tl, frac_bounds(tpt))):
                 if sleep:     # lying cat: the tail follows the source's world directions, not rotation deltas over the target's own rest tail
                     spec['abs'][b] = (tpt[i + 1] - tpt[i]).rotation_difference(C @ chord(sc_, u0, u1)).to_matrix()
                 else:
                     spec['abs'][b] = cdelta(C, chord(sr, u0, u1), chord(sc_, u0, u1))
+                    if lw > 0: spec['abs'][b] = _slerp3(spec['abs'][b], (tpt[i + 1] - tpt[i]).rotation_difference(V(self.LP['tail'][min(i, 3)]).normalized()).to_matrix(), lw)
         # legs: pass 0 gives shoulder and hip heads
         _, posed0 = t.solve(spec)
-        if tl and str(self.clip).startswith('Sleep') and self.tail_r:
+        if tl and ((str(self.clip).startswith('Sleep') and self.clip not in LOAF6) or lw > 0.85) and self.tail_r:
             # lying tail: keep each segment's heading, let it sink onto the floor (tail radius above it) and then lie flat
             head = posed0[tl[0]].translation.copy()
             for i, b in enumerate(tl):
@@ -326,6 +366,14 @@ class Retarget:
                 T.z = Wref.z + k * (H[sW].z - RH[sW].z) + par['pawdz'][kind + side]
                 pole = C @ (H[sE] - (H[sS] + H[sW]) * 0.5)
                 if pole.length < 1e-4: pole = Eref - (Sref + Wref) * 0.5
+                if lw > 0:
+                    sg = 1.0 if side == 'L' else -1.0   # target frame: the cat's left is -X (faces +Y), so L has x < 0
+                    sg = -1.0 if Pt.x < 0 else 1.0       # sg = +1 on the +X side, -1 on the -X side
+                    if kind == 'F':
+                        a, b2 = self.LP['front_t']; Tl = V((Pt.x - sg * a, Pt.y + b2, T.z)); pl = V((sg * self.LP['front_pole'][0], self.LP['front_pole'][1], self.LP['front_pole'][2]))
+                    else:
+                        a, b2 = self.LP['hind_t']; Tl = V((Pt.x + sg * -a, Pt.y + b2, T.z)); pl = V((sg * self.LP['hind_pole'][0], self.LP['hind_pole'][1], self.LP['hind_pole'][2]))
+                    T = V((T.x + (Tl.x - T.x) * lw, T.y + (Tl.y - T.y) * lw, T.z)); pole = pole.lerp(pl, lw)
                 l1 = (Eref - Sref).length; l2 = (Wref - Eref).length
                 # reach: pull the target in horizontally first (keeps the paw on the floor); only a shoulder that is
                 # too high above the paw counts as overreach (the caller then flattens the spine pitch)
@@ -342,7 +390,10 @@ class Retarget:
                 spec['abs'][lg['mid']] = (Wref - Eref).rotation_difference(d2).to_matrix()
                 W = Pt + d1 * l1 + d2 * l2
                 if lg.get('eff_loc'): spec['loc'][lg['eff_loc']] = W
-                for tb, sb in lg.get('rots', {}).items(): spec['abs'][tb] = rdelta(C, RR[sb], R[sb])
+                for tb, sb in lg.get('rots', {}).items():
+                    spec['abs'][tb] = rdelta(C, RR[sb], R[sb])
+                    if lw > 0:
+                        pd_ = t.rrot[tb] @ V((0, 1, 0)); spec['abs'][tb] = _slerp3(spec['abs'][tb], _rd(pd_, (0, 1, -0.05) if kind == 'H' else pd_), lw)
                 if lg.get('chord'):
                     cb, a, b2 = lg['chord']
                     Dc = cdelta(C, RH[b2] - RH[a], H[b2] - H[a])
@@ -350,6 +401,9 @@ class Retarget:
                     if lg.get('foot_loc'):
                         fb, fr = lg['foot_loc']
                         spec['loc'][fb] = W + Dc @ (t.rhead[fb] - t.rhead[fr])
+                        if lw > 0:
+                            fo = V(self.LP['foot']); spec['loc'][fb] = spec['loc'][fb].lerp(W + fo, lw)
+                            spec['abs'][cb] = _slerp3(Dc, _rd(t.rrot[cb] @ V((0, 1, 0)), fo), lw)
         return spec
 
     def measure_ref(self):
@@ -377,6 +431,9 @@ class Retarget:
             # the compact loaf: belly on the floor. The scaled source clearance leaves the target belly a few cm up (legs propping it), so fade the
             # trunk clearance to zero as the source trunk comes down to the floor
             sref = max(ref['torso'], 1e-6); wt = fl + (wt - fl) * max(0.0, min(1.0, fd['torso'] / sref))
+        lw = self.loaf_weight(fd)
+        if lw > 0:
+            for k in wp: wp[k] = wp[k] + (fl + (self.LP['front_wz'] if k[0] == 'F' else self.LP['hind_wz']) - wp[k]) * max(0.0, min(1.0, (lw - 0.6) / 0.4))
         pd = self.clip in self.cfg.get('pelvis_driven', ())
         def inner(par, iters=10):
             for it in range(iters):
@@ -398,7 +455,7 @@ class Retarget:
         basis = inner(par)
         # a shoulder or hip too high above its paw: flatten that half of the spine rotation (bisection on the fraction)
         for key, kind in (('sf', 'F'), ('sr', 'H')):
-            if self.fl[kind] < 0.01 or str(self.clip).startswith('Sleep') and os.environ.get('SLEEPFLAT') != '1': continue   # lying poses keep the full spine rotation
+            if lw > 0 or self.fl[kind] < 0.01 or str(self.clip).startswith('Sleep') and os.environ.get('SLEEPFLAT') != '1': continue   # lying poses keep the full spine rotation
             lo, hi = 0.0, 1.0
             for _ in range(6):
                 mid = 0.5 * (lo + hi); par[key] = mid
@@ -420,7 +477,7 @@ class Retarget:
             if DEBUG:
                 m2 = t.measure(); zz = t.verts()[:, 2]; ii = np.where(t.M_body)[0][np.argmin(zz[t.M_body])]
                 print('   LIFT %.3f -> body %.3f lowest vertex group %s' % (d, m2['body'] - fl, t.dom[ii]))
-        if str(self.clip).startswith('Sleep'):      # a lying cat must not hover: bring the lowest vertex down to the floor (ears and head count)
+        if str(self.clip).startswith('Sleep') or lw > 0:      # a lying cat must not hover: bring the lowest vertex down to the floor (ears and head count)
             for _ in range(5):
                 zlow = float(t.verts()[:, 2].min())      # every vertex counts (ears, tail tip)
                 if abs(zlow - fl) > 0.003:       # both ways: hovering or any vertex (tail, ears) under the floor
@@ -465,6 +522,7 @@ def default_frames(cn, nf):
     if cn == 'Walk': return [0, 8, 15, 23, nf]
     return [0, nf // 2, nf]
 
+LOAFMIN = {}; LOAFMAX = {}   # somali loaf clips: lowest vertex over frames (min / max), printed
 MEAS = {}      # sleep clip name -> lowest vertex, footprint, head heights (written into the json)
 
 def build_clips(rt, shots, only, frames_arg, cam):
@@ -483,6 +541,8 @@ def build_clips(rt, shots, only, frames_arg, cam):
         for k in range(nf + 1):
             fd = rt.S.clips[cn][k]; rt.clip = cn
             basis, par = rt.solve_frame(fd)
+            if rt.cfg.get('loaf_pose') and cn in LOAF6:
+                LOAFMIN[cn] = min(LOAFMIN.get(cn, 9.0), float(t.verts()[:, 2].min() - rt.floor)); LOAFMAX[cn] = max(LOAFMAX.get(cn, -9.0), float(t.verts()[:, 2].min() - rt.floor))
             if cn.startswith('Sleep'):
                 Pm = t.verts(); hd = np.array([d.startswith('Head') for d in t.dom])
                 mm = MEAS.setdefault(cn, {'min_z': 9.0, 'x': [9.0, -9.0], 'y': [9.0, -9.0], 'head': []})
@@ -506,6 +566,7 @@ def build_clips(rt, shots, only, frames_arg, cam):
                       " ".join("%s%+.3f" % (a, b - rt.floor) for a, b in m['paw'].items()), m['body'] - rt.floor))
                 render_views("%s_f%02d" % (cn, k), shots, rt.C, rt.floor, cam[0], cam[1])
         print("CLIP %-11s %d frames, IK overreach total %.3f" % (cn, nf + 1, t.over))
+        if cn in LOAFMIN: print("LOAFMIN %s %.4f %.4f" % (cn, LOAFMIN[cn], LOAFMAX[cn]))
         arm.animation_data.action = None
         act.use_fake_user = True
         acts[cn] = (act, nf, loop)
@@ -586,7 +647,7 @@ def stage_somali():
                              src=('HindUpperLeg.' + sd, 'HindLowerLeg.' + sd, 'HindHock.' + sd),
                              chord=(B('Heel.' + sd), 'HindHock.' + sd, 'HindPaw.' + sd),
                              foot_loc=(B('Foot.' + sd), B('Heel.' + sd)), rots={B('Foot.' + sd): 'HindPaw.' + sd})
-    cfg = dict(C=Rz(180), floor=FLOOR, root=B('Root'), rear=[B('LowerSpine'), B('Butt')],
+    cfg = dict(C=Rz(180), floor=FLOOR, root=B('Root'), loaf_pose=True, rear=[B('LowerSpine'), B('Butt')],
                fwd=[B('UpperSpine'), B('Collarbone'), B('Neck')], fwd_end=B('Head'), head=[B('Head')],
                fwd_src={B('UpperSpine'): 'Spine02', B('Collarbone'): 'Chest', B('Neck'): 'Neck'},
                rots={B('Ear.L'): 'Ear.L', B('Ear.R'): 'Ear.R'},
