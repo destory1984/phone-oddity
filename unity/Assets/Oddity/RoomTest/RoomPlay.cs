@@ -142,7 +142,7 @@ namespace Oddity.RoomTest
                 var text=Environment.GetEnvironmentVariable("ODDITY_PLAYKEYS");scripted=!string.IsNullOrWhiteSpace(text);
                 if(scripted)foreach(var part in text.Split(',')){
                     var pair=part.Split(':');
-                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0]=="lietv" || pair[0].StartsWith("cam") || pair[0]=="realtab" || pair[0]=="wait" || pair[0].StartsWith("click") || pair[0].StartsWith("view") || pair[0]=="wheelup" || pair[0]=="liftup" || pair[0].StartsWith("orbit") || pair[0].StartsWith("insideswing") || pair[0]=="l" || pair[0]=="liftdown" || pair[0]=="swingleft" || pair[0]=="shiftx" || pair[0]=="shiftleft" || pair[0]=="shiftright" || pair[0]=="shiftup" || pair[0]=="shiftdown" ||pair[0]=="swingright" || pair[0]=="tiltup" || pair[0]=="tiltdown" || pair[0]=="freeze" || pair[0]=="unfreeze" || (pair[0].StartsWith("gi") && int.TryParse(pair[0].Substring(2),out _)) || (pair[0].StartsWith("shade") && int.TryParse(pair[0].Substring(5),out _)) || pair[0]=="wheeldown" || FaceKeys.ScriptDigit(pair[0])>=0 || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
+                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0]=="lietv" || pair[0].StartsWith("cam") || pair[0]=="realtab" || pair[0]=="wait" || pair[0].StartsWith("click") || pair[0].StartsWith("view") || pair[0]=="wheelup" || pair[0]=="liftup" || pair[0].StartsWith("orbit") || pair[0].StartsWith("insideswing") || pair[0]=="l" || pair[0].StartsWith("catsleep") || pair[0]=="liftdown" || pair[0]=="swingleft" || pair[0]=="shiftx" || pair[0]=="shiftleft" || pair[0]=="shiftright" || pair[0]=="shiftup" || pair[0]=="shiftdown" ||pair[0]=="swingright" || pair[0]=="tiltup" || pair[0]=="tiltdown" || pair[0]=="freeze" || pair[0]=="unfreeze" || (pair[0].StartsWith("gi") && int.TryParse(pair[0].Substring(2),out _)) || (pair[0].StartsWith("shade") && int.TryParse(pair[0].Substring(5),out _)) || pair[0]=="wheeldown" || FaceKeys.ScriptDigit(pair[0])>=0 || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
                     script.Add((pair[0],seconds));
                 }
                 Debug.Log("ROOMPLAY_READY model="+modelName);
@@ -362,8 +362,9 @@ namespace Oddity.RoomTest
             public SkinnedMeshRenderer[] smrs;public bool[][] tailMask;public Mesh bake;public string gapKey=""; // surf: height of the surface it rests on (floor 0); the rest of these measure its lowest vertex
             public Spot spot,after,transit,fitSpot,jobSpot;public float radius=.2f,relocAt;public Vector2 cOff; // spot: the perch / cushion spot it holds (going there, or standing on it); after: the final spot when it passes through another (fridge via counter); transit: a spot it only hops through; fitSpot: the cushion it landed on; radius, cOff: the footprint circle (centre = root + rotated cOff)
             public bool[][] pawMask;public bool pawFallback;public int pawSeeds;public readonly List<Vector3> conPts=new List<Vector3>();public float pawLogAt; // pawMask: vertices mainly weighted to a paw / foot / toe bone; conPts: the lowest vertex of each paw and the lowest body vertices, each rests on its own surface
+            public bool hasSleep,aiSleeps;public int sleepPose=-1,sleepCur;public (float lng,float sht)[] sleepFp; // sleep: the 21 Sleep clips are loaded (indices 14 + pose*3 + Down/Idle/Up); sleepPose: the pose the next sleep takes (K cycles it), sleepCur: the pose playing now; sleepFp: Idle footprints from the json (model units); aiSleeps: the AI chose a sleep for its current rest
             public bool aiPaused;public float resumeIn;public int aiPhase;public string aiAct="",aiLast="",aiPlace="";public float aiT,aiDur,aiGo;public Vector2 aiTarget;public bool aiHasTarget;
-            public bool Idleish=>index==0 || (somali && (index==3 || index==6 || index==9 || (white && index==12)));
+            public bool Idleish=>index==0 || (somali && (index==3 || index==6 || index==9 || (white && index==12) || (hasSleep && index>=SleepBase && (index-SleepBase)%3==1)));
             public int JumpClip=>white?11:somali?0:2; // the Somali has no jump clip: the arc is flown in the Idle pose
         }
         // a high place a cat can sit on: it walks to stand (a floor spot), hops to land (top view x, z; the height comes from a downward ray), and faces yaw
@@ -380,8 +381,12 @@ namespace Oddity.RoomTest
         static bool SomaliLoops(int i)=>i==0||i==1||i==3||i==6||i==9;
         // the white cat: the Somali's eleven clips in the same order, then Jump (11), Groom (12, sitting, loops), Stretch (13)
         static readonly string[] WhiteClips={"Idle","Walk","SitDown","SittingIdle","StandUp","LieDown","LyingIdle","GetUp","LoafDown","LoafIdle","LoafUp","Jump","Groom","Stretch"};
-        static bool WhiteLoops(int i)=>SomaliLoops(i)||i==12;
-        static bool IsUp(int s)=>s==3||s==6||s==9;
+        static bool WhiteLoops(int i)=>SomaliLoops(i)||i==12||(i>=SleepBase && (i-SleepBase)%3==1);
+        // the seven sleeping poses (CatSleep) follow the 14 shared clips: index SleepBase + pose*3 + 0 Down, 1 Idle (loops), 2 Up. Cats whose file lacks them keep the first 14 and hasSleep false
+        const int SleepBase=14;
+        static int SleepClip(int pose,int phase)=>SleepBase+pose*3+phase;
+        static string[] SleepAwareNames(Func<string,bool> has)=>CatSleep.AllClipNames().All(has)?WhiteClips.Concat(CatSleep.AllClipNames()).ToArray():WhiteClips;
+        static bool IsUp(int s)=>s==3||s==6||s==9||s==14; // 14: the Up clip of a sleep pose. sit 12: sleep Down playing, 13: asleep (the pose's Idle)
         const string SomaliSharedFile="Assets/Oddity/DevMotion/Cat/Somali/somali_cat_shared.glb";
         const string WhiteDir="Assets/Models/test/";
         const string SomaliFile="Assets/Oddity/DevMotion/Cat/Somali/somali_cat.glb",SomaliLieFile="Assets/Oddity/DevMotion/Cat/Somali/somali_cat_lie.glb";
@@ -463,8 +468,8 @@ namespace Oddity.RoomTest
                 if(prefab==null){Debug.LogWarning("ROOMPLAY_"+tag+" import failed "+file+", using the older files");return false;}
                 var all=AssetDatabase.LoadAllAssetsAtPath(file).OfType<AnimationClip>().ToList();
                 AnimationClip Find(string n)=>all.FirstOrDefault(c=>c.name==n) ?? all.FirstOrDefault(c=>c.name.EndsWith("|"+n) && !c.name.StartsWith("__preview__"));
-                var names=WhiteClips;
-                var p=new Pet{tag=tag,kind=kind,somali=true,white=true,hasLie=true,clipNames=names,clips=new AnimationClip[names.Length]};
+                var names=SleepAwareNames(n=>Find(n)!=null);
+                var p=new Pet{tag=tag,kind=kind,somali=true,white=true,hasLie=true,hasSleep=names.Length>WhiteClips.Length,clipNames=names,clips=new AnimationClip[names.Length]};
                 for(int i=0;i<names.Length;i++){
                     var src=Find(names[i]);
                     if(src==null){Debug.LogWarning("ROOMPLAY_"+tag+" clip missing "+names[i]+" in "+file+" (have "+string.Join(",",all.Select(c=>c.name))+"), using the older files");return false;}
@@ -493,6 +498,8 @@ namespace Oddity.RoomTest
                 float scale=p.root.localScale.x;var info=new SharedInfo();
                 var jf=Path.Combine(Application.dataPath,"../"+Path.ChangeExtension(file,".json"));
                 if(File.Exists(jf))info=JsonUtility.FromJson<SharedInfo>(File.ReadAllText(jf));
+                if(File.Exists(jf) && p.hasSleep)p.sleepFp=CatSleep.ParseFootprints(File.ReadAllText(jf));
+                Debug.Log("ROOMPLAY_CATSLEEP who="+p.tag+" clips="+(p.hasSleep?CatSleep.Count*3:0)+" footprints="+(p.sleepFp!=null?string.Join("/",p.sleepFp.Select(f=>F(f.lng*scale)+"x"+F(f.sht*scale))):"none")+" (m, long x short)");
                 if(info.walk_speed_units_per_s>0){p.walkSpd=info.walk_speed_units_per_s*scale*CatSpeedMul;p.runSpd=p.walkSpd*2f;p.aiSpd=p.walkSpd*.8f;}
                 var mat=go.GetComponentsInChildren<Renderer>().SelectMany(r=>r.sharedMaterials).FirstOrDefault(m=>m!=null);
                 Debug.Log("ROOMPLAY_CATSPEED name="+tag+" walk="+F(p.walkSpd)+" run="+F(p.runSpd)+" ai="+F(p.aiSpd));Debug.Log("ROOMPLAY_"+tag+" shared file="+Path.GetFileName(file)+" scale="+F(scale)+" json body="+F(info.body_length_nose_to_tail_base)+" head="+F(info.head_top_height_above_floor)+" walk="+F(info.walk_speed_units_per_s)+" speed="+F(p.walkSpd)+" m/s run="+F(p.runSpd)+" ai="+F(p.aiSpd)+" clips="+string.Join(",",p.clips.Select(c=>c.name+":"+F(c.length)+(c.legacy?"L":"M")))+" renderers="+go.GetComponentsInChildren<Renderer>().Length+" material="+(mat!=null?mat.shader.name+" colour="+(mat.HasProperty("_BaseColor")?mat.GetColor("_BaseColor").ToString():"-")+" map="+(mat.HasProperty("_BaseMap") && mat.GetTexture("_BaseMap")!=null):"none"));
@@ -564,10 +571,11 @@ namespace Oddity.RoomTest
                 if(prefab==null){Debug.LogWarning("ROOMPLAY_WHITE import failed "+file+", no white cat");return;}
                 var all=AssetDatabase.LoadAllAssetsAtPath(file).OfType<AnimationClip>().ToList();
                 AnimationClip Find(string n)=>all.FirstOrDefault(c=>c.name==n) ?? all.FirstOrDefault(c=>c.name.EndsWith(n) && !c.name.StartsWith("__preview__"));
-                var p=new Pet{tag="WHITE",kind="white",somali=true,white=true,hasLie=true,clipNames=WhiteClips,clips=new AnimationClip[WhiteClips.Length]};
-                for(int i=0;i<WhiteClips.Length;i++){
-                    var src=Find(WhiteClips[i]);
-                    if(src==null){Debug.LogWarning("ROOMPLAY_WHITE clip missing "+WhiteClips[i]+" (have "+string.Join(",",all.Select(c=>c.name))+"), no white cat");return;}
+                var wnames=SleepAwareNames(n=>Find(n)!=null);
+                var p=new Pet{tag="WHITE",kind="white",somali=true,white=true,hasLie=true,hasSleep=wnames.Length>WhiteClips.Length,clipNames=wnames,clips=new AnimationClip[wnames.Length]};
+                for(int i=0;i<wnames.Length;i++){
+                    var src=Find(wnames[i]);
+                    if(src==null){Debug.LogWarning("ROOMPLAY_WHITE clip missing "+wnames[i]+" (have "+string.Join(",",all.Select(c=>c.name))+"), no white cat");return;}
                     p.clips[i]=PetClipCopy(src,WhiteLoops(i));}
                 var wrap=new GameObject("White");var go=Instantiate(prefab,wrap.transform);go.name="WhiteModel";go.transform.localRotation=Quaternion.identity;
                 p.root=wrap.transform;
@@ -585,7 +593,10 @@ namespace Oddity.RoomTest
                 // front left on the open floor in front of the TV stand (z -2 -> -1.62), clear of the Somali (-1.30, -0.85) and the rug cat, turned toward the camera at an angle the other way
                 var spot=PetEnv("ODDITY_WHITESPOT")!=null?PetEnv("ODDITY_WHITESPOT").Split(',').Select(s=>float.Parse(s,CultureInfo.InvariantCulture)).ToArray():apt?new[]{Apartment.WhiteStart.x,Apartment.WhiteStart.y}:new[]{-.25f,-1.05f};
                 PetPlace(p,new Vector2(spot[0],spot[1]),WhiteYaw,true,WhiteBodyLength);
-                float scale=p.root.localScale.x;p.walkSpd=.70f*scale*CatSpeedMul;p.runSpd=p.walkSpd*2f;p.aiSpd=p.walkSpd*.8f;
+                float scale=p.root.localScale.x;
+                var wjson=Path.ChangeExtension(found,".json");if(File.Exists(wjson) && p.hasSleep)p.sleepFp=CatSleep.ParseFootprints(File.ReadAllText(wjson));
+                Debug.Log("ROOMPLAY_CATSLEEP who=WHITE clips="+(p.hasSleep?CatSleep.Count*3:0)+" footprints="+(p.sleepFp!=null?string.Join("/",p.sleepFp.Select(f=>F(f.lng*scale)+"x"+F(f.sht*scale))):"none")+" (m, long x short)");
+                p.walkSpd=.70f*scale*CatSpeedMul;p.runSpd=p.walkSpd*2f;p.aiSpd=p.walkSpd*.8f;
                 var mat=go.GetComponentsInChildren<Renderer>().SelectMany(r=>r.sharedMaterials).FirstOrDefault(m=>m!=null);
                 Debug.Log("ROOMPLAY_CATSPEED name=WHITE walk="+F(p.walkSpd)+" run="+F(p.runSpd)+" ai="+F(p.aiSpd));Debug.Log("ROOMPLAY_WHITE file="+Path.GetFileName(found)+" speed="+F(p.walkSpd)+" m/s run="+F(p.runSpd)+" ai="+F(p.aiSpd)+" clips="+string.Join(",",p.clips.Select(c=>c.name+":"+F(c.length)+(c.legacy?"L":"M")))+" renderers="+go.GetComponentsInChildren<Renderer>().Length+" material="+(mat!=null?mat.shader.name+" colour="+(mat.HasProperty("_BaseColor")?mat.GetColor("_BaseColor").ToString():"-")+" map="+(mat.HasProperty("_BaseMap") && mat.GetTexture("_BaseMap")!=null):"none"));
                 pets.Add(p);
@@ -602,7 +613,7 @@ namespace Oddity.RoomTest
         }
         // the Somali rests in one of three poses: sits (SitDown once, then SittingIdle), lies like a sphinx (LieDown, LyingIdle) or loafs (LoafDown, LoafIdle). It gets up with the matching Up clip
         // (StandUp, GetUp, LoafUp) and then goes on; changing between poses stands up first (restNext). PetAnimTick moves between the clips
-        static readonly string[] RestNames={"","sit","lie","loaf","groom","stretch","jump"};
+        static readonly string[] RestNames={"","sit","lie","loaf","groom","stretch","jump","sleep"};
         void PetSit(Pet p)=>PetRest(p,1);
         // kinds 1 sit, 2 lie, 3 loaf; 4 groom (sits first, then loops Groom), 5 stretch (once, standing), 6 jump in place (once)
         void PetRest(Pet p,int kind)
@@ -611,6 +622,7 @@ namespace Oddity.RoomTest
             if(kind>=4 && kind!=6 && !p.white)return;
             if(kind!=1 && !p.hasLie){Notice("이 소말리 파일에는 눕는 동작이 없음 (somali_cat_lie.glb)");return;}
             int s=p.sit;
+            if(kind==7){PetSleepStart(p);return;}
             if(kind==5 || kind==6){
                 if(s!=0){PetStand(p,kind);return;} // up first, then the stretch or the jump
                 p.goal=null;p.faceTo=float.NaN;p.moving=false;p.restNext=0;
@@ -633,6 +645,69 @@ namespace Oddity.RoomTest
             p.sit=kind==1?1:kind==2?4:7;SetPetClip(p,kind==1?2:kind==2?5:8,true);
             Debug.Log("ROOMPLAY_"+p.tag+" rest pose="+(p.groomAfter?"groom":RestNames[kind]));
         }
+        // ---- sleeping: the seven poses of CatSleep. Down once, Idle loops, Up when it leaves (Space, a walk, another pose, a new AI choice). PetRestTick grounds it like any lying clip (the lowest vertex on the surface)
+        static readonly bool LampEnv=Environment.GetEnvironmentVariable("ODDITY_LAMP")=="1";
+        static CatSleep.Place PlaceOf(string perchOrAct)
+        {
+            if(string.IsNullOrEmpty(perchOrAct))return CatSleep.Place.Floor;
+            if(perchOrAct=="bed")return CatSleep.Place.Bed;
+            if(perchOrAct.StartsWith("tower"))return CatSleep.Place.Tower;
+            if(perchOrAct=="sill")return CatSleep.Place.Sill;
+            switch(perchOrAct){case "floor":case "rug":case "here":case "harin":case "window":case "clip":case "wander":case "stretch":case "idle":return CatSleep.Place.Floor;}
+            return CatSleep.Place.Other;
+        }
+        CatSleep.Place PlaceOfPet(Pet p)=>p.perch!=null?PlaceOf(p.perch.name):p.onSofa?CatSleep.Place.Other:CatSleep.Place.Floor;
+        // the top of a perch in metres (width, depth) from its colliders, null when it has none
+        Vector2? PerchSize(string name)
+        {
+            if(name==null || !perches.TryGetValue(name,out var pr) || !perchColsOf.TryGetValue(pr,out var cols) || cols.Count==0)return null;
+            Bounds b=default;bool first=true;foreach(var c in cols){if(c==null)continue;if(first){b=c.bounds;first=false;}else b.Encapsulate(c.bounds);}
+            return first?(Vector2?)null:new Vector2(b.size.x,b.size.z);
+        }
+        // does the pose's footprint (json x the cat's scale) fit the perch (null: the floor, which always does)? Without a json every pose is believed to fit
+        bool SleepFits(Pet p,int pose,string perch)
+        {
+            if(p.sleepFp==null || p.root==null)return true;
+            var size=PerchSize(perch);if(size==null)return true;
+            float sc=p.root.localScale.x;var fp=p.sleepFp[pose];
+            return CatSleep.Fits(fp.lng*sc,fp.sht*sc,size.Value.x,size.Value.y);
+        }
+        // the pose a cat takes where it is (or at the perch/act it is heading for): weighted by CatSleep, -1 when none is allowed and fits
+        int SleepChoose(Pet p,string perchOrAct)
+        {
+            string perch=perchOrAct!=null && perches.ContainsKey(perchOrAct)?perchOrAct:null;
+            return CatSleep.Choose(PlaceOf(perchOrAct),LampEnv,k=>SleepFits(p,k,perch),Rng());
+        }
+        void PetSleepStart(Pet p)
+        {
+            if(!p.hasSleep){Notice("이 고양이는 잠자는 동작이 없음");return;}
+            int s=p.sit;
+            if(s==12||s==13){if(p.sleepCur==p.sleepPose){p.restNext=0;return;}PetStand(p,7);return;} // another pose: the Up clip of this one first
+            if(s!=0){PetStand(p,7);return;}
+            string pn=p.perch!=null?p.perch.name:null;var place=PlaceOfPet(p);
+            if(!CatSleep.Allowed(p.sleepPose,place) || !SleepFits(p,p.sleepPose,pn)){ // the pose chosen on the way does not fit up here
+                int alt=SleepChoose(p,pn??(p.onSofa?"sofa":null));
+                if(alt<0){Debug.Log("ROOMPLAY_CATSLEEP who="+p.tag+" pose="+CatSleep.Id[p.sleepPose]+" on="+(pn??"floor")+" does not fit, loaf instead");PetRest(p,3);return;}
+                p.sleepPose=alt;}
+            p.goal=null;p.faceTo=float.NaN;p.moving=false;p.restNext=0;p.groomAfter=false;
+            if(p.perch!=null && p.perch.name=="sill")p.faceTo=p.perch.yaw+90f; // along the sill, not across its narrow depth
+            p.sleepCur=p.sleepPose;p.sit=12;SetPetClip(p,SleepClip(p.sleepCur,0),true);
+            Debug.Log("ROOMPLAY_CATSLEEP who="+p.tag+" pose="+CatSleep.Id[p.sleepCur]+" on="+(pn??(p.onSofa?"sofa":"floor")));
+        }
+        // K: the next pose that is allowed and fits, a notice with its Korean name; Space or a walk wakes the cat
+        void CatSleepKey(Pet p,int forcePose=-1)
+        {
+            if(!p.hasSleep){Notice("이 고양이는 잠자는 동작이 없음");return;}
+            if(p.job!=0)return;
+            string pn=p.perch!=null?p.perch.name:null;var place=PlaceOfPet(p);
+            int cur=(p.sit==12||p.sit==13)?p.sleepCur:p.sleepPose;
+            int pick=-1;
+            if(forcePose>=0){pick=forcePose;}
+            else for(int i=1;i<=CatSleep.Count;i++){int k=(cur+i)%CatSleep.Count;if(CatSleep.Allowed(k,place) && SleepFits(p,k,pn)){pick=k;break;}}
+            if(pick<0){Notice("여기엔 맞는 자세가 없음");return;}
+            p.sleepPose=pick;Notice("잠자기: "+CatSleep.Korean[pick]);
+            PetRest(p,7);
+        }
         void PetStand(Pet p,int then=0)
         {
             if(!p.somali)return;
@@ -643,6 +718,7 @@ namespace Oddity.RoomTest
             if(p.white && s==0){p.restNext=0;if(then>0)PetRest(p,then);return;} // already standing
             if(s==4||s==5){p.sit=6;SetPetClip(p,7,true);}
             else if(s==7||s==8){p.sit=9;SetPetClip(p,10,true);}
+            else if(s==12||s==13){p.sit=14;SetPetClip(p,SleepClip(p.sleepCur,2),true);} // asleep (or still lying down): the pose's own Up clip
             else{p.sit=3;SetPetClip(p,4,true);} // sitting or grooming
         }
         void PetAnimTick(Pet p)
@@ -654,7 +730,8 @@ namespace Oddity.RoomTest
             else if(p.sit==11 && t>=p.clips[p.oneClip].length){p.sit=0;SetPetClip(p,0,true);}
             else if(p.hasLie && p.sit==4 && t>=p.clips[5].length){p.sit=5;SetPetClip(p,6,true);}
             else if(p.hasLie && p.sit==7 && t>=p.clips[8].length){p.sit=8;SetPetClip(p,9,true);}
-            else if(IsUp(p.sit) && t>=p.clips[p.sit==3?4:p.sit==6?7:10].length){
+            else if(p.sit==12 && t>=p.clips[SleepClip(p.sleepCur,0)].length){p.sit=13;SetPetClip(p,SleepClip(p.sleepCur,1),true);} // the lying-down clip is over: asleep, its Idle loops
+            else if(IsUp(p.sit) && t>=p.clips[p.sit==3?4:p.sit==6?7:p.sit==9?10:SleepClip(p.sleepCur,2)].length){
                 p.sit=0;SetPetClip(p,0,true);
                 int next=p.restNext;p.restNext=0;if(next>0)PetRest(p,next);
             }
@@ -717,13 +794,15 @@ namespace Oddity.RoomTest
             if(key=="l"){if(p.headB==null){Notice("이 고양이는 머리 뼈가 없음");return;}p.lookOn=!p.lookOn;Notice(p.lookOn?p.tag+" 카메라 바라보기":p.tag+" 바라보기 끝");Debug.Log("ROOMPLAY_CATLOOK name="+p.tag+" on="+(p.lookOn?1:0));return;} // L: this cat looks at the camera (each cat keeps its own)
             if(act>=0){if(p.job!=0)return;CatAction(p,act);return;}
             if(key=="left"||key=="right"){if(p.job==0){p.heading+=key=="left"?45:-45;p.faceTo=float.NaN;}return;}
-            if(key=="c"||key=="v"||key=="k"){
+            if(key=="k"){CatSleepKey(p);return;} // K: sleep, each press the next pose
+            if(key.StartsWith("catsleep") && int.TryParse(key.Substring(8),out var csn) && csn>=1 && csn<=CatSleep.Count){CatSleepKey(p,csn-1);return;} // script keys catsleep1..7: that pose
+            if(key=="c"||key=="v"){
                 if(p.job!=0 || p.onSofa)return;
                 var cp=new Vector2(p.root.position.x,p.root.position.z);
                 if(!spotsOf.TryGetValue("sofa",out var sl) || sl.Count==0){Notice("소파가 없음");return;}
                 var sp=FreeSpot("sofa",p,cp);if(sp==null){Notice("자리가 없어요");return;}
                 PetGoToSofa(p,sp,cp);
-                p.arriveRest=p.somali && key=="k"?2:0; // K: the Somali lies down on the cushion (sphinx), C and V sit
+                p.arriveRest=0; // C and V sit
                 return;
             }
             Notice("고양이에게 없는 동작");
@@ -1164,6 +1243,8 @@ namespace Oddity.RoomTest
         int AiRestKind(Pet p,string act)
         {
             if(!p.hasLie)return 1;
+            p.aiSleeps=false;
+            if(p.hasSleep && Rng().Next(100)<35){int sk=SleepChoose(p,act);if(sk>=0){p.sleepPose=sk;p.aiSleeps=true;return 7;}} // sometimes the rest is a sleep, in a pose that is allowed and fits there (CatSleep)
             int r=Rng().Next(100);
             if(p.white){ // sit 30, lie 30, loaf 25, groom 15 (sill: lie 45, loaf 30, sit 15, groom 10)
                 if(act=="sill" || act.StartsWith("tower"))return r<45?2:r<75?3:r<90?1:4;
@@ -1182,7 +1263,7 @@ namespace Oddity.RoomTest
                     at=t.Value;place=act=="rug"?"rug":"floor";PetGoTo(p,"floor",at,null,cp);p.aiDur=Rnd(3,8);break;}
                 case "sofa":{
                     var sp=FreeSpot("sofa",p,cp,true);if(sp==null)return false;
-                    at=sp.land;PetGoToSofa(p,sp,cp);if(p.somali)p.arriveRest=AiRestKind(p,act);p.aiDur=Rnd(10,25);break;}
+                    at=sp.land;PetGoToSofa(p,sp,cp);if(p.somali)p.arriveRest=AiRestKind(p,act);p.aiDur=p.aiSleeps?Rnd(20,60):Rnd(10,25);break;}
                 case "window":{
                     float wz=Rnd(0f,1.1f);var spot=NearestFree(apt?new Vector2(Rnd(Apartment.WindowRangeX.x,Apartment.WindowRangeX.y),Apartment.WindowSpot.y):new Vector2(-1.40f,wz));if(!FarFromOthers(p,spot))return false;
                     at=spot;PetGoTo(p,"window",spot,null,apt?new Vector2(spot.x,Apartment.WindowLook.y):new Vector2(-RoomHalf,wz));p.aiDur=Rnd(6,15);break;}
@@ -1196,7 +1277,7 @@ namespace Oddity.RoomTest
                     at=found.Value;PetGoTo(p,"harin",at,null,hp);p.aiDur=Rnd(5,10);break;}
                 case "clip":
                     travel=false;
-                    if(p.sit==0 || IsUp(p.sit))PetRest(p,AiRestKind(p,act));p.aiDur=Rnd(8,20);
+                    p.aiSleeps=false;if(p.sit==0 || IsUp(p.sit))PetRest(p,AiRestKind(p,p.perch!=null?p.perch.name:act));p.aiDur=p.aiSleeps?Rnd(20,60):Rnd(8,20);
                     place="here";break;
                 case "idle":
                     travel=false;p.aiDur=Rnd(4,10);place="here";break;
@@ -1207,7 +1288,7 @@ namespace Oddity.RoomTest
                     if(!perches.TryGetValue(act,out var pr))return false;
                     if(act=="fridge" && !(p.perch!=null && p.perch.name=="counter") && FreeSpot("counter",p,cp)==null)return false;
                     if(!PetGoToPerch(p,act,null,true))return false;
-                    at=p.spot!=null?p.spot.land:pr.land;if(p.somali)p.arriveRest=AiRestKind(p,act);p.aiDur=Rnd(10,30);break;}
+                    at=p.spot!=null?p.spot.land:pr.land;if(p.somali)p.arriveRest=AiRestKind(p,act);p.aiDur=p.aiSleeps?Rnd(20,60):Rnd(10,30);break;}
             }
             p.aiAct=act;p.aiPlace=place;p.aiTarget=at;p.aiHasTarget=travel;p.aiGo=0;
             AiLog(p,act,place,at);
@@ -1739,10 +1820,11 @@ namespace Oddity.RoomTest
         }
         void ScriptClick(string key)
         {
+            if(key=="clickbed" && ctl!=null){if(!PetGoToPerch(ctl,"bed"))Notice("침대 자리가 없음");return;} // script: the controlled cat goes up on the bed
             if(apt && ((key=="clicktable" && tableRoot==null) || (key=="clickfridge" && !Apartment.HasFridge) || (key=="clickteatable" && !Apartment.HasTea) || (key=="clickledge" && !Apartment.HasLedge))){Notice("이 집에는 그런 가구가 없음");return;}
             if(apt && Apartment.NoSofa && key.StartsWith("clicksofa")){Notice("이 집에는 소파가 없음 - 침대 가장자리로");key="clickbededge";}
             if(key.StartsWith("clicktower")){ScriptClickTower(key);return;}
-            Vector3 target=key=="clickbededge"?Apartment.BedEdgeSeat+Vector3.up*.05f:key=="clickwindow"?(apt?new Vector3((Apartment.WinX0+Apartment.WinX1)/2,(Apartment.WinY0+Apartment.WinY1)/2,Apartment.WinPlaneZ):new Vector3(-RoomHalf,(WinY.x+WinY.y)/2,(WinZ.x+WinZ.y)/2)):key=="clicksofa"&&sofa!=null?SeatOf("SeatL",sofa):key=="clicksofar"&&sofa!=null?SeatOf("SeatR",sofa):key=="clicksofac"&&sofa!=null?SeatOf("SeatC",sofa):key=="clicktable"&&tableRoot!=null?tableRoot.position+Vector3.up*.7f:key=="clickcounter"?(apt?new Vector3(Apartment.CounterLand[0].x,.86f,Apartment.CounterLand[0].y):new Vector3(1.17f,.86f,1.5f)):key=="clickfridge"?(apt?new Vector3(4.03f,1.2f,8.5f):new Vector3(1.7f,1.2f,1.5f)):key=="clickteatable"?new Vector3((Apartment.TeaX0+Apartment.TeaX1)/2,.4f,(Apartment.TeaZ0+Apartment.TeaZ1)/2):key=="clicksill"?(apt?new Vector3((Apartment.SillLand[0].x+Apartment.SillLand[Apartment.SillLand.Length-1].x)/2,Apartment.WinY0,Apartment.SillLand[0].y):new Vector3(-1.85f,.85f,.2f)):key=="clickledge"?new Vector3(.8f,.9f,.15f):ScriptFloorPoint();
+            Vector3 target=key=="clickbededge"?Apartment.BedEdgeSeat+Vector3.up*.05f:key=="clickwindow"?(apt?new Vector3((Apartment.WinX0+Apartment.WinX1)/2,(Apartment.WinY0+Apartment.WinY1)/2,Apartment.WinPlaneZ):new Vector3(-RoomHalf,(WinY.x+WinY.y)/2,(WinZ.x+WinZ.y)/2)):key=="clicksofa"&&sofa!=null?SeatOf("SeatL",sofa):key=="clicksofar"&&sofa!=null?SeatOf("SeatR",sofa):key=="clicksofac"&&sofa!=null?SeatOf("SeatC",sofa):key=="clicktable"&&tableRoot!=null?tableRoot.position+Vector3.up*.7f:key=="clickcounter"?(apt?new Vector3(Apartment.CounterLand[0].x,.86f,Apartment.CounterLand[0].y):new Vector3(1.17f,.86f,1.5f)):key=="clickfridge"?(apt?new Vector3(4.03f,1.2f,8.5f):new Vector3(1.7f,1.2f,1.5f)):key=="clickteatable"?new Vector3((Apartment.TeaX0+Apartment.TeaX1)/2,.4f,(Apartment.TeaZ0+Apartment.TeaZ1)/2):key=="clicksill"?(apt?new Vector3((Apartment.SillLand[0].x+Apartment.SillLand[Apartment.SillLand.Length-1].x)/2,Apartment.WinY0,Apartment.SillLand[0].y):new Vector3(-1.85f,.85f,.2f)):key=="clickledge"?new Vector3(.8f,.9f,.15f):key=="clickbed"?new Vector3(.5f,.43f,1.4f):ScriptFloorPoint();
             ClickAt(new Ray(cameraView.transform.position,target-cameraView.transform.position));
         }
         // clickfloor's fixed point (.9, .9); ODDITY_CLICKXZ="x,z" picks another one for a path test
@@ -3174,7 +3256,7 @@ namespace Oddity.RoomTest
             Part(PrimitiveType.Cylinder,shield.transform,Vector3.zero,new Vector3(.5f,.012f,.5f),new Color(.45f,.27f,.13f));
             Part(PrimitiveType.Cylinder,shield.transform,new Vector3(0,.015f,0),new Vector3(.12f,.012f,.12f),new Color(.78f,.8f,.84f));
         }
-        static readonly string[] CatCommonKeys={"space  멈추기 (앉았거나 누웠으면 일어서기)","W A S D  걷기, Shift  달리기 (2배)","← →  제자리 돌기","↑ ↓, 휠  줌, Ctrl+휠  카메라 높이","Shift+휠  카메라 좌우, Alt+휠  기울기","Shift+← →  카메라 좌우 돌기, Shift+↑ ↓  카메라 높이","C V  소파에 올라가 앉기, K  올라가 눕기","클릭  바닥, 소파, 식탁, 조리대, 냉장고, 창","M  다음 동작, R  다시 불러오기, L  카메라 보기","O  고양이 소리 켜고 끄기","I  방 안 카메라 (다시 누르면 밖)","Tab  하린으로"};
+        static readonly string[] CatCommonKeys={"space  멈추기 (앉았거나 누웠으면 일어서기)","W A S D  걷기, Shift  달리기 (2배)","← →  제자리 돌기","↑ ↓, 휠  줌, Ctrl+휠  카메라 높이","Shift+휠  카메라 좌우, Alt+휠  기울기","Shift+← →  카메라 좌우 돌기, Shift+↑ ↓  카메라 높이","C V  소파에 올라가 앉기, K  잠자기 (누를 때마다 다른 자세)","클릭  바닥, 소파, 식탁, 조리대, 냉장고, 창","M  다음 동작, R  다시 불러오기, L  카메라 보기","O  고양이 소리 켜고 끄기","I  방 안 카메라 (다시 누르면 밖)","Tab  하린으로"};
         static string CatRow(Pet p,int i){const string keys="123456789";return i<ActionNames.Length?keys[i]+"  "+ActionNames[i]+(CanDo(p,i)?"":" (없음)"):CatCommonKeys[i-ActionNames.Length];}
         static readonly bool noHud=Environment.GetEnvironmentVariable("ODDITY_NOHUD")=="1" || Environment.GetEnvironmentVariable("ODDITY_ORBIT")=="1";
         // script-only still cameras (for the shots): cam1..cam9 take "ex,ey,ez,ax,ay,az,fov" from the environment ODDITY_CAM1..9; camphone / camface / camback are placed from the pose; camoff gives the normal camera back
