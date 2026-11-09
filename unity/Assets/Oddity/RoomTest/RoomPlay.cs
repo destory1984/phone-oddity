@@ -128,6 +128,7 @@ namespace Oddity.RoomTest
                 var sitClip=Environment.GetEnvironmentVariable("ODDITY_PLAYSIT");if(!string.IsNullOrWhiteSpace(sitClip))Keys[SitIndex].clip=sitClip; // which clip C sits with
                 var curlClip=Environment.GetEnvironmentVariable("ODDITY_PLAYCURL");if(!string.IsNullOrWhiteSpace(curlClip))Keys[CurlIndex].clip=curlClip; // and V
                 var napClip=Environment.GetEnvironmentVariable("ODDITY_PLAYNAP");if(!string.IsNullOrWhiteSpace(napClip))Keys[NapIndex].clip=napClip; // and K
+                else if(apt && Apartment.HasBed)Keys[NapIndex].clip="KaSleepCurlUpSidewaysLoop"; // the bed: curled on her side rests on the quilt with the head on the pillow, the side-turn clip hovers
                 LoadModel(Environment.GetEnvironmentVariable("ODDITY_MODEL")??NewestInTest(DefaultLine)??NewestInTest(null)??"Assets/Models/test/harin-6T-I1-30.vrm"); // the newest O2 build by default, else the newest vrm of any line
                 PlaceSofa();
                 BuildPerches();
@@ -1605,7 +1606,7 @@ namespace Oddity.RoomTest
         // Shift+C and Shift+V step through these; the floor ones (lying, crouching) play where she stands instead of on a seat
         static readonly string[] SitClips={"KaSitPutHandBetweensLoop","KaSitSwingingLegsLoop","KaSitCrossLegsLoop","MxSitCrossedRecline","MxSitCrossedArmKnee","MxSitHoldKnee"};
         static readonly string[] CurlClips={"KaSitWithBothLegsUpLoop","MxLayStomachElbows","MxCrouchPose","MxCrouchIdle"};
-        static readonly string[] NapClips={"KaSleepTurnToTheSideLoop","KaSleepCurlUpSidewaysLoop"}; // K: side, face to the room; Shift+K: curled up, face in the armrest
+        static readonly string[] NapClips={"KaSleepTurnToTheSideLoop","KaSleepCurlUpSidewaysLoop","KaSleepBendOneKneeLoop"}; // K: side, face to the room; Shift+K: curled up, face in the armrest
         static bool FloorClip(string clip)=>clip.StartsWith("MxLay")||clip.StartsWith("MxCrouch");
         bool onFloor;
         void NextSit(int index)
@@ -1773,7 +1774,7 @@ namespace Oddity.RoomTest
         void FeetClear()
         {
             float w=weights[SitIndex]+weights[NapIndex]+(onFloor?0:weights[CurlIndex]);if(w<=0 || sofa==null)return;
-            if(weights[NapIndex]>.5f){NapFeet(weights[NapIndex]);return;}
+            if(weights[NapIndex]>.5f){if(!seatIsBed)NapFeet(weights[NapIndex]);return;} // the sofa's armrest pull-in would drag a bed sleeper's legs across each other
             if(!onFloor && weights[CurlIndex]>.5f){CurlFeet(weights[CurlIndex]);return;}
             for(int side=0;side<2;side++){
                 var upper=anim.GetBoneTransform(side==0?HumanBodyBones.LeftUpperLeg:HumanBodyBones.RightUpperLeg);
@@ -1968,8 +1969,6 @@ namespace Oddity.RoomTest
             var hips=anim.GetBoneTransform(HumanBodyBones.Hips);
             var aim=seatAt+(weights[NapIndex]>0?Vector3.up*NapLift:Vector3.zero);
             model.transform.position+=(aim-hips.position)*w;
-            if(seatIsBed && weights[NapIndex]+weights[BedIndex]>0)LieGround(Mathf.Clamp01(weights[NapIndex]+weights[BedIndex]));
-            else lieLowRel=float.NaN;
             if(weights[NapIndex]+weights[BedIndex]<.5f)OffBackrest(w);
         }
         // a sit clip that leans back puts her back and shoulders into the backrest: the deepest bone is measured against the backrest with a ray from the front and she is moved forward by that much
@@ -2914,6 +2913,7 @@ namespace Oddity.RoomTest
             ChinRest(dt);
             LookAtPlayer(dt);
             SofaTick(dt);
+            LieFinish();
             if(sword!=null){sword.SetActive(current==12);shield.SetActive(current==12);if(current==12)PlaceShield();}
             if(blob!=null)blob.position=new Vector3(x,.004f,z+.02f);
         }
@@ -3073,9 +3073,18 @@ namespace Oddity.RoomTest
             floorError=Mathf.Max(floorError,Mathf.Abs(lift+lowest));
         }
         // the camera stays put on the wide ground; the down arrow dollies out to see her, the up arrow dollies in and centres on her
+        // ODDITY_BEDCAM=x,y,z,tx,ty,tz,fov: a fixed still camera for the lying-pose pictures (eye, target, lens)
+        static readonly float[] BedCamSet=ParseCam(Environment.GetEnvironmentVariable("ODDITY_BEDCAM"));
+        static float[] ParseCam(string t){if(string.IsNullOrWhiteSpace(t))return null;var p=t.Split(',');if(p.Length!=7)return null;var r=new float[7];for(int i=0;i<7;i++)if(!float.TryParse(p[i],NumberStyles.Float,CultureInfo.InvariantCulture,out r[i]))return null;return r;}
+        void BedCam()
+        {
+            if(BedCamSet==null || cameraView==null)return;
+            var eye=new Vector3(BedCamSet[0],BedCamSet[1],BedCamSet[2]);var d=new Vector3(BedCamSet[3],BedCamSet[4],BedCamSet[5])-eye;
+            cameraView.transform.SetPositionAndRotation(eye,Quaternion.LookRotation(d,Mathf.Abs(d.normalized.y)>.95f?Vector3.forward:Vector3.up));cameraView.fieldOfView=BedCamSet[6];
+        }
         void Frame(float dt,float zoomKey)
         {
-            if(room){RoomFrame(dt,zoomKey);StillCam();return;}
+            if(room){RoomFrame(dt,zoomKey);StillCam();BedCam();return;}
             zoom=Mathf.Clamp(zoom*Mathf.Exp(zoomKey*.8f*dt),1.2f,30f);
             float near=Mathf.InverseLerp(6.79f,2.6f,zoom);
             cameraView.transform.position=new Vector3(x*near,Mathf.Lerp(1.13f,1.54f,near),Mathf.Lerp(-zoom,z-zoom,near));
@@ -3203,21 +3212,21 @@ namespace Oddity.RoomTest
             Debug.Log("ROOMPLAY_LIE clip="+Keys[c].clip+" axisYaw="+F(lieAxisYaw[c])+" faceYaw="+F(face.sqrMagnitude>1e-4f?Mathf.Atan2(face.x,face.z)*Mathf.Rad2Deg:0)+" hipsY="+F(hips.position.y));
             mixer.SetInputWeight(c,0);plays[c].SetTime(0);model.transform.SetPositionAndRotation(keepP,keepR);
         }
-        // lying on the bed her lowest vertex rests on the mattress top: the model is lifted so the measured lowest point of every mesh touches it (measured every 6th frame while it settles)
-        float lieLowRel=float.NaN;int lieFrame;Mesh lieBake;SkinnedMeshRenderer[] lieMeshes;readonly List<Vector3> lieVerts=new List<Vector3>();float lieLogged=-9;
-        void LieGround(float w)
+        // Lying on the bed, after everything else has posed her: the legs are uncrossed, the head is put over the pillow (the neck bends sideways until the head's lowest vertex is on the pillow top),
+        // then the model is lifted or lowered so the skinned body's lowest surface (hair excluded, see BedProbe) touches the quilt. Measured every 3rd frame (every frame while blending).
+        LieRig lieRig;GameObject lieRigFor;bool lieMeshLogged;float lieLogged=-9;
+        static readonly bool LieLegsOn=Environment.GetEnvironmentVariable("ODDITY_LIELEGS")!="0";
+        void LieFinish()
         {
-            float top=Apartment.BedLieTop;
-            if(lieMeshes==null || lieMeshes.Length==0 || lieMeshes[0]==null)lieMeshes=model.GetComponentsInChildren<SkinnedMeshRenderer>().Where(r=>r.sharedMesh!=null).ToArray();
-            if(float.IsNaN(lieLowRel) || lieFrame++%6==0 || w<.999f){
-                if(lieBake==null)lieBake=new Mesh();
-                float low=float.PositiveInfinity;
-                foreach(var r in lieMeshes){r.BakeMesh(lieBake);lieBake.GetVertices(lieVerts);var m=r.transform.localToWorldMatrix;foreach(var v in lieVerts)low=Mathf.Min(low,m.MultiplyPoint3x4(v).y);}
-                lieLowRel=low-model.transform.position.y;
+            float w=Mathf.Clamp01(weights[NapIndex]+weights[BedIndex]);
+            if(!(seatIsBed && w>0 && model!=null && apt && Apartment.HasBed)){if(lieRig!=null)lieRig.Neck=0;return;}
+            if(lieRig==null || lieRigFor!=model){lieRig=new LieRig(model,anim);lieRigFor=model;}
+            bool pillow=weights[NapIndex]>=weights[BedIndex];
+            lieRig.Place(w,pillow,Apartment.BedLieTop,LieLegsOn,false);
+            if(w>.99f && Time.unscaledTime-lieLogged>2){
+                lieLogged=Time.unscaledTime;var hp=anim.GetBoneTransform(HumanBodyBones.Hips).position;var head=anim.GetBoneTransform(HumanBodyBones.Head);var hd=head.position;var hc=BedProbe.HeadCentre(head,anim.GetBoneTransform(HumanBodyBones.Neck));
+                if(!lieMeshLogged){lieMeshLogged=true;Debug.Log("ROOMPLAY_LIEMESH "+lieRig.Describe());}Debug.Log("ROOMPLAY_LIEGROUND lowest="+F(lieRig.LowestY)+" trueLowest="+F(lieRig.TrueLowestY)+" top="+F(Apartment.BedLieTop)+" headLow="+F(lieRig.HeadLowY)+" pillowTop="+F(Apartment.PillowTopAt(hc.x,hc.z))+" neck="+F(lieRig.Neck)+" legsApart="+F(lieRig.LegsApart)+" head=("+F(hd.x)+","+F(hd.y)+","+F(hd.z)+") modelYaw="+F(model.transform.eulerAngles.y)+" axisNow="+F(Mathf.Atan2(hd.x-hp.x,hd.z-hp.z)*Mathf.Rad2Deg)+" hips=("+F(hp.x)+","+F(hp.y)+","+F(hp.z)+") pillow="+(pillow?1:0)+" meshes="+lieRig.Meshes);
             }
-            float target=top-lieLowRel+.003f;var pos=model.transform.position;
-            model.transform.position=new Vector3(pos.x,Mathf.Lerp(pos.y,target,w),pos.z);
-            if(w>.99f && Time.unscaledTime-lieLogged>2){lieLogged=Time.unscaledTime;var hp=anim.GetBoneTransform(HumanBodyBones.Hips).position;var hd=anim.GetBoneTransform(HumanBodyBones.Head).position;Bounds bb=default;bool first=true;foreach(HumanBodyBones hb in Enum.GetValues(typeof(HumanBodyBones))){if(hb==HumanBodyBones.LastBone)continue;var bt=anim.GetBoneTransform(hb);if(bt==null)continue;if(first){bb=new Bounds(bt.position,Vector3.zero);first=false;}else bb.Encapsulate(bt.position);}Debug.Log("ROOMPLAY_LIEFIT x="+F(bb.min.x)+".."+F(bb.max.x)+" z="+F(bb.min.z)+".."+F(bb.max.z)+" bed x 0..1 z .5..2.5");Debug.Log("ROOMPLAY_LIEGROUND lowest="+F(lieLowRel+model.transform.position.y)+" top="+F(top)+" modelYaw="+F(model.transform.eulerAngles.y)+" yaw="+F(yaw)+" axisNow="+F(Mathf.Atan2(hd.x-hp.x,hd.z-hp.z)*Mathf.Rad2Deg)+" hips=("+F(hp.x)+","+F(hp.y)+","+F(hp.z)+")");}
         }
         void SofaTick(float dt)
         {

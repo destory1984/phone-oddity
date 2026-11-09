@@ -118,5 +118,50 @@ namespace Oddity.RoomTest.Tests
             }
             finally { Apartment.Use(null); }
         }
+
+        // the lying pose on the studio bed: the clip sampled, the model turned head to the north, then placed by LieRig as RoomPlay does after posing
+        static void Lie(string clipName, out GameObject model, out LieRig rig, bool pillow)
+        {
+            var (m, r) = Make(); r.Dispose(); model = m; rig = null;
+            AnimationClip clip = AssetDatabase.LoadAllAssetsAtPath("Assets/Oddity/DevMotion/Resources/Motion/" + clipName + ".fbx").OfType<AnimationClip>().FirstOrDefault(c => !c.name.StartsWith("__preview__"));
+            if (clip == null) { Object.DestroyImmediate(m); Assert.Ignore("no clip " + clipName); return; }
+            var a = m.GetComponent<Animator>();
+            m.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity); clip.SampleAnimation(m, 0);
+            var axis = a.GetBoneTransform(HumanBodyBones.Head).position - a.GetBoneTransform(HumanBodyBones.Hips).position; axis.y = 0;
+            float ay = Mathf.Atan2(axis.x, axis.z) * Mathf.Rad2Deg; var lay = OneRoom.Layout;
+            rig = new LieRig(m, a);
+            for (int i = 0; i < 12; i++)
+            {
+                m.transform.SetPositionAndRotation(new Vector3(lay.bedSeat.x, 0, lay.bedSeat.z), Quaternion.Euler(0, -ay, 0)); clip.SampleAnimation(m, 0);
+                var hp = a.GetBoneTransform(HumanBodyBones.Hips).position; m.transform.position += new Vector3(lay.bedSeat.x - hp.x, 0, lay.bedSeat.z - hp.z);
+                rig.Place(1, pillow, lay.bedLieTop, true, true);
+            }
+        }
+
+        [TestCase("KaSleepTurnToTheSideLoop")]
+        [TestCase("KaSleepCurlUpSidewaysLoop")]
+        public void SofaMotions_LyingBodySurfaceRestsOnTheQuiltAndTheHeadOnThePillow(string clipName)
+        {
+            Apartment.Use(OneRoom.Layout);
+            GameObject model = null;
+            try
+            {
+                Lie(clipName, out model, out var rig, true);
+                var a = model.GetComponent<Animator>(); float top = OneRoom.Layout.bedLieTop;
+                Assert.That(rig.LowestY - top, Is.InRange(-.02f, .01f), "the body's lowest surface is on the quilt, lowest " + rig.LowestY);
+                Assert.That(rig.TrueLowestY, Is.GreaterThan(top - .025f), "nothing sinks more than 2 cm");
+                var head = a.GetBoneTransform(HumanBodyBones.Head); var pc = Apartment.PillowAt; var ps = Apartment.PillowSize;
+                Assert.That(Mathf.Abs(head.position.x - pc.x), Is.LessThan(ps.x / 2 + .05f), "head over the pillow in x");
+                Assert.That(Mathf.Abs(head.position.z - pc.z), Is.LessThan(ps.z / 2 + .05f), "head over the pillow in z");
+                var hc = BedProbe.HeadCentre(head, a.GetBoneTransform(HumanBodyBones.Neck)); float pt = Apartment.PillowTopAt(hc.x, hc.z);
+                Assert.That(rig.HeadLowY, Is.InRange(pt - .06f, pt + .03f), "the head's lowest vertex " + rig.HeadLowY + " rests on the pillow top " + pt + " (neck " + rig.Neck + ")");
+                var lay = OneRoom.Layout; Assert.That(a.GetBoneTransform(HumanBodyBones.Hips).position.x, Is.InRange(0f, 1f), "inside the bed");
+                // legs: each on its own side of the other along the hip axis (left hip -> right hip), knees and ankles
+                var s = (a.GetBoneTransform(HumanBodyBones.RightUpperLeg).position - a.GetBoneTransform(HumanBodyBones.LeftUpperLeg).position).normalized;
+                foreach (var (l, r, name) in new[] { (HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg, "knees"), (HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot, "ankles") })
+                    Assert.That(Vector3.Dot(a.GetBoneTransform(r).position - a.GetBoneTransform(l).position, s), Is.GreaterThan(.05f), name + " are not crossed");
+            }
+            finally { Apartment.Use(null); if (model != null) Object.DestroyImmediate(model); }
+        }
     }
 }

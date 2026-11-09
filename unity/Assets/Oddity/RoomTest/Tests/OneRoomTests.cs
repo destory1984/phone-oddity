@@ -54,7 +54,7 @@ namespace Oddity.RoomTest.Tests
         {
             var f = Apartment.Furniture().ToDictionary(q => q.name);
             Assert.AreEqual(0f, f["bed_frame"].x0, 1e-3f); Assert.AreEqual(1.0f, f["bed_frame"].x1, 1e-3f); Assert.AreEqual(.5f, f["bed_frame"].z0, 1e-3f); Assert.AreEqual(2.5f, f["bed_frame"].z1, 1e-3f);
-            Assert.Greater(f["bed_pillow"].z0, f["bed_duvet"].z1, "the pillow is at the north (head) end");
+            Assert.Greater(Apartment.PillowAt.z - Apartment.PillowSize.z / 2, f["bed_duvet"].z1, "the pillow is at the north (head) end"); Assert.That(Apartment.PillowSize.x, Is.EqualTo(.5f).Within(.05f)); Assert.That(Apartment.PillowSize.z, Is.EqualTo(.32f).Within(.05f)); Assert.That(Apartment.PillowSize.y, Is.EqualTo(.12f).Within(.03f));
             Assert.AreEqual(0f, f["wardrobe"].x0, 1e-3f); Assert.AreEqual(.6f, f["wardrobe"].x1, 1e-3f); Assert.AreEqual(2.7f, f["wardrobe"].z0, 1e-3f); Assert.Greater(f["wardrobe_door1"].x0, f["wardrobe"].x1 - .02f, "doors face east");
             Assert.AreEqual(OneRoom.X1, f["counter"].x1, 1e-3f); Assert.GreaterOrEqual(f["counter"].x0, 2.4f); Assert.AreEqual(3.0f, f["counter"].z0, 1e-3f); Assert.AreEqual(4.5f, f["counter"].z1, 1e-3f); Assert.AreEqual("counter", f["counter"].perch);
             Assert.AreEqual("sill", f["sill"].perch);

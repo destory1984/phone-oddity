@@ -16,7 +16,7 @@ namespace Oddity.RoomTest
             public string name; public float H, X1, ZN, limX0, limX1, limZ0, limZ1;
             public Func<List<WallDef>> walls; public Func<List<RoomDef>> rooms; public Func<List<DoorDef>> doors; public Func<List<FurnBox>> furniture; public Func<List<LeafDef>> leaves; public Func<List<Fixture>> fixtures; public Func<List<Rect>> props;
             public Vector2 harinStart, somaliStart, whiteStart, tabbyStart, windowSpot, windowLook, windowRangeX; public float windowYaw, startYaw, somaliYaw, whiteYaw, tabbyYaw;
-            public Vector3 sunThrough, sunOnto, lampAt, sofaAt, sofaFace, tableAt, tableFace, bedSeat, bedFront, bedSize; public float sofaScale = 1;
+            public Vector3 sunThrough, sunOnto, lampAt, sofaAt, sofaFace, tableAt, tableFace, bedSeat, bedFront, bedSize, pillowAt, pillowSize; public float sofaScale = 1;
             public bool hasTable, hasTea, hasFridge, hasLedge, hasBed, hasTv, sky = true, peep;
             public Vector3 tvAt, tvFace, tvSize; // the wall TV: centre of its body, the way its screen faces, width x height x depth
             public Vector3 bedStand; public float bedLieTop; // bedLieTop: the surface a body lying on the bed rests on (the quilt) // the free floor beside the bed she walks to before she lies down
@@ -147,6 +147,16 @@ namespace Oddity.RoomTest
         public static Vector3 BedSeat => Cur.bedSeat;
         public static Vector3 BedFront => Cur.bedFront;
         public static Vector3 BedSize => Cur.bedSize;
+        // the pillow: a flattened ellipsoid, pillowAt = centre of its flat base (x, mattress top, z), pillowSize = full width, height at the centre, depth; zero size = none
+        public static bool HasPillow => Cur.pillowSize.y > 0;
+        public static Vector3 PillowAt => Cur.pillowAt;
+        public static Vector3 PillowSize => Cur.pillowSize;
+        public static float PillowTopAt(float x, float z)
+        {
+            if (!HasPillow) return 0;
+            float a = Cur.pillowSize.x / 2, b = Cur.pillowSize.z / 2, dx = (x - Cur.pillowAt.x) / a, dz = (z - Cur.pillowAt.z) / b, d2 = dx * dx + dz * dz;
+            return Cur.pillowAt.y + (d2 >= 1 ? 0 : Cur.pillowSize.y * Mathf.Sqrt(1 - d2));
+        }
         public static float WinPlaneZ => Cur.winPlaneZ;
         public static float WinX0 => Cur.winX0;
         public static float WinX1 => Cur.winX1;

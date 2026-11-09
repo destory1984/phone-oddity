@@ -54,7 +54,6 @@ namespace Oddity.RoomTest
                 f("bed_frame", 0, 1.0f, 0, .28f, .5f, 2.5f, wood, true),
                 f("bed_mattress", .02f, .98f, .28f, .42f, .52f, 2.48f, linen, false, "bed"),
                 f("bed_duvet", 0, 1.0f, .42f, .46f, .5f, 1.95f, duvet),
-                f("bed_pillow", .15f, .85f, .42f, .52f, 2.05f, 2.42f, white),
                 f("bed_head", 0, 1.0f, 0, .85f, 2.5f, 2.56f, wood),
                 f("rug", 1.25f, 2.15f, 0, .006f, 1.0f, 2.6f, new Color(.82f, .76f, .66f)),
                 // built-in wardrobe: west wall, two doors facing east
@@ -120,6 +119,8 @@ namespace Oddity.RoomTest
             {
                 float cx = 2.56f + i * .055f; var c = Apartment.Part(fr, PrimitiveType.Cylinder, new Vector3(cx, 1.30f, .12f + (i % 2) * .03f), new Vector3(.06f, .9f, .06f), sheer * (i % 2 == 0 ? 1f : .94f)); Apartment.NoShadow(c);
             }
+            // the pillow: an ellipsoid whose lower half is inside the mattress, so the visible part is a soft dome (pillowSize.y high at the centre)
+            var pl = Layout; var pg = Apartment.Part(fr, PrimitiveType.Sphere, pl.pillowAt, new Vector3(pl.pillowSize.x, pl.pillowSize.y * 2, pl.pillowSize.z), new Color(.95f, .94f, .92f)); pg.name = "bed_pillow";
             Apartment.Part(fr, PrimitiveType.Cylinder, new Vector3(.55f, .45f, .14f), new Vector3(.14f, .05f, .14f), pot);
             foreach (var (dx, dy, k) in new[] { (0f, .62f, .26f), (.05f, .74f, .2f), (-.04f, .70f, .18f) }) Apartment.Part(fr, PrimitiveType.Sphere, new Vector3(.55f + dx, dy, .14f), Vector3.one * k, new Color(.30f, .48f, .28f));
         }
@@ -129,7 +130,7 @@ namespace Oddity.RoomTest
             walls = Walls, rooms = Rooms, doors = Doors, furniture = Furniture, leaves = Leaves, fixtures = Fixtures, props = Props,
             // the sofa: the props glb scaled to 1.5 m long on the east wall facing west; the bed seat mark for K (and C when it is the nearest), lying along the bed with the head to the north
             sofaAt = new Vector3(2.60f, 0, 1.45f), sofaFace = Vector3.left, sofaScale = .94f, hasTable = false, hasTea = false, hasFridge = false, hasLedge = false, hasBed = true,
-            bedSeat = new Vector3(.5f, .43f, 1.5f), bedFront = Vector3.right, bedSize = new Vector3(1.0f, .43f, 2.0f), bedStand = new Vector3(1.25f, 0, 1.5f), bedLieTop = .46f,
+            bedSeat = new Vector3(.5f, .43f, 1.5f), bedFront = Vector3.right, bedSize = new Vector3(1.0f, .43f, 2.0f), bedStand = new Vector3(1.25f, 0, 1.5f), bedLieTop = .46f, pillowAt = new Vector3(.5f, .42f, 2.30f), pillowSize = new Vector3(.50f, .14f, .32f),
             // a 32 inch TV on the west wall over the foot of the bed, facing the sofa, centred on the sofa's z
             hasTv = true, tvAt = new Vector3(.02f, 1.25f, 1.45f), tvFace = Vector3.right, tvSize = new Vector3(.72f, .42f, .04f),
             harinStart = new Vector2(1.6f, 2.0f), somaliStart = new Vector2(1.2f, 3.2f), whiteStart = new Vector2(1.9f, 1.1f), tabbyStart = new Vector2(2.0f, 3.3f),
