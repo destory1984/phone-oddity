@@ -29,7 +29,7 @@ namespace Oddity.RoomTest
             ("5", "KaIdle24Dance04"), ("6", "KaIdle89CheekPointPose"),
             ("7", "KaIdle41CuteShyPose"), ("8", "KaIdle44GreetingBow"),
             ("9", "BlowKissSkin"), ("space", "CatwalkIdleSkin"),
-            ("a", "CatwalkSkin"), ("shift", "KaRun01"), ("f", "UAL1Standard#Sword_Attack"), ("z", "ZeroTwoDance"), ("0", "KaIdle73IdolPose"), ("c", "KaSitPutHandBetweensLoop"), ("v", "KaSitWithBothLegsUpLoop"), ("y", "MxYawn"), ("k", "KaSleepTurnToTheSideLoop"), ("j", "HairSweep"), ("u", "HairToss"), ("d", "CatwalkSkin"), ("w", "CatwalkSkin"), ("s", "CatwalkSkin"), ("left", "누르는 동안 시계 방향 회전"), ("right", "누르는 동안 반시계 회전"), ("n", "다음 모델, Shift+N 이전 모델"),("r", "현재 모델 다시 불러오기"), ("l", "주인공(카메라) 바라보기 켜고 끄기"), ("h", "식탁 의자에서 턱 괴기 켜고 끄기"), ("g", "다음 걷기"), ("escape", "재생 끝내기"), ("up", "줌 인"), ("down", "줌 아웃"), ("m", "고양이(소말리) 동작 바꾸기"), ("tab", "Tab 하린, 고양이, 소말리, 흰 고양이 번갈아 조종"), ("o", "O 고양이 소리 켜고 끄기"), ("i", "방 안 카메라 (다시 누르면 밖)")
+            ("a", "CatwalkSkin"), ("shift", "KaRun01"), ("f", "UAL1Standard#Sword_Attack"), ("z", "ZeroTwoDance"), ("0", "KaIdle73IdolPose"), ("c", "KaSitPutHandBetweensLoop"), ("v", "KaSitWithBothLegsUpLoop"), ("y", "MxYawn"), ("k", "KaSleepTurnToTheSideLoop"), ("j", "HairSweep"), ("u", "HairToss"), ("b", "MxLayStomachElbows"), ("d", "CatwalkSkin"), ("w", "CatwalkSkin"), ("s", "CatwalkSkin"), ("left", "누르는 동안 시계 방향 회전"), ("right", "누르는 동안 반시계 회전"), ("n", "다음 모델, Shift+N 이전 모델"),("r", "현재 모델 다시 불러오기"), ("l", "주인공(카메라) 바라보기 켜고 끄기"), ("h", "식탁 의자에서 턱 괴기 켜고 끄기"), ("g", "다음 걷기"), ("escape", "재생 끝내기"), ("up", "줌 인"), ("down", "줌 아웃"), ("m", "고양이(소말리) 동작 바꾸기"), ("tab", "Tab 하린, 고양이, 소말리, 흰 고양이 번갈아 조종"), ("o", "O 고양이 소리 켜고 끄기"), ("i", "방 안 카메라 (다시 누르면 밖)"), ("p", "소파에서 핸드폰 보기"), ("t", "소파에서 TV 보기")
         };
         // G cycles the walk; ODDITY_PLAYWALK picks the first one
         static readonly string[] Walks={"CatwalkSkin","KaWalk01","KaWalk02","KaWalk03","KaWalk04","KaWalk05","KaWalk06","KaWalk07","WalkFemale","WalkFeminine","WalkStandardSkin"};
@@ -54,8 +54,8 @@ namespace Oddity.RoomTest
             var view = EditorWindow.GetWindow(typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView"));
             view.position = new Rect(80,80,1280,720); view.Focus();
         }
-        public const int MotionCount=21;
-        public const int ZeroTwoIndex=13, IdolIndex=14, SitIndex=15, CurlIndex=16, YawnIndex=17, NapIndex=18, SweepIndex=19, TossIndex=20; // index 9 is the idle, on space only
+        public const int MotionCount=22;
+        public const int ZeroTwoIndex=13, IdolIndex=14, SitIndex=15, CurlIndex=16, YawnIndex=17, NapIndex=18, SweepIndex=19, TossIndex=20, BedIndex=21; // index 9 is the idle, on space only
         ZeroTwoDance zeroTwoDance;
         HairSweepRig hairRig; // j: puts the right hand on the head during the hair sweep
         int gestureOn=-1; // the hair gesture playing now (SweepIndex or TossIndex), -1 none
@@ -138,7 +138,7 @@ namespace Oddity.RoomTest
                 var text=Environment.GetEnvironmentVariable("ODDITY_PLAYKEYS");scripted=!string.IsNullOrWhiteSpace(text);
                 if(scripted)foreach(var part in text.Split(',')){
                     var pair=part.Split(':');
-                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0]=="realtab" || pair[0]=="wait" || pair[0].StartsWith("click") || pair[0].StartsWith("view") || pair[0]=="wheelup" || pair[0]=="liftup" || pair[0].StartsWith("orbit") || pair[0].StartsWith("insideswing") || pair[0]=="l" || pair[0]=="liftdown" || pair[0]=="swingleft" || pair[0]=="shiftleft" || pair[0]=="shiftright" || pair[0]=="shiftup" || pair[0]=="shiftdown" ||pair[0]=="swingright" || pair[0]=="tiltup" || pair[0]=="tiltdown" || pair[0]=="freeze" || pair[0]=="unfreeze" || (pair[0].StartsWith("gi") && int.TryParse(pair[0].Substring(2),out _)) || (pair[0].StartsWith("shade") && int.TryParse(pair[0].Substring(5),out _)) || pair[0]=="wheeldown" || FaceKeys.ScriptDigit(pair[0])>=0 || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
+                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0].StartsWith("cam") || pair[0]=="realtab" || pair[0]=="wait" || pair[0].StartsWith("click") || pair[0].StartsWith("view") || pair[0]=="wheelup" || pair[0]=="liftup" || pair[0].StartsWith("orbit") || pair[0].StartsWith("insideswing") || pair[0]=="l" || pair[0]=="liftdown" || pair[0]=="swingleft" || pair[0]=="shiftleft" || pair[0]=="shiftright" || pair[0]=="shiftup" || pair[0]=="shiftdown" ||pair[0]=="swingright" || pair[0]=="tiltup" || pair[0]=="tiltdown" || pair[0]=="freeze" || pair[0]=="unfreeze" || (pair[0].StartsWith("gi") && int.TryParse(pair[0].Substring(2),out _)) || (pair[0].StartsWith("shade") && int.TryParse(pair[0].Substring(5),out _)) || pair[0]=="wheeldown" || FaceKeys.ScriptDigit(pair[0])>=0 || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
                     script.Add((pair[0],seconds));
                 }
                 Debug.Log("ROOMPLAY_READY model="+modelName);
@@ -209,16 +209,16 @@ namespace Oddity.RoomTest
             var a=candidate.GetComponent<Animator>();
             if(a==null || a.avatar==null || !a.avatar.isHuman){ShowStatue(candidate,path);return;} // a bare mesh (no rig yet) stands still so its shape can be seen
             var puppet=candidate.AddComponent<HarinPuppet>();puppet.SetFace("neutral");puppet.enabled=false;
-            var oldDance=zeroTwoDance;var oldHair=hairRig;var oldModel=model;var oldGraph=graph;var oldMixer=mixer;var oldPlays=plays;
+            var oldDance=zeroTwoDance;var oldHair=hairRig;var oldSofa=sofaRig;var oldModel=model;var oldGraph=graph;var oldMixer=mixer;var oldPlays=plays;
             var oldClips=clips;var oldAnchors=anchors;var oldTravels=travels;var oldWeights=weights;var oldFrom=from;
             float oldSpeed=speed, oldBlend=blend;
             double phase=plays!=null && clips[current]!=null ? plays[current].GetTime()/clips[current].length : 0;
             soleMesh=null;model=candidate;anim=a;RestFeet();Arm();anim.applyRootMotion=false;
-            try{zeroTwoDance=new ZeroTwoDance(anim);try{hairRig=new HairSweepRig(anim);}catch(Exception e){hairRig=null;Debug.LogWarning("ROOMPLAY_HAIR rig failed: "+e.Message);}BuildMotion();if(clips[current]!=null)plays[current].SetTime(phase*clips[current].length);Evaluate(0);}
-            catch{zeroTwoDance?.Dispose();zeroTwoDance=oldDance;hairRig=oldHair;if(graph.IsValid())graph.Destroy();graph=oldGraph;mixer=oldMixer;plays=oldPlays;clips=oldClips;anchors=oldAnchors;travels=oldTravels;weights=oldWeights;from=oldFrom;speed=oldSpeed;blend=oldBlend;model=oldModel;anim=oldModel!=null?oldModel.GetComponent<Animator>():null;Destroy(candidate);throw;}
+            try{zeroTwoDance=new ZeroTwoDance(anim);try{hairRig=new HairSweepRig(anim);}catch(Exception e){hairRig=null;Debug.LogWarning("ROOMPLAY_HAIR rig failed: "+e.Message);}BuildMotion();try{sofaRig=new SofaRig(anim,handFingersLocal,handPalmLocal,headFront);}catch(Exception e){sofaRig=null;Debug.LogWarning("ROOMPLAY_SOFA rig failed: "+e.Message);}sofaOn=SofaMode.None;sofaWant=SofaMode.None;if(clips[current]!=null)plays[current].SetTime(phase*clips[current].length);Evaluate(0);}
+            catch{zeroTwoDance?.Dispose();zeroTwoDance=oldDance;hairRig=oldHair;sofaRig?.Dispose();sofaRig=oldSofa;if(graph.IsValid())graph.Destroy();graph=oldGraph;mixer=oldMixer;plays=oldPlays;clips=oldClips;anchors=oldAnchors;travels=oldTravels;weights=oldWeights;from=oldFrom;speed=oldSpeed;blend=oldBlend;model=oldModel;anim=oldModel!=null?oldModel.GetComponent<Animator>():null;Destroy(candidate);throw;}
             modelName=Path.GetFileNameWithoutExtension(path);modelPath=path;LogSprings(candidate);
             if(statue!=null){Destroy(statue);statue=null;}
-            oldDance?.Dispose();if(oldGraph.IsValid())oldGraph.Destroy();if(oldClips!=null && oldClips[ZeroTwoIndex]!=null)Destroy(oldClips[ZeroTwoIndex]);DestroyGestureClips(oldClips);if(oldModel!=null)Destroy(oldModel);
+            oldDance?.Dispose();oldSofa?.Dispose();if(oldGraph.IsValid())oldGraph.Destroy();if(oldClips!=null && oldClips[ZeroTwoIndex]!=null)Destroy(oldClips[ZeroTwoIndex]);DestroyGestureClips(oldClips);if(oldModel!=null)Destroy(oldModel);
         }
         // a mesh without a Humanoid Avatar (a fresh Tripo glb): no motion, it stands on the floor at its own size (scaled to 1.6 m when it is far off),
         // left and right arrows turn it, up and down arrows zoom, N, Shift+N and R still step through the lines, Esc ends
@@ -317,13 +317,14 @@ namespace Oddity.RoomTest
                     var seat=Mark(chair.transform,"Seat");if(seat!=null)seats.Add((seat,Facing(chair.transform),-StandOff)); // a chair is left from behind, the table is in front
                 }}
             if(tableRoot!=null)Laptop(tableRoot,apt?-90:0);
+            tv?.Dispose();tv=null;if(apt && Apartment.HasTv)tv=new SofaTv(null,Apartment.TvAt,Apartment.TvFace,Apartment.TvSize);
             if(apt && Apartment.HasBed && sofa!=null)AddBedSeat();
             if(sofa==null && seats.Count>0)sofa=seats[0].mark.root;
             propHits.Clear();foreach(var root in seats.Select(t=>t.mark.root).Distinct())foreach(var mf in root.GetComponentsInChildren<MeshFilter>())if(mf.sharedMesh!=null){var c=mf.gameObject.AddComponent<MeshCollider>();c.sharedMesh=mf.sharedMesh;propHits.Add(c);} // only for PropTop's rays
             clickHits.Clear();clickHits.AddRange(propHits);
             if(tableRoot!=null)foreach(var mf in tableRoot.GetComponentsInChildren<MeshFilter>())if(mf.sharedMesh!=null){var c=mf.gameObject.AddComponent<MeshCollider>();c.sharedMesh=mf.sharedMesh;clickHits.Add(c);}
             clickHits.AddRange(perchCols);
-            if(aptView!=null){if(sofa!=null)aptView.Register(sofa);if(tableRoot!=null)aptView.Register(tableRoot);foreach(var rt in seats.Select(t=>t.mark.root).Distinct())aptView.Register(rt);}
+            if(aptView!=null){if(tv!=null)aptView.Register(tv.Root);if(sofa!=null)aptView.Register(sofa);if(tableRoot!=null)aptView.Register(tableRoot);foreach(var rt in seats.Select(t=>t.mark.root).Distinct())aptView.Register(rt);}
             Blockers();
             BuildSofaSpots();
             Debug.Log("ROOMPLAY_PROPS seats="+string.Join(" ",seats.Select(t=>t.mark.root.name+"/"+t.mark.name+"("+F(t.mark.position.x)+","+F(t.mark.position.y)+","+F(t.mark.position.z)+" face "+F(t.front.x)+","+F(t.front.z)+")")));
@@ -943,6 +944,7 @@ namespace Oddity.RoomTest
             if(apt){
                 perches["sill"]=new Perch{name="sill",stand=NearestFree(new Vector2(Apartment.SillLand[0].x,Apartment.WindowSpot.y)),land=Apartment.SillLand[0],yaw=180,pick=c=>Is(c,"sill")};
                 if(Apartment.HasLedge)perches["ledge"]=new Perch{name="ledge",stand=NearestFree(new Vector2(Apartment.LedgeLand[0].x,.75f)),land=Apartment.LedgeLand[0],yaw=180,pick=c=>Is(c,"ledge")};
+                if(Apartment.HasBed && Apartment.HasTv)perches["bed"]=new Perch{name="bed",stand=NearestFree(new Vector2(Apartment.BedStand.x+.05f,1.2f)),land=new Vector2(.5f,1.2f),yaw=90,pick=c=>Is(c,"bed")}; // the studio bed (cats may jump on it, not when she lies on it)
                 if(Apartment.HasTea)perches["teatable"]=new Perch{name="teatable",stand=NearestFree(new Vector2(Apartment.TeaX1+.35f,(Apartment.TeaZ0+Apartment.TeaZ1)/2)),land=new Vector2((Apartment.TeaX0+Apartment.TeaX1)/2,(Apartment.TeaZ0+Apartment.TeaZ1)/2),yaw=-90,pick=c=>Is(c,"teatable")}; // a cat on the tea table faces the sofa
             }else perches["sill"]=new Perch{name="sill",stand=NearestFree(new Vector2(-1.38f,.2f)),land=new Vector2(-1.88f,.2f),yaw=-90,pick=c=>Is(c,"sill")};
             if(tableRoot!=null){
@@ -1183,7 +1185,7 @@ namespace Oddity.RoomTest
             void Add(string n,int w){if(n!=p.aiLast)opts.Add(new KeyValuePair<string,int>(n,w));}
             Add("wander",12);Add("rug",6);if(sofa!=null && spotsOf.TryGetValue("sofa",out var sofaSpots) && sofaSpots.Count>0)Add("sofa",20);Add("window",15);Add("harin",15);Add("clip",15);Add("idle",5);
             if(p.white && p.sit!=0)Add("stretch",8);
-            foreach(var (n,w) in new[]{("sill",15),("counter",8),("table",7),("fridge",5),("ledge",6),("teatable",5)})if(perches.ContainsKey(n))Add(n,w);
+            foreach(var (n,w) in new[]{("sill",15),("counter",8),("table",7),("fridge",5),("ledge",6),("teatable",5),("bed",6)})if(perches.ContainsKey(n))Add(n,w);
             while(opts.Count>0){
                 int total=opts.Sum(o=>o.Value),r=Rng().Next(total),i=0;
                 for(;i<opts.Count-1;i++){if(r<opts[i].Value)break;r-=opts[i].Value;}
@@ -1311,7 +1313,7 @@ namespace Oddity.RoomTest
             p.spot=sp;
             if(sp!=null)Debug.Log("ROOMPLAY_"+p.tag+" reserve="+sp.key);
         }
-        bool SpotTaken(Spot sp,Pet except){if(sp.kind=="sofa" && HarinOnSeat(sp.mark))return true;foreach(var o in pets)if(o!=except && (o.spot==sp || o.after==sp || o.transit==sp))return true;return false;}
+        bool SpotTaken(Spot sp,Pet except){if(sp.kind=="sofa" && HarinOnSeat(sp.mark))return true;if(sp.kind=="bed" && seatIsBed && (current==BedIndex || current==NapIndex))return true;foreach(var o in pets)if(o!=except && (o.spot==sp || o.after==sp || o.transit==sp))return true;return false;}
         // a free spot of that kind ("sofa", "sill", ...): the nearest to near, or a random one
         Spot FreeSpot(string kind,Pet p,Vector2 near,bool random=false)
         {
@@ -1350,7 +1352,7 @@ namespace Oddity.RoomTest
         void BuildSofaSpots()
         {
             var list=new List<Spot>();spotsOf["sofa"]=list;
-            var mk=seats.Where(t=>t.mark.root==sofa).ToList();if(sofa==null || mk.Count==0)return;
+            var mk=seats.Where(t=>t.mark.root==sofa && t.mark.name!="SeatBed").ToList();if(sofa==null || mk.Count==0)return;
             var front=mk[0].front;var side=Vector3.Cross(Vector3.up,front).normalized;var mid=mk[mk.Count/2].mark.position;float s0=Vector3.Dot(mid,side);
             Physics.SyncTransforms();
             sofaCols=propHits.Where(c=>c!=null && c.transform.root==sofa).Cast<Collider>().ToList();
@@ -1394,7 +1396,7 @@ namespace Oddity.RoomTest
         float blockLogAt;
         void LogBlock(string who,string by){if(Time.unscaledTime-blockLogAt<.5f)return;blockLogAt=Time.unscaledTime;Debug.Log("ROOMPLAY_BLOCK who="+who+" by="+by+" harin=("+F(x)+","+F(z)+")");}
         bool CatOnSeat(Transform mark){foreach(var o in pets)if(o.onSofa && o.seat==mark)return true;return false;}
-        bool HarinOnSeat(Transform mark)=>mark!=null && chairSat==null && !onFloor && (current==SitIndex || current==CurlIndex || current==NapIndex) && Vector3.Distance(mark.position,seatAt)<.05f;
+        bool HarinOnSeat(Transform mark)=>mark!=null && chairSat==null && !onFloor && (current==SitIndex || current==CurlIndex || current==NapIndex || current==BedIndex) && Vector3.Distance(mark.position,seatAt)<.05f;
         Vector2 PetSeparate(Pet p,Vector2 from,Vector2 next)
         {
             if(p.perch!=null || p.onSofa)return next;
@@ -1751,20 +1753,20 @@ namespace Oddity.RoomTest
         void Sit(int index,bool sofaOnly,Transform only)
         {
             if(clips[index]!=null && FloorClip(Keys[index].clip)){onFloor=true;Select(index);Notice("바닥 "+Keys[index].clip);return;}
-            onFloor=false;
+            onFloor=false;faced=true; // her first-frame facing is not to be applied over a seat
             if(seats.Count==0 || clips[index]==null){Notice("앉을 자리가 없거나 앉기 클립이 없음");return;}
-            var pool=sofaOnly?seats.Where(t=>t.mark.root==sofa && t.mark.name==(apt && Apartment.HasBed?"SeatBed":"SeatC")).ToList():seats;if(pool.Count==0)pool=seats; // the nap: the sofa's middle seat, in the studio the bed
+            var pool=sofaOnly?seats.Where(t=>t.mark.root==sofa && t.mark.name==(apt && Apartment.HasBed?"SeatBed":"SeatC")).ToList():seats.Where(t=>t.mark.name!="SeatBed").ToList();if(pool.Count==0)pool=seats; // the nap: the sofa's middle seat, in the studio the bed
             if(only!=null){var one=seats.Where(t=>t.mark==only).ToList();if(one.Count>0)pool=one;}
             pool=pool.Where(t=>!CatOnSeat(t.mark)).ToList();if(pool.Count==0){Notice("고양이가 그 자리에 있어요");return;} // a seat a cat lies on is not hers
             var seat=pool.OrderBy(t=>new Vector2(t.mark.position.x-x,t.mark.position.z-z).sqrMagnitude).First();
             if(chairJob!=null)return;
             if(chairSat!=null){if(seat.mark==chairSat.mark){SelectRaw(index);Notice("앉기 "+chairSat.chair.name+" "+Keys[index].clip);}else StartChairStand(-1);return;} // another seat: get up first
             if(seat.mark.root!=sofa){StartChairSit(seat.mark,seat.front,index);return;}
-            seatAt=seat.mark.position;
+            seatAt=seat.mark.position;seatIsBed=seat.mark.name=="SeatBed";
             seatFront=seat.front;seatEdge=seat.mark.root==sofa?.36f:.30f; // seat mark to the cushion's front edge: sofa-1 0.36 m, chair-1 0.21 + 0.09 m
             var stand=seatAt+seat.front*seat.off;x=Mathf.Clamp(stand.x,LimX0,LimX1);z=Mathf.Clamp(stand.z,ZNear,ZFar);
-            yaw=heading=targetYaw=turnStart=Mathf.Atan2(seat.front.x,seat.front.z)*Mathf.Rad2Deg+(index==NapIndex?NapTurn:0);turnTime=1;
-            Select(index);Notice("앉기 "+seat.mark.root.name+" "+Keys[index].clip);
+            yaw=heading=targetYaw=turnStart=seatIsBed && index==NapIndex?LieYaw(NapIndex,0)+NapTurn:Mathf.Atan2(seat.front.x,seat.front.z)*Mathf.Rad2Deg+(index==NapIndex?NapTurn:0);turnTime=1;
+            Select(index);Notice("앉기 "+seat.mark.root.name+" "+Keys[index].clip);Debug.Log("ROOMPLAY_SITYAW yaw="+F(yaw)+" heading="+F(heading)+" bed="+seatIsBed+" lie="+F(lieAxisYaw[NapIndex])+" napTurn="+F(NapTurn));
         }
         // a seated foot that has gone back into the seat (a folded leg) or under the floor is brought out in front of the seat edge with leg IK, knee forward
         Vector3 seatFront;float seatEdge;
@@ -1910,7 +1912,7 @@ namespace Oddity.RoomTest
                 float Away(Vector3 q)=>walls.Min(r=>{float dx=Mathf.Max(r.xMin-q.x,0,q.x-r.xMax),dz=Mathf.Max(r.yMin-q.z,0,q.z-r.yMax);return Mathf.Sqrt(dx*dx+dz*dz);});
                 if(Away(mark.position+c.side*ChairBeside)<Away(mark.position-c.side*ChairBeside))c.side=-c.side;
             }
-            onFloor=false;chairJob=new ChairWork{c=c,sitting=true,clip=clip};Notice("의자로 "+root.name+" "+Keys[clip].clip);
+            onFloor=false;seatIsBed=false;chairJob=new ChairWork{c=c,sitting=true,clip=clip};Notice("의자로 "+root.name+" "+Keys[clip].clip);
         }
         void StartChairStand(int then)
         {
@@ -1962,11 +1964,13 @@ namespace Oddity.RoomTest
         // pulls her so the hips meet the seat mark, by the sit clip's weight so standing up blends back
         void PinToSeat()
         {
-            float w=weights[SitIndex]+weights[NapIndex]+(onFloor?0:weights[CurlIndex]);if(w<=0 || sofa==null)return;
+            float w=weights[SitIndex]+weights[NapIndex]+weights[BedIndex]+(onFloor?0:weights[CurlIndex]);if(w<=0 || sofa==null)return;
             var hips=anim.GetBoneTransform(HumanBodyBones.Hips);
             var aim=seatAt+(weights[NapIndex]>0?Vector3.up*NapLift:Vector3.zero);
             model.transform.position+=(aim-hips.position)*w;
-            if(weights[NapIndex]<.5f)OffBackrest(w);
+            if(seatIsBed && weights[NapIndex]+weights[BedIndex]>0)LieGround(Mathf.Clamp01(weights[NapIndex]+weights[BedIndex]));
+            else lieLowRel=float.NaN;
+            if(weights[NapIndex]+weights[BedIndex]<.5f)OffBackrest(w);
         }
         // a sit clip that leans back puts her back and shoulders into the backrest: the deepest bone is measured against the backrest with a ray from the front and she is moved forward by that much
         // segments of her back and arms with the body's thickness behind each bone; each is sampled at both ends and the middle
@@ -2274,6 +2278,7 @@ namespace Oddity.RoomTest
             // ODDITY_LAMP=1 turns the ceiling lamp on; by default only the window sun lights the room, with a brighter ambient fill
             bool lamp=Environment.GetEnvironmentVariable("ODDITY_LAMP")=="1" || OrbitEnv;
             RenderSettings.ambientLight=lamp?(apt?new Color(.40f,.39f,.38f):new Color(.26f,.26f,.27f)):apt?new Color(.55f,.54f,.52f):new Color(.40f,.39f,.38f); // the apartment's rooms away from the sun are lit by this alone: a little brighter
+            if(one && Environment.GetEnvironmentVariable("ODDITY_NIGHT")=="1"){keyLight.intensity=.02f;RenderSettings.ambientLight=new Color(.045f,.05f,.075f);} // a dark room: no sun, no LED, only what glows (TV, phone)
             if(one && lamp){keyLight.intensity=.04f;RenderSettings.ambientLight=new Color(.12f,.13f,.18f);} // the studio at night: only its LEDs and a faint blue fill
             if(apt){aptView?.SetLamps(lamp);if(lamp)Debug.Log("ROOMPLAY_LAMP on LED intensities/range: "+aptView?.LampInfo()+" ambient="+RenderSettings.ambientLight.r.ToString("0.00",CultureInfo.InvariantCulture));}else if(lamp)CeilingLamp();
         }
@@ -2462,6 +2467,7 @@ namespace Oddity.RoomTest
             }
             if(clips[current]==null){int available=Array.FindIndex(clips,c=>c!=null);if(available<0)throw new Exception("no available motion clips");current=available;}
             try{MeasureHair();}catch(Exception e){Debug.LogWarning("ROOMPLAY_HAIR measure failed: "+e);}
+            try{Array.Clear(lieAxisYaw,0,lieAxisYaw.Length);MeasureLie(NapIndex);MeasureLie(BedIndex);}catch(Exception e){Debug.LogWarning("ROOMPLAY_LIE measure failed: "+e);}
             speed=MeasureWalk(10);walkTwist=lastTwist;runSpeed=Mathf.Clamp(MeasureWalk(11),speed*1.5f,speed*3);runTwist=lastTwist;weights[current]=from[current]=1;blend=1;graph.Play();Evaluate(0);
         }
         float lastTwist;
@@ -2516,6 +2522,8 @@ namespace Oddity.RoomTest
         {
             if(FaceKeys.ScriptDigit(key)>=0){SetFace(FaceKeys.ScriptDigit(key));return;} // Shift+digit: the face only, before the body and cat keys
             if(key=="shiftleft"||key=="shiftright"||key=="shiftup"||key=="shiftdown"){Log(key);return;} // script only: held by Update for the step's seconds
+            if((sofaOn!=SofaMode.None || sofaPend) && ctl==null && SofaBodyKeys.Contains(key))SofaStop("key "+key);
+            if(key.StartsWith("cam") && StillCamKey(key)){return;}
             if(key=="o"){ToggleCatSfx();return;}
             if(key=="i"){ToggleInside();return;}
             if(key.StartsWith("insideswing") && float.TryParse(key.Substring(11),NumberStyles.Float,CultureInfo.InvariantCulture,out var isw)){if(insideOn){inSwingWant=inSwing=Mathf.Repeat(isw,360);Debug.Log("ROOMPLAY_CAMSWING inside deg="+F(inSwingWant));}return;} // a still: the inside swing set to N degrees
@@ -2538,6 +2546,7 @@ namespace Oddity.RoomTest
             else if(key=="space"){if(direction==0)Select(9);}
             else if(key=="l"){lookOn=!lookOn;Notice(lookOn?"주인공 바라보기":"바라보기 끝");}
             else if(key=="h"){chinOn=!chinOn;Notice(chinOn?"턱 괴기 (식탁 의자에서)":"턱 괴기 끝");}
+            else if(key=="p"||key=="t"||key=="b"){if(direction==0 && !busy)SofaKey(key=="p"?SofaMode.Phone:key=="t"?SofaMode.Tv:SofaMode.Bed);}
             else if(key=="k"){if(direction==0 && !busy){if(Keyboard.current!=null && Keyboard.current.shiftKey.isPressed)NextSit(NapIndex);else Sit(NapIndex,true);}}
             else if(key=="c"||key=="v"){if(direction==0 && !busy){int index=key=="c"?SitIndex:CurlIndex;
                 if(Keyboard.current!=null && Keyboard.current.shiftKey.isPressed)NextSit(index);else Sit(index);}}
@@ -2724,7 +2733,7 @@ namespace Oddity.RoomTest
             int dir=wish==Vector2.zero?0:run?2:1;
             // letting go of the walk or run keys holds her in that stride (space returns to the idle); a scripted run still goes back to the idle
             if(dir!=direction){if(dir==0 && !scripted)heading=targetYaw;direction=dir;if(dir!=0 || scripted)Select(dir==0?9:dir==2?11:10);Log(dir==0?"stop":dir==2?"run":"walk");}
-            if(current==SitIndex || current==CurlIndex || current==NapIndex)turning=0; // arrows would turn her off the seat
+            if(current==SitIndex || current==CurlIndex || current==NapIndex || current==BedIndex)turning=0; // arrows would turn her off the seat
             if(dir==0 && turning!=0){heading+=turning*TurnRate*dt;yaw=turnStart=targetYaw=heading;turnTime=1;} // held arrows turn her smoothly, letting go stops her there
             Turn(dir==0?heading:Mathf.Atan2(wish.x,wish.y)*Mathf.Rad2Deg);
             turnTime+=dt/.2f;yaw=Mathf.LerpAngle(turnStart,targetYaw,Mathf.SmoothStep(0,1,turnTime));
@@ -2815,10 +2824,10 @@ namespace Oddity.RoomTest
         void Smile(float dt)
         {
             var vrm=model.GetComponent<Vrm10Instance>();if(vrm==null || vrm.Runtime==null)return;
-            smile=Mathf.MoveTowards(smile,faceHeld!=null?0:current==9 || HairGestures.IsGesture(current)?IdleSmile:SmileWeight,dt*SmileWeight/.3f);
+            float smileWant=faceHeld!=null?0:current==9 || HairGestures.IsGesture(current)?IdleSmile:SmileWeight;if(faceHeld==null && sofaRig!=null && sofaRig.Weight>.01f)smileWant=Mathf.Lerp(smileWant,sofaRig.Smile,Mathf.Clamp01(sofaRig.Weight*2));smile=Mathf.MoveTowards(smile,smileWant,dt*SmileWeight/.3f);
             FaceTick(vrm,dt);
             vrm.Runtime.Expression.SetWeight(ExpressionKey.Relaxed,smile);
-            nap=Mathf.MoveTowards(nap,current==NapIndex?1:0,dt/.6f);vrm.Runtime.Expression.SetWeight(ExpressionKey.Blink,Mathf.Max(nap,clips[TossIndex]!=null?HairGestures.TossBlink((float)plays[TossIndex].GetTime())*weights[TossIndex]:0)); // asleep: eyes shut; the head toss blinks once
+            nap=Mathf.MoveTowards(nap,current==NapIndex?1:0,dt/.6f);vrm.Runtime.Expression.SetWeight(ExpressionKey.Blink,Mathf.Max(nap,sofaRig!=null?sofaRig.Blink*Mathf.Clamp01(sofaRig.Weight*2):0,clips[TossIndex]!=null?HairGestures.TossBlink((float)plays[TossIndex].GetTime())*weights[TossIndex]:0)); // asleep: eyes shut; the head toss blinks once
         }
         // J hair sweep and U head toss: one shot each, back to the idle (space) by themselves; pressing again restarts, walking or another key cancels
         void StartGesture(int index)
@@ -2892,7 +2901,7 @@ namespace Oddity.RoomTest
             DeepenBow();
             if(hairRig!=null && clips[SweepIndex]!=null)hairRig.Apply((float)plays[SweepIndex].GetTime(),weights[SweepIndex]);
             LimitWrists();
-            if(weights[SitIndex]+weights[CurlIndex]+weights[NapIndex]<.5f)LevelFeet(dt);
+            if(weights[SitIndex]+weights[CurlIndex]+weights[NapIndex]+weights[BedIndex]<.5f)LevelFeet(dt);
             zeroTwoDance?.Apply(zeroTwoPhase,weights[ZeroTwoIndex]);
             zeroTwoAudio?.SetState(current==ZeroTwoIndex,musicAdvancing,zeroTwoAudioSeconds);
             Meow();
@@ -2904,6 +2913,7 @@ namespace Oddity.RoomTest
             SitHands();
             ChinRest(dt);
             LookAtPlayer(dt);
+            SofaTick(dt);
             if(sword!=null){sword.SetActive(current==12);shield.SetActive(current==12);if(current==12)PlaceShield();}
             if(blob!=null)blob.position=new Vector3(x,.004f,z+.02f);
         }
@@ -3065,7 +3075,7 @@ namespace Oddity.RoomTest
         // the camera stays put on the wide ground; the down arrow dollies out to see her, the up arrow dollies in and centres on her
         void Frame(float dt,float zoomKey)
         {
-            if(room){RoomFrame(dt,zoomKey);return;}
+            if(room){RoomFrame(dt,zoomKey);StillCam();return;}
             zoom=Mathf.Clamp(zoom*Mathf.Exp(zoomKey*.8f*dt),1.2f,30f);
             float near=Mathf.InverseLerp(6.79f,2.6f,zoom);
             cameraView.transform.position=new Vector3(x*near,Mathf.Lerp(1.13f,1.54f,near),Mathf.Lerp(-zoom,z-zoom,near));
@@ -3106,6 +3116,134 @@ namespace Oddity.RoomTest
         static readonly string[] CatCommonKeys={"space  멈추기 (앉았거나 누웠으면 일어서기)","W A S D  걷기, Shift  달리기 (2배)","← →  제자리 돌기","↑ ↓, 휠  줌, Ctrl+휠  카메라 높이","Shift+휠  카메라 좌우, Alt+휠  기울기","Shift+← →  카메라 좌우 돌기, Shift+↑ ↓  카메라 높이","C V  소파에 올라가 앉기, K  올라가 눕기","클릭  바닥, 소파, 식탁, 조리대, 냉장고, 창","M  다음 동작, R  다시 불러오기, L  카메라 보기","O  고양이 소리 켜고 끄기","I  방 안 카메라 (다시 누르면 밖)","Tab  하린으로"};
         static string CatRow(Pet p,int i){const string keys="123456789";return i<ActionNames.Length?keys[i]+"  "+ActionNames[i]+(CanDo(p,i)?"":" (없음)"):CatCommonKeys[i-ActionNames.Length];}
         static readonly bool noHud=Environment.GetEnvironmentVariable("ODDITY_NOHUD")=="1" || Environment.GetEnvironmentVariable("ODDITY_ORBIT")=="1";
+        // script-only still cameras (for the shots): cam1..cam9 take "ex,ey,ez,ax,ay,az,fov" from the environment ODDITY_CAM1..9; camphone / camface / camback are placed from the pose; camoff gives the normal camera back
+        string stillCam;
+        bool StillCamKey(string key){if(key=="camoff"){stillCam=null;return true;}if(key=="camphone"||key=="camface"||key=="camback"||(key.Length==4 && char.IsDigit(key[3]))){stillCam=key;return true;}return false;}
+        void StillCam()
+        {
+            if(stillCam==null || cameraView==null || anim==null)return;
+            Vector3 eye,aim;float fov=30;
+            if(stillCam=="camphone" || stillCam=="camface" || stillCam=="camback"){
+                if(sofaRig==null)return;
+                var f=sofaRig.BodyForward;var r=Vector3.Cross(Vector3.up,f).normalized;var c=sofaRig.PhoneCentre;var hd=anim.GetBoneTransform(HumanBodyBones.Head).position;
+                bool tvLook=sofaOn==SofaMode.Tv;
+                if(stillCam=="camphone"){eye=c+f*.38f+r*.20f+Vector3.up*.10f;aim=c;fov=22;}
+                else if(stillCam=="camface"){eye=hd+f*.85f+r*.30f+Vector3.up*.05f;aim=tvLook?hd-Vector3.up*.12f:Vector3.Lerp(hd,c,.5f);fov=tvLook?34:30;}
+                else{eye=hd-f*.9f+r*.55f+Vector3.up*.45f;aim=Vector3.Lerp(hd,c,.5f);fov=32;}
+            }else{
+                var v=Environment.GetEnvironmentVariable("ODDITY_CAM"+stillCam.Substring(3));if(string.IsNullOrWhiteSpace(v))return;
+                var q=v.Split(',').Select(t=>float.Parse(t,CultureInfo.InvariantCulture)).ToArray();eye=new Vector3(q[0],q[1],q[2]);aim=new Vector3(q[3],q[4],q[5]);fov=q[6];
+            }
+            cameraView.fieldOfView=fov;cameraView.transform.SetPositionAndRotation(eye,Quaternion.LookRotation(aim-eye,Vector3.up));
+        }
+        // ---- P: phone on the sofa, T: TV from the sofa, B: lying on the stomach on the bed with the phone (SofaMotions.cs does the posing; this is the keys and the walk there)
+        SofaRig sofaRig;SofaTv tv;SofaMode sofaOn,sofaWant;bool sofaPend,seatIsBed;float sofaPendT;bool sofaLogged;
+        static readonly HashSet<string> SofaBodyKeys=new HashSet<string>{"space","c","v","k","y","j","u","z","f","0","1","2","3","4","5","6","7","8","9"};
+        bool SeatedOnSofa()=>sofa!=null && current==SitIndex && !onFloor && chairSat==null && chairJob==null && !seatIsBed && seats.Any(t=>t.mark.root==sofa && t.mark.name!="SeatBed" && Vector3.Distance(t.mark.position,seatAt)<.05f);
+        bool LyingOnBed()=>current==BedIndex && seatIsBed;
+        static string SofaWord(SofaMode m)=>m==SofaMode.Tv?"tv":"phone";
+        void SofaKey(SofaMode mode)
+        {
+            if(sofaRig==null || model==null){Notice("이 모델로는 할 수 없음");return;}
+            if(mode==SofaMode.Tv && tv==null){Notice("이 집에는 TV가 없음");return;}
+            if(mode==SofaMode.Bed && !(apt && Apartment.HasBed && sofa!=null)){Notice("이 집에는 침대가 없음");return;}
+            if(sofaOn==mode){SofaEnd("again",false);return;} // the same key again puts the phone down / stops
+            if(sofaPend && sofaWant==mode){SofaCancel("again");return;}
+            bool seated=mode==SofaMode.Bed?LyingOnBed():SeatedOnSofa();
+            if(seated){SofaStart(mode,sofaOn!=SofaMode.None?"switch":"seated");return;} // P <-> T while sitting: direct, no standing up
+            if(sofaOn!=SofaMode.None)SofaEnd("switch",true);
+            sofaWant=mode;sofaPend=true;sofaPendT=0;
+            if(mode==SofaMode.Bed){var b=Apartment.BedStand;clickSeat=null;clickWindow=false;clickGoal=new Vector2(b.x,b.z);hPathGoal=null;hReplanned=false;clickStuck=0;Notice("침대로 걸어가기");return;}
+            var pool=seats.Where(t=>t.mark.root==sofa && t.mark.name!="SeatBed" && !CatOnSeat(t.mark)).OrderBy(t=>new Vector2(t.mark.position.x-x,t.mark.position.z-z).sqrMagnitude).ToList();
+            if(pool.Count==0){sofaPend=false;sofaWant=SofaMode.None;Notice("앉을 소파 자리가 없음");return;}
+            var seat=pool[0];var stand=seat.mark.position+seat.front*seat.off;
+            if(chairSat!=null){StartChairStand(-1);return;}
+            clickSeat=seat.mark;clickWindow=false;clickGoal=new Vector2(Mathf.Clamp(stand.x,LimX0,LimX1),Mathf.Clamp(stand.z,ZNear,ZFar));hPathGoal=null;hReplanned=false;clickStuck=0;Notice("소파로 걸어가기");
+        }
+        void SofaCancel(string why){if(!sofaPend)return;sofaPend=false;sofaWant=SofaMode.None;if(clickGoal.HasValue && clickSeat!=null && clickSeat.root==sofa){clickGoal=null;clickSeat=null;}Debug.Log("ROOMPLAY_SOFA cancel "+why);}
+        void SofaStop(string why){if(sofaPend)SofaCancel(why);if(sofaOn!=SofaMode.None)SofaEnd(why,true);}
+        void SofaStart(SofaMode mode,string why)
+        {
+            sofaOn=mode;sofaWant=mode;sofaPend=false;sofaLogged=false;sofaRig.SetMode(mode);
+            string seatName=mode==SofaMode.Bed?"SeatBed":seats.Where(t=>t.mark.root==sofa && Vector3.Distance(t.mark.position,seatAt)<.05f).Select(t=>t.mark.name).FirstOrDefault()??"?";
+            Debug.Log((mode==SofaMode.Bed?"ROOMPLAY_BED":"ROOMPLAY_SOFA")+" start="+SofaWord(mode)+" seat="+seatName+" why="+why+" model="+modelName);
+            Notice(mode==SofaMode.Phone?"핸드폰 보기":mode==SofaMode.Tv?"TV 보기":"엎드려 핸드폰 보기");
+        }
+        void SofaEnd(string why,bool immediate)
+        {
+            if(sofaOn==SofaMode.None)return;
+            Debug.Log((sofaOn==SofaMode.Bed?"ROOMPLAY_BED":"ROOMPLAY_SOFA")+" end="+SofaWord(sofaOn)+" why="+why);
+            if(immediate)sofaRig.Clear();else sofaRig.SetMode(SofaMode.None);
+            sofaOn=SofaMode.None;sofaWant=SofaMode.None;
+            var vrm=model!=null?model.GetComponent<Vrm10Instance>():null;if(vrm!=null && !lookOn)vrm.LookAtTarget=null;
+        }
+        // the bed: she walked to its side; now she lies down on her stomach along it, head to the window
+        void LieOnBed()
+        {
+            var seat=seats.FirstOrDefault(t=>t.mark!=null && t.mark.name=="SeatBed");if(seat.mark==null){SofaCancel("no bed seat");return;}
+            if(CatOnSeat(seat.mark) || pets.Any(o=>o.perch!=null && o.perch.name=="bed")){SofaCancel("cat on the bed");Notice("고양이가 침대에 있어요");return;}
+            onFloor=false;faced=true;seatAt=seat.mark.position;seatIsBed=true;seatFront=seat.front;seatEdge=.30f;
+            var b=Apartment.BedStand;x=b.x;z=b.z;
+            yaw=heading=targetYaw=turnStart=LieYaw(BedIndex,180);turnTime=1;
+            SelectRaw(BedIndex);
+            sofaPend=false;SofaStart(SofaMode.Bed,"walked");
+        }
+        // the yaw that turns the model so the clip's hips -> head axis points along wantAxisYaw (0 = north +z, 180 = south): the clip's own axis was measured unturned
+        float LieYaw(int clip,float wantAxisYaw)=>Mathf.Repeat(wantAxisYaw-lieAxisYaw[clip]+180,360)-180;
+        readonly float[] lieAxisYaw=new float[MotionCount];
+        void MeasureLie(int c)
+        {
+            if(clips[c]==null)return;
+            var hips=anim.GetBoneTransform(HumanBodyBones.Hips);var headB=anim.GetBoneTransform(HumanBodyBones.Head);if(hips==null || headB==null)return;
+            var keepP=model.transform.position;var keepR=model.transform.rotation;
+            model.transform.SetPositionAndRotation(Vector3.zero,Quaternion.identity);mixer.SetInputWeight(c,1);plays[c].SetTime(0);graph.Evaluate(0);
+            var axis=headB.position-hips.position;axis.y=0;
+            var face=headB.rotation*headFront;face.y=0;
+            lieAxisYaw[c]=axis.sqrMagnitude>1e-4f?Mathf.Atan2(axis.x,axis.z)*Mathf.Rad2Deg:0;
+            Debug.Log("ROOMPLAY_LIE clip="+Keys[c].clip+" axisYaw="+F(lieAxisYaw[c])+" faceYaw="+F(face.sqrMagnitude>1e-4f?Mathf.Atan2(face.x,face.z)*Mathf.Rad2Deg:0)+" hipsY="+F(hips.position.y));
+            mixer.SetInputWeight(c,0);plays[c].SetTime(0);model.transform.SetPositionAndRotation(keepP,keepR);
+        }
+        // lying on the bed her lowest vertex rests on the mattress top: the model is lifted so the measured lowest point of every mesh touches it (measured every 6th frame while it settles)
+        float lieLowRel=float.NaN;int lieFrame;Mesh lieBake;SkinnedMeshRenderer[] lieMeshes;readonly List<Vector3> lieVerts=new List<Vector3>();float lieLogged=-9;
+        void LieGround(float w)
+        {
+            float top=Apartment.BedLieTop;
+            if(lieMeshes==null || lieMeshes.Length==0 || lieMeshes[0]==null)lieMeshes=model.GetComponentsInChildren<SkinnedMeshRenderer>().Where(r=>r.sharedMesh!=null).ToArray();
+            if(float.IsNaN(lieLowRel) || lieFrame++%6==0 || w<.999f){
+                if(lieBake==null)lieBake=new Mesh();
+                float low=float.PositiveInfinity;
+                foreach(var r in lieMeshes){r.BakeMesh(lieBake);lieBake.GetVertices(lieVerts);var m=r.transform.localToWorldMatrix;foreach(var v in lieVerts)low=Mathf.Min(low,m.MultiplyPoint3x4(v).y);}
+                lieLowRel=low-model.transform.position.y;
+            }
+            float target=top-lieLowRel+.003f;var pos=model.transform.position;
+            model.transform.position=new Vector3(pos.x,Mathf.Lerp(pos.y,target,w),pos.z);
+            if(w>.99f && Time.unscaledTime-lieLogged>2){lieLogged=Time.unscaledTime;var hp=anim.GetBoneTransform(HumanBodyBones.Hips).position;var hd=anim.GetBoneTransform(HumanBodyBones.Head).position;Bounds bb=default;bool first=true;foreach(HumanBodyBones hb in Enum.GetValues(typeof(HumanBodyBones))){if(hb==HumanBodyBones.LastBone)continue;var bt=anim.GetBoneTransform(hb);if(bt==null)continue;if(first){bb=new Bounds(bt.position,Vector3.zero);first=false;}else bb.Encapsulate(bt.position);}Debug.Log("ROOMPLAY_LIEFIT x="+F(bb.min.x)+".."+F(bb.max.x)+" z="+F(bb.min.z)+".."+F(bb.max.z)+" bed x 0..1 z .5..2.5");Debug.Log("ROOMPLAY_LIEGROUND lowest="+F(lieLowRel+model.transform.position.y)+" top="+F(top)+" modelYaw="+F(model.transform.eulerAngles.y)+" yaw="+F(yaw)+" axisNow="+F(Mathf.Atan2(hd.x-hp.x,hd.z-hp.z)*Mathf.Rad2Deg)+" hips=("+F(hp.x)+","+F(hp.y)+","+F(hp.z)+")");}
+        }
+        void SofaTick(float dt)
+        {
+            if(tv!=null){tv.On=sofaOn==SofaMode.Tv;tv.Tick(dt);}
+            if(sofaRig==null || model==null)return;
+            if(sofaPend){
+                sofaPendT+=dt;
+                if(sofaWant==SofaMode.Bed){
+                    if(!clickGoal.HasValue && sofaPendT>.05f){if(current==10)SofaCancel("walk key");else if(current==9 || current==SitIndex)LieOnBed();else SofaCancel("busy");}
+                }else if(SeatedOnSofa())SofaStart(sofaWant,"walked");
+                else if(!clickGoal.HasValue && chairSat==null && chairJob==null && sofaPendT>.1f && current!=SitIndex)SofaCancel("no walk");
+                if(sofaPend && sofaPendT>30)SofaCancel("timeout");
+            }
+            if(sofaOn==SofaMode.Phone || sofaOn==SofaMode.Tv){if(!SeatedOnSofa())SofaEnd("moved",true);}
+            else if(sofaOn==SofaMode.Bed && !LyingOnBed())SofaEnd("moved",true);
+            if(sofaRig.Weight<=0 && sofaOn==SofaMode.None){sofaRig.Apply(dt);return;}
+            sofaRig.TvCentre=tv!=null?tv.ScreenCentre:sofaRig.TvCentre;
+            float ly=LieYawNow();sofaRig.BedForward=new Vector3(Mathf.Sin(ly*Mathf.Deg2Rad),0,Mathf.Cos(ly*Mathf.Deg2Rad));sofaRig.MattressTop=Apartment.HasBed?Apartment.BedLieTop:0;
+            sofaRig.Tick(dt);sofaRig.Apply(dt);
+            var vrm=model.GetComponent<Vrm10Instance>();
+            if(vrm!=null && sofaRig.Weight>.05f){vrm.LookAtTargetType=VRM10ObjectLookAt.LookAtTargetTypes.SpecifiedTransform;vrm.LookAtTarget=sofaRig.LookTarget;}
+            if(sofaOn==SofaMode.Phone || sofaOn==SofaMode.Tv)OffBackrest(Mathf.Clamp01(weights[SitIndex])*sofaRig.Weight); // leaning back must not put her back through the backrest
+            if(!sofaLogged && sofaOn!=SofaMode.None && sofaRig.Weight>.99f){sofaLogged=true;Debug.Log("SOFAMOTION mode="+SofaWord(sofaOn)+" head="+F(sofaRig.LastHeadPitch)+" hand="+F(sofaRig.LastHandLeft)+","+F(sofaRig.LastHandRight)+" phone=("+F(sofaRig.PhoneCentre.x)+","+F(sofaRig.PhoneCentre.y)+","+F(sofaRig.PhoneCentre.z)+") thumb="+(sofaRig.HasThumb?1:0));}
+        }
+        // the way her head points along the bed when she lies prone: the lie yaw plus the clip's own axis
+        float LieYawNow()=>yaw-bodyFix+lieAxisYaw[BedIndex];
         void OnGUI()
         {
             var ev=Event.current;
@@ -3126,9 +3264,9 @@ namespace Oddity.RoomTest
                 }
                 if(i==Keys.Length){style.normal.textColor=faceHeld!=null?Color.yellow:Color.white;GUI.Label(new Rect(16,34+i*17,330,18),"  Shift+1→0  표정 "+(faceHeld??"(0 원래대로)"),style);continue;}
                 if(i==Keys.Length+1){style.normal.textColor=Color.white;GUI.Label(new Rect(16,34+i*17,330,18),"  Shift+← →  카메라 좌우 돌기, Shift+↑ ↓  카메라 높이",style);continue;}
-                bool selected=i==current;
+                bool selected=i==current || (Keys[i].key=="p" && sofaOn==SofaMode.Phone) || (Keys[i].key=="t" && sofaOn==SofaMode.Tv);
                 style.normal.textColor=selected?Color.yellow:clips!=null && i<MotionCount && clips[i]==null?Color.gray:Color.white;
-                GUI.Label(new Rect(16,34+i*17,330,18),(selected?"> ":"  ")+Keys[i].key+"  "+Keys[i].clip,style);
+                GUI.Label(new Rect(16,34+i*17,330,18),(selected?"> ":"  ")+Keys[i].key+"  "+(Keys[i].key=="b"?"침대에 엎드려 핸드폰 보기":Keys[i].clip),style);
             }
             if(Time.realtimeSinceStartup<messageUntil)GUI.Label(new Rect(16,listEnd+4,900,40),message,new GUIStyle(GUI.skin.label){fontSize=24});
             // who is controlled: top right, white with a dark outline; it pops (1.3 -> 1 in 0.2 s) and flashes when Tab hands control over
@@ -3146,6 +3284,6 @@ namespace Oddity.RoomTest
             if(!catSfxOn){var small=new GUIStyle(GUI.skin.label){fontSize=13,alignment=TextAnchor.MiddleRight};var r2=new Rect(Screen.width-230,46,220,22);
                 small.normal.textColor=new Color(0,0,0,.9f);GUI.Label(new Rect(r2.x+1,r2.y+1,r2.width,r2.height),"고양이 소리 끔",small);small.normal.textColor=new Color(1f,.85f,.6f);GUI.Label(r2,"고양이 소리 끔",small);}
         }
-        void OnDestroy(){foreach(var pet in pets)if(pet.graph.IsValid())pet.graph.Destroy();zeroTwoAudio?.Dispose();zeroTwoDance?.Dispose();if(clips!=null && clips[ZeroTwoIndex]!=null)Destroy(clips[ZeroTwoIndex]);DestroyGestureClips(clips);if(graph.IsValid())graph.Destroy();if(boundsMesh!=null)Destroy(boundsMesh);if(soleBake!=null)Destroy(soleBake);EditorSettings.enterPlayModeOptionsEnabled=oldEnabled;EditorSettings.enterPlayModeOptions=oldOptions;}
+        void OnDestroy(){foreach(var pet in pets)if(pet.graph.IsValid())pet.graph.Destroy();zeroTwoAudio?.Dispose();zeroTwoDance?.Dispose();sofaRig?.Dispose();tv?.Dispose();if(clips!=null && clips[ZeroTwoIndex]!=null)Destroy(clips[ZeroTwoIndex]);DestroyGestureClips(clips);if(graph.IsValid())graph.Destroy();if(boundsMesh!=null)Destroy(boundsMesh);if(soleBake!=null)Destroy(soleBake);EditorSettings.enterPlayModeOptionsEnabled=oldEnabled;EditorSettings.enterPlayModeOptions=oldOptions;}
     }
 }

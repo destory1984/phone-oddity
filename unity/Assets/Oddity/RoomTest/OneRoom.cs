@@ -52,7 +52,7 @@ namespace Oddity.RoomTest
             return new List<Apartment.FurnBox> {
                 // bed: west wall, head at the north end
                 f("bed_frame", 0, 1.0f, 0, .28f, .5f, 2.5f, wood, true),
-                f("bed_mattress", .02f, .98f, .28f, .42f, .52f, 2.48f, linen),
+                f("bed_mattress", .02f, .98f, .28f, .42f, .52f, 2.48f, linen, false, "bed"),
                 f("bed_duvet", 0, 1.0f, .42f, .46f, .5f, 1.95f, duvet),
                 f("bed_pillow", .15f, .85f, .42f, .52f, 2.05f, 2.42f, white),
                 f("bed_head", 0, 1.0f, 0, .85f, 2.5f, 2.56f, wood),
@@ -129,7 +129,9 @@ namespace Oddity.RoomTest
             walls = Walls, rooms = Rooms, doors = Doors, furniture = Furniture, leaves = Leaves, fixtures = Fixtures, props = Props,
             // the sofa: the props glb scaled to 1.5 m long on the east wall facing west; the bed seat mark for K (and C when it is the nearest), lying along the bed with the head to the north
             sofaAt = new Vector3(2.60f, 0, 1.45f), sofaFace = Vector3.left, sofaScale = .94f, hasTable = false, hasTea = false, hasFridge = false, hasLedge = false, hasBed = true,
-            bedSeat = new Vector3(.5f, .43f, 1.5f), bedFront = Vector3.right, bedSize = new Vector3(1.0f, .43f, 2.0f),
+            bedSeat = new Vector3(.5f, .43f, 1.5f), bedFront = Vector3.right, bedSize = new Vector3(1.0f, .43f, 2.0f), bedStand = new Vector3(1.25f, 0, 1.5f), bedLieTop = .46f,
+            // a 32 inch TV on the west wall over the foot of the bed, facing the sofa, centred on the sofa's z
+            hasTv = true, tvAt = new Vector3(.02f, 1.25f, 1.45f), tvFace = Vector3.right, tvSize = new Vector3(.72f, .42f, .04f),
             harinStart = new Vector2(1.6f, 2.0f), somaliStart = new Vector2(1.2f, 3.2f), whiteStart = new Vector2(1.9f, 1.1f), tabbyStart = new Vector2(2.0f, 3.3f),
             startYaw = 180, somaliYaw = 150, whiteYaw = 200, tabbyYaw = 170,
             windowSpot = new Vector2(1.5f, .62f), windowLook = new Vector2(1.5f, 0), windowRangeX = new Vector2(.8f, 2.2f), windowYaw = 180,

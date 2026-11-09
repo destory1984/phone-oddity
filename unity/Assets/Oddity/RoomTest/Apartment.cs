@@ -17,7 +17,9 @@ namespace Oddity.RoomTest
             public Func<List<WallDef>> walls; public Func<List<RoomDef>> rooms; public Func<List<DoorDef>> doors; public Func<List<FurnBox>> furniture; public Func<List<LeafDef>> leaves; public Func<List<Fixture>> fixtures; public Func<List<Rect>> props;
             public Vector2 harinStart, somaliStart, whiteStart, tabbyStart, windowSpot, windowLook, windowRangeX; public float windowYaw, startYaw, somaliYaw, whiteYaw, tabbyYaw;
             public Vector3 sunThrough, sunOnto, lampAt, sofaAt, sofaFace, tableAt, tableFace, bedSeat, bedFront, bedSize; public float sofaScale = 1;
-            public bool hasTable, hasTea, hasFridge, hasLedge, hasBed, sky = true, peep;
+            public bool hasTable, hasTea, hasFridge, hasLedge, hasBed, hasTv, sky = true, peep;
+            public Vector3 tvAt, tvFace, tvSize; // the wall TV: centre of its body, the way its screen faces, width x height x depth
+            public Vector3 bedStand; public float bedLieTop; // bedLieTop: the surface a body lying on the bed rests on (the quilt) // the free floor beside the bed she walks to before she lies down
             public Vector2 counterStand, fridgeLand; public Vector2[] counterLand = new Vector2[0], sillLand = new Vector2[0], ledgeLand = new Vector2[0];
             public Rect rugBox; public Rect[] wander = new Rect[0]; public float[] wanderWeight = new float[0];
             public float winPlaneZ, winX0, winX1, winY0, winY1; // the window a click can hit (the plane's z and the opening on it)
@@ -134,6 +136,12 @@ namespace Oddity.RoomTest
         public static bool HasFridge => Cur.hasFridge;
         public static bool HasLedge => Cur.hasLedge;
         public static bool HasBed => Cur.hasBed;
+        public static bool HasTv => Cur.hasTv;
+        public static Vector3 TvAt => Cur.tvAt;
+        public static Vector3 TvFace => Cur.tvFace;
+        public static Vector3 TvSize => Cur.tvSize;
+        public static Vector3 BedStand => Cur.bedStand;
+        public static float BedLieTop => Cur.bedLieTop;
         public static bool Peep => Cur.peep;
         public static string LayoutName => Cur.name;
         public static Vector3 BedSeat => Cur.bedSeat;
