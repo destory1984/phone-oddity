@@ -264,6 +264,103 @@ namespace Oddity.RoomTest
         }
         public static Vector3 OrbitCamera(float deg) { float r = OrbitRadius(deg), a = deg * Mathf.Deg2Rad; return new Vector3(OrbitCentre.x + Mathf.Sin(a) * r, OrbitCamY, OrbitCentre.y + Mathf.Cos(a) * r); }
 
+        // ---- the inside camera (key I): the camera stands in the room of the character it follows, at eye height, 0.25 m off every wall of that room and out of the furniture
+        public const float InsideMargin = .25f, InsideCamY = 1.35f, InsideDist = 1.6f, InsideMinDist = .5f, InsideGoodDist = 1.0f;
+        static List<Rect> insideObs; static Dictionary<string, Rect> insideBoxes; static List<Rect> insideSight;
+        public static Rect InsideBox(string room)
+        {
+            if (insideBoxes == null) { insideBoxes = new Dictionary<string, Rect>(); foreach (var r in Rooms()) insideBoxes[r.name] = Rect.MinMaxRect(r.floor.xMin + InsideMargin, r.floor.yMin + InsideMargin, r.floor.xMax - InsideMargin, r.floor.yMax - InsideMargin); }
+            return insideBoxes[room];
+        }
+        static Rect Grow(Rect r, float m) => Rect.MinMaxRect(r.xMin - m, r.yMin - m, r.xMax + m, r.yMax + m);
+        // everything above the floor coverings, the glb props' footprints, the door leaves and the sliding stacks, each grown by the margin
+        public static List<Rect> InsideObstacles()
+        {
+            if (insideObs == null)
+                insideObs = Furniture().Where(f => f.y1 > .2f).Select(f => Rect.MinMaxRect(f.x0, f.z0, f.x1, f.z1)).Concat(PropFootprints()).Concat(LeafBlockers()).Select(r => Grow(r, InsideMargin)).ToList();
+            return insideObs;
+        }
+        // furniture and door leaves that stand in the way of a sight line at head height (not grown)
+        static List<Rect> InsideSightBlockers()
+        {
+            if (insideSight == null)
+                insideSight = Furniture().Where(f => f.y1 > 1.2f && f.y0 < 1.45f).Select(f => Rect.MinMaxRect(f.x0, f.z0, f.x1, f.z1)).Concat(LeafBlockers()).ToList();
+            return insideSight;
+        }
+        public static bool InsideFree(string room, Vector2 p)
+        {
+            if (!InsideBox(room).Contains(p)) return false;
+            foreach (var r in InsideObstacles()) if (p.x > r.xMin && p.x < r.xMax && p.y > r.yMin && p.y < r.yMax) return false;
+            return true;
+        }
+        static bool SegHitsRect(Vector2 a, Vector2 b, Rect r)
+        {
+            float t0 = 0, t1 = 1; var d = b - a;
+            for (int i = 0; i < 2; i++)
+            {
+                float s = a[i], dd = d[i], lo = i == 0 ? r.xMin : r.yMin, hi = i == 0 ? r.xMax : r.yMax;
+                if (Mathf.Abs(dd) < 1e-9f) { if (s < lo || s > hi) return false; continue; }
+                float ta = (lo - s) / dd, tb = (hi - s) / dd; if (ta > tb) { var t = ta; ta = tb; tb = t; }
+                t0 = Mathf.Max(t0, ta); t1 = Mathf.Min(t1, tb); if (t0 > t1) return false;
+            }
+            return true;
+        }
+        // true when nothing at head height stands between the camera spot and the target (boxes the target itself stands in or on are ignored)
+        public static bool InsideSight(Vector2 cam, Vector2 target)
+        {
+            foreach (var r in InsideSightBlockers()) { if (r.Contains(target) || r.Contains(cam)) continue; if (SegHitsRect(cam, target, r)) return false; }
+            return true;
+        }
+        static Vector2 Dir(float deg) { float a = deg * Mathf.Deg2Rad; return new Vector2(Mathf.Sin(a), Mathf.Cos(a)); }
+        // the longest free distance (InsideDist down to InsideMinDist) at one angle round the target (0 = north, clockwise seen from above), 0 when none
+        static float InsideReach(string room, Vector2 t, float deg)
+        {
+            var d = Dir(deg);
+            for (float r = InsideDist; r >= InsideMinDist - 1e-3f; r -= .05f) { var p = t + d * r; if (InsideFree(room, p) && InsideSight(p, t)) return r; }
+            return 0;
+        }
+        // the camera spot for a target at t standing in `room`: base + swing degrees round the target, shrunk toward 0.5 m where something is in the way. A blocked angle is skipped:
+        // with no swing the farthest free direction is used (the one nearest the wanted angle among equals) and so is a facing direction that only has a cramped spot; with a swing the nearest free angle either side.
+        // In a room too small for any ring spot the free spot farthest from the target is used. Returns false only when the room has no free spot at all
+        public static bool InsideSpot(string room, Vector2 t, float baseDeg, float swingDeg, out Vector2 cam)
+        {
+            float want = baseDeg + swingDeg; float rr = InsideReach(room, t, want);
+            if (swingDeg != 0)
+            {
+                if (rr > 0) { cam = t + Dir(want) * rr; return true; }
+                for (float o = 5; o <= 180.01f; o += 5) foreach (float sgn in new[] { 1f, -1f }) { float a = want + o * sgn, r = InsideReach(room, t, a); if (r > 0) { cam = t + Dir(a) * r; return true; } }
+            }
+            else
+            {
+                if (rr >= InsideGoodDist) { cam = t + Dir(want) * rr; return true; }
+                float best = rr, bestAt = want;
+                for (float o = 5; o <= 180.01f; o += 5) foreach (float sgn in new[] { 1f, -1f }) { float a = want + o * sgn, r = InsideReach(room, t, a); if (r > best + 1e-4f) { best = r; bestAt = a; } }
+                if (best > 0 && (rr <= 0 || best >= rr + .4f)) { cam = t + Dir(bestAt) * best; return true; }
+                if (rr > 0) { cam = t + Dir(want) * rr; return true; }
+            }
+            // too cramped for a ring: the free spot farthest from the target, one with a clear sight line first
+            var box = InsideBox(room); Vector2 pick = default; float far = -1; bool seen = false, any = false;
+            for (int pass = 0; pass < 2 && !any; pass++) // first only spots within the ring distance, then anywhere
+                for (float x = box.xMin; x <= box.xMax + 1e-4f; x += .05f)
+                    for (float z = box.yMin; z <= box.yMax + 1e-4f; z += .05f)
+                    {
+                        var p = new Vector2(x, z); if (!InsideFree(room, p)) continue;
+                        float dist = Vector2.Distance(p, t); if (pass == 0 && dist > InsideDist) continue;
+                        bool s = InsideSight(p, t);
+                        if ((s && !seen) || (s == seen && dist > far)) { seen = s; far = dist; pick = p; any = true; }
+                    }
+            cam = pick; return any;
+        }
+        // the default fov for a camera this far from the target: 60 from 1.2 m up, widening to 80 at 0.6 m and below
+        public static float InsideFov(float dist) => Mathf.Lerp(80f, 60f, Mathf.InverseLerp(.6f, 1.2f, dist));
+        // the room a floor point belongs to (the nearest floor)
+        public static string RoomAt(Vector2 p)
+        {
+            string best = null; float gap = float.MaxValue;
+            foreach (var r in Rooms()) { var f = r.floor; float dx = Mathf.Max(f.xMin - p.x, 0, p.x - f.xMax), dz = Mathf.Max(f.yMin - p.y, 0, p.y - f.yMax), g = dx * dx + dz * dz; if (g < gap) { gap = g; best = r.name; } }
+            return best;
+        }
+
         // ---- the builder
         public sealed class WallPiece { public string name, wall; public Renderer r; public Vector3 min, max; }
         static GameObject Box(Transform p, string name, float x0, float x1, float y0, float y1, float z0, float z1, Color c)
@@ -328,24 +425,36 @@ namespace Oddity.RoomTest
             readonly List<(string wall, Renderer r)> frames = new List<(string, Renderer)>(); readonly Dictionary<string, HashSet<string>> cutOf = new Dictionary<string, HashSet<string>>();
             public void AddFrame(string wall, Renderer r) { frames.Add((wall, r)); }
             public void Register(Transform t) { foreach (var r in t.GetComponentsInChildren<Renderer>(true)) if (!statics.Contains(r) && !ceilParts.Contains(r)) statics.Add(r); if (showAll) ShowAll(showCeil); else if (current != null) Apply(); }
-            public bool Near(Vector2 p) { var f = Room(current).floor; return p.x > f.xMin - .35f && p.x < f.xMax + .35f && p.y > f.yMin - .35f && p.y < f.yMax + .35f; }
+            // the shown zones: the current room's floor grown by 0.35 m; the inside camera adds the rooms joined to it by a door, so they look finished through the openings
+            List<Rect> Zones()
+            {
+                var l = new List<Rect>(); var names = new List<string> { current };
+                if (Inside) foreach (var d in doors) { if (d.a == current) names.Add(d.b); else if (d.b == current) names.Add(d.a); }
+                foreach (var n in names) { var f = Room(n).floor; l.Add(Rect.MinMaxRect(f.xMin - .35f, f.yMin - .35f, f.xMax + .35f, f.yMax + .35f)); }
+                return l;
+            }
+            public bool Near(Vector2 p) { foreach (var g in Zones()) if (p.x > g.xMin && p.x < g.xMax && p.y > g.yMin && p.y < g.yMax) return true; return false; }
+            bool SkyShown() { if (current == "living" || current == "balcony") return true; if (!Inside) return false; foreach (var d in doors) if ((d.a == current && (d.b == "living" || d.b == "balcony")) || (d.b == current && (d.a == "living" || d.a == "balcony"))) return true; return false; }
+            // the inside camera (key I): no wall of the room is cut away and its ceiling is shown; the rooms beyond the doors stay switched off as in the outside view
+            public bool Inside { get; private set; }
+            public void SetInside(bool on) { Inside = on; if (current != null) Apply(); }
             void Apply()
             {
-                showAll = false; SetCeilingShown(false);
-                var rd = Room(current); var h = HiddenFor(rd); var f = rd.floor; var g = Rect.MinMaxRect(f.xMin - .35f, f.yMin - .35f, f.xMax + .35f, f.yMax + .35f);
+                showAll = false; SetCeilingShown(Inside);
+                var rd = Room(current); var h = Inside ? new bool[pieces.Count] : HiddenFor(rd); var zones = Zones();
                 for (int k = 0; k < pieces.Count; k++)
                 {
                     var r = pieces[k].r; if (r == null) continue;
-                    var b = r.bounds; bool near = b.max.x > g.xMin && b.min.x < g.xMax && b.max.z > g.yMin && b.min.z < g.yMax;
+                    var b = r.bounds; bool near = zones.Any(g => b.max.x > g.xMin && b.min.x < g.xMax && b.max.z > g.yMin && b.min.z < g.yMax);
                     r.shadowCastingMode = h[k] || !near ? UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly : UnityEngine.Rendering.ShadowCastingMode.On;
                 }
-                var cutWalls = cutOf[rd.name];
-                foreach (var (wn, r) in frames) { if (r == null) continue; var c = r.bounds.center; r.enabled = !cutWalls.Contains(wn) && g.Contains(new Vector2(c.x, c.z)); } // the frames of a cut-away wall go with it
+                var cutWalls = Inside ? new HashSet<string>() : cutOf[rd.name];
+                foreach (var (wn, r) in frames) { if (r == null) continue; var c = r.bounds.center; r.enabled = !cutWalls.Contains(wn) && zones.Any(g => g.Contains(new Vector2(c.x, c.z))); } // the frames of a cut-away wall go with it
                 foreach (var r in statics)
                 {
                     if (r == null || r.name == "ceiling") continue;
-                    if (r.name == "Sky") { r.enabled = current == "living" || current == "balcony"; continue; }
-                    var c = r.bounds.center; r.enabled = r.name != "slab" && g.Contains(new Vector2(c.x, c.z));
+                    if (r.name == "Sky") { r.enabled = SkyShown(); continue; }
+                    var c = r.bounds.center; r.enabled = r.name != "slab" && zones.Any(g => g.Contains(new Vector2(c.x, c.z)));
                 }
             }
             public void Show(string room)
