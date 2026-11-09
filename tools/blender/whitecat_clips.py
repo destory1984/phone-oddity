@@ -78,7 +78,10 @@ def mask(prefixes):
 M_TAIL = mask(('Tail',)); M_EAR = mask(('Ear',))
 M_PAWS = mask(('FrontPaw', 'FrontToes', 'HindPaw', 'HindToes'))
 M_HEAD = mask(('Head',))
+M_PAW = {'FL': mask(('FrontPaw.L', 'FrontToes.L')), 'FR': mask(('FrontPaw.R', 'FrontToes.R')),
+         'HL': mask(('HindPaw.L', 'HindToes.L')), 'HR': mask(('HindPaw.R', 'HindToes.R'))}
 M_BODYFLOOR = ~(mask(('Tail04', 'Tail05', 'Tail06', 'Tail07', 'Ear')))
+M_BELLY = mask(('Pelvis', 'Spine0', 'Chest', 'Neck', 'Scapula'))      # trunk without legs, head and tail
 
 def verts():
     dg = bpy.context.evaluated_depsgraph_get()
@@ -91,7 +94,7 @@ def verts():
 
 def minz(torso=False):
     """Lowest body vertex; torso=True ignores the paws (tucked poses lie on the belly, paws only rest)."""
-    m = (M_BODYFLOOR & ~M_PAWS) if torso else M_BODYFLOOR
+    m = M_BELLY if torso == 'belly' else (M_BODYFLOOR & ~M_PAWS) if torso else M_BODYFLOOR
     return float(verts()[m][:, 2].min())
 
 # ---------------------------------------------------------------- solver
@@ -130,6 +133,8 @@ def solve_chain(spec):
             head = rhead[n].copy(); Dn = Matrix.Identity(3)
         if n == 'Pelvis':
             head = rhead[n] + spec['pel']
+        elif n in spec.get('off', {}):
+            head = head + spec['off'][n]
         if n in spec.get('aim', {}):
             cur = rseg[n]
             Dn = cur.rotation_difference(Vector(spec['aim'][n]).normalized()).to_matrix()
@@ -173,6 +178,8 @@ def default_pose():
     P['HLm'] = tuple(M_REST); P['HRm'] = (-M_REST.x, M_REST.y, M_REST.z)
     for k in ('FLpitch', 'FRpitch', 'HLpitch', 'HRpitch'): P[k] = (0,)
     for k in ('FLtoe', 'FRtoe', 'HLtoe', 'HRtoe'): P[k] = (0,)
+    for k in ('FLyr', 'FRyr', 'HLyr', 'HRyr'): P[k] = (0, 0)     # paw yaw, roll (lying poses)
+    P['oS2'] = (0, 0, 0); P['oCh'] = (0, 0, 0)                    # breathing offsets of Spine02 / Chest heads
     return P
 
 def lerp_pose(A, B, s):
@@ -200,6 +207,7 @@ def build_spec(P, ground=None):
     for i in range(6):
         spec['aim']['Tail0%d' % (i + 1)] = V(P['A%d' % (i + 1)])
     spec['inc']['Tail07'] = euler(*P['A7'])
+    spec['off'] = {'Spine02': V(P['oS2']), 'Chest': V(P['oCh'])}
     # pass 1: heads of shoulders and hips (they do not depend on the leg aims)
     _, posed0 = solve_chain(spec)
     for s in 'LR':
@@ -209,7 +217,7 @@ def build_spec(P, ground=None):
         l1 = rlen['FrontUpperLeg.' + s]; l2 = rlen['FrontLowerLeg.' + s]
         K, d1, d2 = ik2(sh, l1, l2, T, pole)
         spec['aim']['FrontUpperLeg.' + s] = d1; spec['aim']['FrontLowerLeg.' + s] = d2
-        spec['abs']['FrontPaw.' + s] = Rx(-P['F' + s + 'pitch'][0])
+        spec['abs']['FrontPaw.' + s] = euler(P['F' + s + 'pitch'][0], *P['F' + s + 'yr'])
         spec['inc']['FrontToes.' + s] = Rx(-P['F' + s + 'toe'][0])
         # hind leg: hip -> stifle -> hock by 2-bone IK, hock = paw - m*L3
         hp = posed0['HindUpperLeg.' + s].translation
@@ -219,7 +227,7 @@ def build_spec(P, ground=None):
         K, d1, d2 = ik2(hp, l1, l2, hock, V(P['H' + s + 'p']))
         spec['aim']['HindUpperLeg.' + s] = d1; spec['aim']['HindLowerLeg.' + s] = d2
         spec['aim']['HindHock.' + s] = m
-        spec['abs']['HindPaw.' + s] = Rx(-P['H' + s + 'pitch'][0])
+        spec['abs']['HindPaw.' + s] = euler(P['H' + s + 'pitch'][0], *P['H' + s + 'yr'])
         spec['inc']['HindToes.' + s] = Rx(-P['H' + s + 'toe'][0])
     return spec
 
@@ -271,6 +279,14 @@ def make_action(name, fn, frames, key_every=1):
             pb.location = l; pb.rotation_quaternion = q
             pb.keyframe_insert('location', frame=f)
             pb.keyframe_insert('rotation_quaternion', frame=f)
+        if name.startswith('Sleep'):
+            bpy.context.view_layer.update()
+            v = verts(); h = v[M_HEAD & ~M_EAR]
+            m = MEAS.setdefault(name, {'min_z': 9.0, 'x': [9.0, -9.0], 'y': [9.0, -9.0], 'head': []})
+            m['min_z'] = min(m['min_z'], float(v[:, 2].min()))
+            m['x'] = [min(m['x'][0], float(v[:, 0].min())), max(m['x'][1], float(v[:, 0].max()))]
+            m['y'] = [min(m['y'][0], float(v[:, 1].min())), max(m['y'][1], float(v[:, 1].max()))]
+            m['head'].append(float(h[:, 2].max()))
         prev = {n: arm.pose.bones[n].rotation_quaternion.copy() for n in order}
     for fc in act.fcurves if hasattr(act, 'fcurves') else []:
         for kp in fc.keyframe_points:
@@ -463,6 +479,28 @@ def tailfix(P, angles):
     Q.update(tail_dirs(angles))
     return Q
 
+def droop_tail(P, H, margin=0.03, max_down=0.75):
+    """Lying tail: keep each segment's heading, let it sink toward the floor (at most max_down of its length per segment)
+    and then lie flat at `margin` height."""
+    Q = copy.deepcopy(P)
+    head = H['Tail01'].copy()
+    for i in range(1, 7):
+        L = rlen['Tail0%d' % i]
+        d = V(Q['A%d' % i]).normalized()
+        hv = V((d.x, d.y, 0)); hv = hv.normalized() if hv.length > 1e-6 else V((0, 1, 0))
+        if head.z > margin + 0.003:
+            dz = -min(max_down, (head.z - margin) / L)
+        else:
+            dz = max(-0.2, min(0.5, (margin - head.z) / L))
+        d = hv * math.sqrt(max(1 - dz * dz, 0)) + V((0, 0, dz))
+        Q['A%d' % i] = tuple(d)
+        head = head + d * L
+    return Q
+
+def tail_heading(angles, z=0.0):
+    """Tail directions lying in the floor plane: angle 0 = straight back (+Y), positive turns toward +X (the belly side)."""
+    return [(math.sin(math.radians(a)), math.cos(math.radians(a)), z) for a in angles]
+
 SIT = copy.deepcopy(STAND)
 # a sitting cat: rump on the surface, front legs straight and vertical (the shoulders can be no higher than the
 # legs reach, so the back is tucked steeply at the pelvis and flattens toward the chest), haunch folded forward
@@ -481,13 +519,16 @@ SPHINX = fit(SPHINX, front=dict(x=0.06, dy=-0.20, z=0.06, pitch=48, pole=(0.0, 1
              hind=dict(x=0.16, dy=0.02, z=0.045, m=(0.05, -0.97, -0.10), pole=(0.4, -1.0, 0.3), pitch=40))
 
 LOAF = copy.deepcopy(STAND)
-# loaf: belly on the surface (the paws only rest, so the torso is grounded), back low and level, elbows folded,
-# forepaws close under the chin, hocks folded beside the haunch
-LOAF.update({'Pelvis': (2, 0, 0), 'Spine01': (0, 0, 0), 'Spine02': (-2, 0, 0), 'Chest': (-12, 0, 0),
-             'Neck': (22, 0, 0), 'Head': (-14, 0, 0), 'pel': (0, 0.02, -0.30)})
-LOAF.update(tail_dirs([(20, -50), (70, -42), (115, -30), (150, -12), (175, -3), (190, 0)]))
-LOAF = fit(LOAF, front=dict(x=0.075, dy=0.0, z=0.06, pitch=48, pole=(0.0, 1, 1.5)),
-           hind=dict(x=0.13, dy=-0.03, z=0.045, m=(0.05, -0.97, -0.10), pole=(0.4, -1.0, 0.3), pitch=40), torso=True)
+# loaf: a compact bread loaf. Belly on the surface (grounded by the trunk alone: legs, head and tail only rest), back a hump,
+# haunch folded under the body, forepaws and hind paws tucked under it (elbows and knees turned outward so the legs stay
+# inside the silhouette), chest and head up, tail laid on the floor round the body
+LOAF.update({'Pelvis': (22, 0, 0), 'Spine01': (-8, 0, 0), 'Spine02': (-10, 0, 0), 'Chest': (-8, 0, 0),
+             'Neck': (22, 0, 0), 'Head': (-14, 0, 0), 'pel': (0, 0.08, -0.31)})
+LOAF.update(tail_dirs([(20, -25), (70, -20), (115, -12), (150, -5), (175, 0), (190, 0)]))
+for _it in range(3):
+    LOAF = fit(LOAF, front=dict(x=0.03, dy=0.09, z=0.045, pitch=60, pole=(0.8, 0.5, 0.0)),
+               hind=dict(x=0.07, dy=-0.10, z=0.045, m=(0.05, -0.97, -0.10), pole=(0.5, -0.8, 0.3), pitch=40), torso='belly')
+    LOAF = droop_tail(LOAF, shoulders_hips(LOAF), 0.03)
 POSES = {'Stand': STAND, 'Sit': SIT, 'Sphinx': SPHINX, 'Loaf': LOAF}
 
 # ---- shared modulations for the rest loops
@@ -594,6 +635,189 @@ def stretch_fn(frames):
             (2.2, lerp_pose(STAND, STRETCH, 0.35)), (2.5, STAND)]
     return keyed(keys, frames)
 
+# ================================================================= sleeping poses (phase A)
+# Lying poses are authored on the cat's right side (roll -90 about Y: belly toward +X, back toward -X, left flank up).
+# Spine bends are world-axis increments, so a curl of the lying spine is a yaw about Z (+ yaw curls the head toward the belly).
+SLEEP_NAMES = ['LoafDoze', 'Donut', 'SideSprawl', 'BellyUp', 'PawCover', 'Superman', 'CurlC']
+
+def clamp_tail(P, H, margin=0.03):
+    """Keep the tail segments above the floor by turning a segment up when its end would go lower than margin."""
+    Q = copy.deepcopy(P)
+    head = H['Tail01'].copy()
+    for i in range(1, 7):
+        L = rlen['Tail0%d' % i]
+        d = V(Q['A%d' % i]).normalized()
+        if head.z + d.z * L < margin:
+            dz = max(-0.999, min(0.999, (margin - head.z) / L))
+            hv = V((d.x, d.y, 0)); hv = hv.normalized() if hv.length > 1e-6 else V((0, 1, 0))
+            d = hv * math.sqrt(max(1 - dz * dz, 0)) + V((0, 0, dz))
+            Q['A%d' % i] = tuple(d)
+        head = head + d * L
+    return Q
+
+def world_tail(P, dirs):
+    """dirs: six world direction vectors for Tail01..06 (normalised here)."""
+    Q = copy.deepcopy(P)
+    for i, d in enumerate(dirs):
+        Q['A%d' % (i + 1)] = tuple(V(d).normalized())
+    return Q
+
+def lie_fit(P, legs, iters=6, tail_margin=0.03, droop=True):
+    """Grounded lying pose. legs: {'FL': dict(ref=bone?, off=(dx,dy,dz), floor=True?, pole=, pitch=, yr=(yaw,roll), toe=, m=(hind))}.
+    A paw target is the head of `ref` (default: that leg's shoulder/hip) plus off in world axes. A leg with floor=True instead
+    keeps adjusting the target height until its paw mesh rests on the floor (the body is grounded by the torso only)."""
+    P = copy.deepcopy(P)
+    zc = {k: None for k in legs}
+    clear = 0.002
+    for it in range(iters):
+        H = shoulders_hips(P)
+        for k, d in legs.items():
+            kind, sd = k[0], k[1]
+            ref = H[d.get('ref', ('FrontUpperLeg.' if kind == 'F' else 'HindUpperLeg.') + sd)]
+            T = ref + V(d['off'])
+            if d.get('floor'):
+                if zc[k] is None: zc[k] = T.z
+                T.z = zc[k]
+            P[k] = tuple(T); P[k + 'p'] = tuple(d.get('pole', (0, 0, 1)))
+            P[k + 'pitch'] = (d.get('pitch', 0),); P[k + 'yr'] = tuple(d.get('yr', (0, 0))); P[k + 'toe'] = (d.get('toe', 0),)
+            if kind == 'H': P[k + 'm'] = tuple(d.get('m', (0, 1, -0.3)))
+        P = ground(P, iters=2, torso=True)
+        apply_basis(pose_basis(P)[0])
+        v = verts()
+        for k, d in legs.items():
+            if d.get('floor'):
+                zc[k] += clear - float(v[M_PAW[k]][:, 2].min())
+        P = droop_tail(P, shoulders_hips(P), tail_margin) if droop else clamp_tail(P, shoulders_hips(P), tail_margin)
+    for it in range(3):
+        P = ground(P, iters=2, torso=True)
+    return ground_all(P)
+
+def ground_all(P, iters=4):
+    """Lift the pose so that no vertex at all (ears and tail tip included) is below the floor."""
+    P = copy.deepcopy(P)
+    for it in range(iters):
+        apply_basis(pose_basis(P)[0])
+        mz = float(verts()[:, 2].min())
+        if mz >= -0.0015: break
+        px, py, pz = P['pel']; P['pel'] = (px, py, pz - mz)
+        for k in ('FL', 'FR', 'HL', 'HR'):       # the paw targets are absolute: lift them with the body
+            x, y, z = P[k]; P[k] = (x, y, z - mz)
+    return P
+
+def sleep_base(pel=(0, 0.0, 0.10)):
+    P = copy.deepcopy(STAND)
+    P.update({'pel': pel, 'Pelvis': (0, 0, -90), 'Spine01': (0, 0, 0), 'Spine02': (0, 0, 0), 'Chest': (0, 0, 0),
+              'Neck': (0, 45, 0), 'Head': (0, -45, 0)})
+    return P
+
+def make_sprawl():
+    P = sleep_base()
+    P.update({'Spine01': (0, 3, 0), 'Spine02': (0, 3, 0), 'Neck': (-6, 50, 0), 'Head': (-4, -52, 0)})
+    P = world_tail(P, [(0.15, 1, 0.1), (0.35, 1, 0), (0.6, 1, 0), (0.8, 1, 0), (0.9, 1, 0), (1, 1, 0)])
+    return lie_fit(P, {
+        'FR': dict(off=(0.10, -0.30, 0), floor=True, pole=(0, 0.3, 1), pitch=48, yr=(0, -90)),
+        'FL': dict(off=(0.14, -0.28, 0.07), pole=(0, 0.3, 1), pitch=48, yr=(0, -90)),
+        'HR': dict(off=(0.18, 0.22, 0), floor=True, pole=(0, -0.3, 1), m=(0.0, 0.97, -0.2), pitch=40, yr=(0, -90)),
+        'HL': dict(off=(0.20, 0.24, 0.07), pole=(0, -0.3, 1), m=(0.0, 0.97, -0.2), pitch=40, yr=(0, -90))})
+
+def make_donut(cover=False):
+    P = sleep_base()
+    P.update({'Spine01': (0, 40, 0), 'Spine02': (0, 50, 0), 'Chest': (0, 52, 0), 'Neck': (-8, 100, 0), 'Head': (-6, -17, 0)})
+    P = world_tail(P, tail_heading([5, 35, 70, 110, 150, 185]))
+    legs = {
+        'FR': dict(ref='Head', off=(0.0, 0.10, 0), floor=True, pole=(0.3, 1, 0.1), pitch=48, yr=(0, -90)),
+        'FL': dict(ref='Head', off=(0.02, 0.09, 0.06), pole=(0.3, 1, 0.1), pitch=48, yr=(0, -90)),
+        'HR': dict(off=(0.22, -0.10, 0), floor=True, pole=(0.4, -1, 0.2), m=(0.5, -0.7, -0.2), pitch=40, yr=(0, -90)),
+        'HL': dict(off=(0.22, -0.12, 0.04), pole=(0.4, -1, 0.2), m=(0.5, -0.7, -0.2), pitch=40, yr=(0, -90))}
+    if cover:
+        legs['FL'] = dict(ref='Head', off=(0.0, 0.05, 0.05), pole=(0.3, 1, 0.1), pitch=70, yr=(0, -90))
+    return lie_fit(P, legs)
+
+def make_belly_up():
+    P = sleep_base(pel=(0, 0, 0.1))
+    P.update({'Pelvis': (0, -12, 168), 'Spine01': (0, 5, 4), 'Spine02': (0, 6, 5), 'Chest': (0, 0, 4), 'Neck': (45, 10, 0), 'Head': (-37, 0, -75)})
+    P = world_tail(P, [(0.1, 1, 0.1), (0.4, 1, 0), (0.8, 1, 0), (1, 0.6, 0), (1, 0.2, 0), (1, 0.0, 0)])
+    return lie_fit(P, {
+        'FL': dict(off=(0.04, -0.14, 0.20), pole=(0.3, 1, 0.5), pitch=30, yr=(0, 160)),
+        'FR': dict(off=(-0.04, -0.16, 0.20), pole=(-0.3, 1, 0.5), pitch=30, yr=(0, -160)),
+        'HL': dict(off=(0.12, -0.05, 0.28), pole=(0.5, -1, 0.3), m=(0.3, 0.3, 1), pitch=0, yr=(0, 180)),
+        'HR': dict(off=(-0.10, -0.02, 0.28), pole=(-0.5, -1, 0.3), m=(-0.3, 0.3, 1), pitch=0, yr=(0, 180))})
+
+def make_superman():
+    P = copy.deepcopy(STAND)
+    P.update({'pel': (0, 0.03, -0.30), 'Pelvis': (0, 0, 0), 'Spine01': (-1, 0, 0), 'Spine02': (-2, 0, 0), 'Chest': (-4, 0, 0),
+              'Neck': (-20, 0, 0), 'Head': (6, 0, 0)})
+    P = world_tail(P, [(0, 1, -0.2), (0, 1, -0.1), (0.1, 1, 0), (0.2, 1, 0), (0.3, 1, 0), (0.3, 1, 0)])
+    return lie_fit(P, {
+        'FL': dict(off=(0.04, -0.34, 0), floor=True, pole=(0.3, 0.3, 1), pitch=48),
+        'FR': dict(off=(-0.04, -0.34, 0), floor=True, pole=(-0.3, 0.3, 1), pitch=48),
+        'HL': dict(off=(0.12, 0.30, 0), floor=True, pole=(0.3, -0.3, 1), m=(0.25, 0.97, 0), pitch=-135),
+        'HR': dict(off=(-0.12, 0.30, 0), floor=True, pole=(-0.3, -0.3, 1), m=(-0.25, 0.97, 0), pitch=-135)})
+
+def make_curlc():
+    P = sleep_base()
+    P.update({'Spine01': (0, 20, 0), 'Spine02': (0, 25, 0), 'Chest': (0, 25, 0), 'Neck': (-8, 58, 0), 'Head': (-6, -30, 0)})
+    P = world_tail(P, [(0.1, 1, 0.1), (0.4, 1, 0), (0.9, 1, 0), (1, 0.4, 0), (1, 0, 0), (1, -0.3, 0)])
+    return lie_fit(P, {
+        'FR': dict(off=(0.20, -0.08, 0), floor=True, pole=(0.3, 1, 0.1), pitch=48, yr=(0, -90)),
+        'FL': dict(off=(0.20, -0.10, 0.04), pole=(0.3, 1, 0.1), pitch=48, yr=(0, -90)),
+        'HR': dict(off=(0.22, -0.12, 0), floor=True, pole=(0.4, -1, 0.2), m=(0.5, -0.7, -0.2), pitch=40, yr=(0, -90)),
+        'HL': dict(off=(0.22, -0.14, 0.04), pole=(0.4, -1, 0.2), m=(0.5, -0.7, -0.2), pitch=40, yr=(0, -90))})
+
+def make_doze():
+    """The loaf of the existing LoafDown/LoafIdle clips, exactly (the doze clips start from it)."""
+    return copy.deepcopy(LOAF)
+
+SLEEP_POSES = {'LoafDoze': make_doze, 'SideSprawl': make_sprawl, 'Donut': make_donut, 'PawCover': lambda: make_donut(True),
+               'BellyUp': make_belly_up, 'Superman': make_superman, 'CurlC': make_curlc}
+SLEEP_BREATH = {'LoafDoze': 0.006, 'Donut': 0.008, 'SideSprawl': 0.016, 'BellyUp': 0.014, 'PawCover': 0.008, 'Superman': 0.008, 'CurlC': 0.008}
+SLEEP_DOWN_T = 1.6; SLEEP_UP_T = 1.1; SLEEP_IDLE_T = 8.0
+MEAS = {}      # clip name -> measurements recorded by make_action for the Sleep clips
+
+def pulse(t, t0, dur):
+    return math.sin(math.pi * (t - t0) / dur) ** 2 if t0 <= t <= t0 + dur else 0.0
+
+def sleep_idle_fn(name, base, frames):
+    """Breathing (3 cycles per loop, only upward from the base), ear flicks every 4 s, slow tail tip twitches; the doze adds head nods."""
+    amp = SLEEP_BREATH[name]
+    def f(fr):
+        t = fr / FPS; T = frames / FPS
+        ph = 2 * math.pi * 3 * fr / frames
+        b = 0.5 - 0.5 * math.cos(ph)
+        P = copy.deepcopy(base)
+        P['oS2'] = (0, 0, amp * b); P['oCh'] = (0, 0, amp * 1.3 * b)
+        eL = pulse(t, 1.5, 0.45); eR = pulse(t, 5.5, 0.45)
+        P = add(P, EarL=(0, 12 * eL, 18 * eL), EarR=(0, -12 * eR, -18 * eR))
+        tw = pulse(t, 2.4, 1.3) - 0.8 * pulse(t, 6.2, 1.1)
+        for i in (3, 4, 5):
+            P['A%d' % (i + 1)] = tuple(Rz(22 * tw * (0.4 + 0.3 * (i - 3))) @ V(P['A%d' % (i + 1)]))
+        P['A7'] = (0, 15 * tw, 0)
+        if name == 'LoafDoze':
+            # slow nod down 0.6 -> 3.4 s, quick jerk back up (3.8 s), a shallower nod 5.0 -> 7.4 s
+            d = 0.0
+            if 0.6 <= t < 3.4: d = ease((t - 0.6) / 2.8)
+            elif 3.4 <= t < 3.8: d = 1.0 - ease((t - 3.4) / 0.4) * 1.05
+            elif 3.8 <= t < 4.4: d = -0.05 * (1 - ease((t - 3.8) / 0.6))
+            elif 5.0 <= t < 7.0: d = 0.55 * ease((t - 5.0) / 2.0)
+            elif 7.0 <= t < 7.6: d = 0.55 * (1 - ease((t - 7.0) / 0.6))
+            P = add(P, Neck=(-14 * d, 0, 0), Head=(-9 * d, 0, 0))
+        return ground_all(P, iters=1)
+    return f
+
+def sleep_trans(A, B, T, mid=None, blend=None):
+    def g(fr):
+        keys = [(0.0, A)] + ([(T * 0.42, mid)] if mid is not None else []) + [(T, B)]
+        if blend is not None:
+            fn = grounded_blend(keyed(keys, fr), fr, blend)
+        else:
+            fn = grounded(keyed(keys, fr))
+        return lambda f: ground_all(fn(f), iters=1)
+    return g
+
+def lift(fn):
+    """Wrap a pose function: nothing may end up below the floor (the compact loaf's tail and ears)."""
+    return lambda f: ground_all(fn(f), iters=2)
+
 def build_all(only=None):
     out = {}
     def want(n): return only is None or n in only
@@ -621,12 +845,23 @@ def build_all(only=None):
     mk('LieDown', trans(STAND, SPHINX), 1.5, False)
     mk('LyingIdle', lambda fr: rest_loop(SPHINX, fr, head_yaw=9, tail_segs=(3, 4, 5), tail_yaw=14), 3.0, True)
     mk('GetUp', trans(SPHINX, STAND), 1.2, False)
-    mk('LoafDown', trans(STAND, LOAF, blend=True), 1.5, False)
-    mk('LoafIdle', lambda fr: rest_loop(LOAF, fr, head_yaw=5, breath=1.3, tail_segs=(4, 5), tail_yaw=8), 3.0, True)
-    mk('LoafUp', trans(LOAF, STAND, blend=False), 1.2, False)
+    mk('LoafDown', lambda fr: lift(trans(STAND, LOAF, blend=True)(fr)), 1.5, False)
+    mk('LoafIdle', lambda fr: lift(rest_loop(LOAF, fr, head_yaw=5, breath=1.3, tail_segs=(4, 5), tail_yaw=8)), 3.0, True)
+    mk('LoafUp', lambda fr: lift(trans(LOAF, STAND, blend=False)(fr)), 1.2, False)
     mk('Jump', jump_fn, 0.8, False)
     mk('Groom', groom_fn, 3.0, True)
     mk('Stretch', stretch_fn, 2.5, False)
+    for nm in SLEEP_NAMES:
+        names = ['Sleep%sDown' % nm, 'Sleep%sIdle' % nm, 'Sleep%sUp' % nm]
+        if only is not None and not any(n in only for n in names): continue
+        B = SLEEP_POSES[nm]()
+        if nm == 'LoafDoze':
+            mk(names[0], lambda fr, B=B: sleep_trans(STAND, B, fr / FPS, blend=True)(fr), SLEEP_DOWN_T - 0.1, False)
+            mk(names[2], lambda fr, B=B: sleep_trans(B, STAND, fr / FPS, blend=False)(fr), SLEEP_UP_T, False)
+        else:
+            mk(names[0], lambda fr, B=B: sleep_trans(STAND, B, fr / FPS, mid=LOAF)(fr), SLEEP_DOWN_T, False)
+            mk(names[2], lambda fr, B=B: sleep_trans(B, STAND, fr / FPS, mid=LOAF)(fr), SLEEP_UP_T, False)
+        mk(names[1], lambda fr, nm=nm, B=B: sleep_idle_fn(nm, B, fr), SLEEP_IDLE_T, True)
     return out
 
 def render_clips(clips):
@@ -662,11 +897,14 @@ def export(clips, out):
 
 def render_static(names):
     for nm in names:
+        if nm not in POSES and nm in SLEEP_POSES:
+            POSES[nm] = SLEEP_POSES[nm]()
         apply_basis(pose_basis(POSES[nm])[0])
         v = verts()
-        print("CONTACT pose %-8s body minz %+.4f paws minz %+.4f tail minz %+.4f reachover %d max %.3f" % (
-            nm, v[M_BODYFLOOR][:, 2].min(), v[M_PAWS][:, 2].min(), v[M_TAIL][:, 2].min(), REACH['over'], REACH['max']))
-        render_pose("pose_%s_f000" % nm)
+        print("CONTACT pose %-8s body minz %+.4f paws minz %+.4f tail minz %+.4f ALL minz %+.4f reachover %d max %.3f" % (
+            nm, v[M_BODYFLOOR][:, 2].min(), v[M_PAWS][:, 2].min(), v[M_TAIL][:, 2].min(), v[:, 2].min(), REACH['over'], REACH['max']))
+        print("HEADS %s " % nm + " ".join("%s=(%.2f,%.2f,%.2f)" % (b, *arm.pose.bones[b].head) for b in ('Pelvis', 'Head', 'Tail07', 'FrontPaw.L', 'FrontPaw.R')))
+        render_pose("pose_%s_f000" % nm, center=(0, 0, 0.2), scale=1.2)
 
 if __name__ == "__main__":
     if arg("--pose"):
@@ -693,7 +931,11 @@ if __name__ == "__main__":
             'shoulder_height': round(float(rhead['FrontUpperLeg.L'].z), 4),
             'walk_speed_units_per_s': round(WALK_STRIDE / WALK_T, 3),
             'walk_stride_units': WALK_STRIDE,
-            'clips': {n: {'seconds': round(nfr / FPS, 4), 'frames': nfr, 'loop': lp} for n, (a, nfr, lp) in clips.items()},
+            'clips': {n: dict({'seconds': round(nfr / FPS, 4), 'frames': nfr, 'loop': lp}, **(
+                {'lowest_vertex_z': round(MEAS[n]['min_z'], 4), 'footprint_x': round(MEAS[n]['x'][1] - MEAS[n]['x'][0], 4),
+                 'footprint_y': round(MEAS[n]['y'][1] - MEAS[n]['y'][0], 4), 'head_height_start': round(MEAS[n]['head'][0], 4),
+                 'head_height_end': round(MEAS[n]['head'][-1], 4), 'head_height_max': round(max(MEAS[n]['head']), 4)} if n in MEAS else {}))
+                      for n, (a, nfr, lp) in clips.items()},
         }
         export(clips, OUT)
         json.dump(info, open(os.path.splitext(OUT)[0] + '.json', 'w'), indent=1)

@@ -34,6 +34,12 @@ CLIPS = [('Idle', 3.0, True), ('Walk', 1.0, True), ('SitDown', 1.2, False), ('Si
          ('StandUp', 1.0, False), ('LieDown', 1.5, False), ('LyingIdle', 3.0, True), ('GetUp', 1.2, False),
          ('LoafDown', 1.5, False), ('LoafIdle', 3.0, True), ('LoafUp', 1.2, False), ('Jump', 0.8, False),
          ('Groom', 3.0, True), ('Stretch', 2.5, False)]
+# 21 sleeping clips (whitecat_clips.py): Sleep<Name>Down / Idle / Up; only retargeted when --sleep is given (stage extract samples them too)
+SLEEP_CLIPS = []
+for _n in ('LoafDoze', 'Donut', 'SideSprawl', 'BellyUp', 'PawCover', 'Superman', 'CurlC'):
+    SLEEP_CLIPS += [('Sleep%sDown' % _n, 1.5 if _n == 'LoafDoze' else 1.6, False), ('Sleep%sIdle' % _n, 8.0, True), ('Sleep%sUp' % _n, 1.1, False)]
+if '--sleep' in sys.argv:
+    CLIPS = CLIPS + SLEEP_CLIPS
 CLIP_FRAMES = {n: int(round(s * FPS)) for n, s, l in CLIPS}
 LOOPS = {n: l for n, s, l in CLIPS}
 
@@ -246,6 +252,7 @@ class Retarget:
         self.kf = 0.5 * (self.kl['FL'] + self.kl['FR']) if 'FR' in self.kl else self.kf
         self.kh = 0.5 * (self.kl['HL'] + self.kl['HR']) if 'HR' in self.kl else self.kh
         self.kb = 0.5 * (self.kf + self.kh)
+        self.tail_r = []
         print("SCALE kf %.3f kh %.3f kb %.3f" % (self.kf, self.kh, self.kb))
 
     def build_spec(self, fd, par):
@@ -262,6 +269,11 @@ class Retarget:
         tp = [t.rhead[b] for b in cfg['fwd']] + [t.rhead[cfg['fwd_end']]]
         for b, (u0, u1) in zip(cfg['fwd'], frac_bounds(tp)):
             spec['abs'][b] = part(cdelta(C, chord(ps_ref, u0, u1), chord(ps, u0, u1)), par['sf'])
+        if str(self.clip).startswith('Sleep') and os.environ.get('SLEEPCHORD') != '1':
+            # rolled / twisted bodies: chords carry no roll about the spine, so use the source bones' own orientation change
+            for b in cfg['fwd']:
+                sb = cfg.get('fwd_src', {}).get(b, b)
+                spec['abs'][b] = rdelta(C, RR[sb], R[sb])
         for b in cfg['head']: spec['abs'][b] = rdelta(C, RR['Head'], R['Head'])
         for b, sb in cfg['rots'].items(): spec['abs'][b] = rdelta(C, RR[sb], R[sb])
         # tail
@@ -271,11 +283,28 @@ class Retarget:
             def ext(P):
                 pts = [P[n] for n in TAIL_SRC]; pts.append(pts[-1] + (pts[-1] - pts[-2])); return pts
             sr, sc_ = ext(RH), ext(H)
-            for b, (u0, u1) in zip(tl, frac_bounds(tpt)):
-                spec['abs'][b] = cdelta(C, chord(sr, u0, u1), chord(sc_, u0, u1))
+            sleep = str(self.clip).startswith('Sleep') and self.tail_r
+            for i, (b, (u0, u1)) in enumerate(zip(tl, frac_bounds(tpt))):
+                if sleep:     # lying cat: the tail follows the source's world directions, not rotation deltas over the target's own rest tail
+                    spec['abs'][b] = (tpt[i + 1] - tpt[i]).rotation_difference(C @ chord(sc_, u0, u1)).to_matrix()
+                else:
+                    spec['abs'][b] = cdelta(C, chord(sr, u0, u1), chord(sc_, u0, u1))
         # legs: pass 0 gives shoulder and hip heads
         _, posed0 = t.solve(spec)
-        if tl:      # the tail must not sink through the floor: lift any segment whose end would go below it
+        if tl and str(self.clip).startswith('Sleep') and self.tail_r:
+            # lying tail: keep each segment's heading, let it sink onto the floor (tail radius above it) and then lie flat
+            head = posed0[tl[0]].translation.copy()
+            for i, b in enumerate(tl):
+                seg0 = tpt[i + 1] - tpt[i]; L = seg0.length; cur = (spec['abs'][b] @ seg0).normalized()
+                hv = V((cur.x, cur.y, 0)); hv = hv.normalized() if hv.length > 1e-6 else V((0, 1, 0))
+                zt = self.floor + self.tail_r[min(i + 1, len(tl) - 1)] * 1.05 + 0.002 * self.kb
+                if head.z > zt + 0.003 * self.kb: dz = -min(0.8, (head.z - zt) / L)
+                else: dz = max(-0.2, min(0.5, (zt - head.z) / L))
+                cur = hv * math.sqrt(max(1 - dz * dz, 0)) + V((0, 0, dz))
+                spec['abs'][b] = seg0.rotation_difference(cur).to_matrix()
+                head = head + cur * L
+            _, posed0 = t.solve(spec)
+        elif tl:      # the tail must not sink through the floor: lift any segment whose end would go below it
             head = posed0[tl[0]].translation.copy()
             for i, b in enumerate(tl[:-1]):
                 seg0 = t.rhead[tl[i + 1]] - t.rhead[b]; cur = spec['abs'][b] @ seg0
@@ -325,6 +354,18 @@ class Retarget:
 
     def measure_ref(self):
         self.ref_m = self.t.measure()
+        # tail radius per bone (99th percentile distance of its vertices to the bone axis) in the reference pose, for the lying tail
+        t = self.t; tl = self.cfg['tail']; self.tail_r = []
+        if tl:
+            P = t.verts(); heads = [t.arm.matrix_world @ t.rhead[b] for b in tl]; heads.append(heads[-1] + (heads[-1] - heads[-2]))
+            for i, b in enumerate(tl):
+                idx = np.where(t.dom == b)[0]
+                if len(idx) < 3: self.tail_r.append(self.tail_r[-1] if self.tail_r else 0.02); continue
+                a, c = np.array(heads[i]), np.array(heads[i + 1]); ax = c - a; ax2 = float(ax @ ax) or 1e-9
+                u = np.clip(((P[idx] - a) @ ax) / ax2, 0, 1)
+                d = np.linalg.norm(P[idx] - (a + u[:, None] * ax), axis=1)
+                self.tail_r.append(float(np.percentile(d, 99)))
+            print('TAILR', [round(x, 3) for x in self.tail_r])
         return self.ref_m
 
     def solve_frame(self, fd):
@@ -332,6 +373,10 @@ class Retarget:
         par = {'sf': 1.0, 'sr': 1.0, 'pz': kb * (fd['H']['Pelvis'].z - ref['H']['Pelvis'].z), 'pawdz': {k: 0.0 for k in self.cfg['pawkeys']}}
         wt = max(fl, rm['trunk'] + kb * (fd['torso'] - ref['torso']))
         wp = {k: (fl if fd['paw'][k] < 0.03 else max(fl, rm['paw'][k] + kb * (fd['paw'][k] - ref['paw'][k]))) for k in rm['paw']}   # a source paw within 0.03 of the floor is planted
+        if str(self.clip).startswith(('Loaf', 'SleepLoaf')):
+            # the compact loaf: belly on the floor. The scaled source clearance leaves the target belly a few cm up (legs propping it), so fade the
+            # trunk clearance to zero as the source trunk comes down to the floor
+            sref = max(ref['torso'], 1e-6); wt = fl + (wt - fl) * max(0.0, min(1.0, fd['torso'] / sref))
         pd = self.clip in self.cfg.get('pelvis_driven', ())
         def inner(par, iters=10):
             for it in range(iters):
@@ -353,7 +398,7 @@ class Retarget:
         basis = inner(par)
         # a shoulder or hip too high above its paw: flatten that half of the spine rotation (bisection on the fraction)
         for key, kind in (('sf', 'F'), ('sr', 'H')):
-            if self.fl[kind] < 0.01: continue
+            if self.fl[kind] < 0.01 or str(self.clip).startswith('Sleep') and os.environ.get('SLEEPFLAT') != '1': continue   # lying poses keep the full spine rotation
             lo, hi = 0.0, 1.0
             for _ in range(6):
                 mid = 0.5 * (lo + hi); par[key] = mid
@@ -375,6 +420,14 @@ class Retarget:
             if DEBUG:
                 m2 = t.measure(); zz = t.verts()[:, 2]; ii = np.where(t.M_body)[0][np.argmin(zz[t.M_body])]
                 print('   LIFT %.3f -> body %.3f lowest vertex group %s' % (d, m2['body'] - fl, t.dom[ii]))
+        if str(self.clip).startswith('Sleep'):      # a lying cat must not hover: bring the lowest vertex down to the floor (ears and head count)
+            for _ in range(5):
+                zlow = float(t.verts()[:, 2].min())      # every vertex counts (ears, tail tip)
+                if abs(zlow - fl) > 0.003:       # both ways: hovering or any vertex (tail, ears) under the floor
+                    d = zlow - fl
+                    par['pz'] -= d
+                    for k in par['pawdz']: par['pawdz'][k] -= d
+                    basis, posed = t.solve(self.build_spec(fd, par)); t.apply(basis)
         return basis, par
 
 # =============================================================== render, keyframing, export
@@ -395,12 +448,12 @@ def setup_render(floor):
     co = bpy.data.objects.new("cam", cam); sc.collection.objects.link(co); sc.camera = co
     return co
 
-def render_views(tag, shots, C, floor, center, scale, views=('front34', 'side')):
+def render_views(tag, shots, C, floor, center, scale, views=('front34', 'side', 'top')):
     global _cam
     if _cam is None: _cam = setup_render(floor)
     os.makedirs(shots, exist_ok=True)
     for v in views:
-        d0 = {'front34': V((2.2, -3.2, 1.7)), 'side': V((9, 0, 0.2))}[v]
+        d0 = {'front34': V((2.2, -3.2, 1.7)), 'side': V((9, 0, 0.2)), 'top': V((0, 0.001, 9))}[v]
         d = (C @ d0).normalized() * 40
         _cam.data.ortho_scale = scale
         _cam.location = V(center) + d
@@ -411,6 +464,8 @@ def render_views(tag, shots, C, floor, center, scale, views=('front34', 'side'))
 def default_frames(cn, nf):
     if cn == 'Walk': return [0, 8, 15, 23, nf]
     return [0, nf // 2, nf]
+
+MEAS = {}      # sleep clip name -> lowest vertex, footprint, head heights (written into the json)
 
 def build_clips(rt, shots, only, frames_arg, cam):
     """Pose every frame of the chosen clips, key them, render the chosen frames. Returns {name: action}."""
@@ -428,12 +483,22 @@ def build_clips(rt, shots, only, frames_arg, cam):
         for k in range(nf + 1):
             fd = rt.S.clips[cn][k]; rt.clip = cn
             basis, par = rt.solve_frame(fd)
+            if cn.startswith('Sleep'):
+                Pm = t.verts(); hd = np.array([d.startswith('Head') for d in t.dom])
+                mm = MEAS.setdefault(cn, {'min_z': 9.0, 'x': [9.0, -9.0], 'y': [9.0, -9.0], 'head': []})
+                mm['min_z'] = min(mm['min_z'], float(Pm[:, 2].min() - rt.floor))
+                mm['x'] = [min(mm['x'][0], float(Pm[:, 0].min())), max(mm['x'][1], float(Pm[:, 0].max()))]
+                mm['y'] = [min(mm['y'][0], float(Pm[:, 1].min())), max(mm['y'][1], float(Pm[:, 1].max()))]
+                mm['head'].append(float(Pm[hd][:, 2].max() - rt.floor))
             for n in t.order:
                 l, q = basis[n]; q = q.copy()
                 if prev is not None: q.make_compatible(prev[n])
                 pb = arm.pose.bones[n]; pb.location = l; pb.rotation_quaternion = q
                 pb.keyframe_insert('location', frame=k); pb.keyframe_insert('rotation_quaternion', frame=k)
             prev = {n: arm.pose.bones[n].rotation_quaternion.copy() for n in t.order}
+            if k in rf and os.environ.get('TAILDBG') and rt.cfg['tail']:
+                print('   TAILZ', cn, k, ' '.join('%.2f' % (arm.pose.bones[b].head.z - rt.floor) for b in rt.cfg['tail']),
+                      '| src', ' '.join('%.2f' % (fd['H']['Tail0%d' % i].z * rt.kb) for i in range(1, 8)))
             if k in rf:
                 bpy.context.scene.frame_set(k)   # the action drives the pose at render time
                 m = t.measure()
@@ -471,7 +536,11 @@ def write_json(path, rt, vmeas, speed_note):
          'standing_trunk_clearance': round(rt.ref_m['trunk'] - rt.floor, 4),
          'scale_vs_whitecat': {'front': round(rt.kf, 4), 'hind': round(rt.kh, 4), 'body': round(rt.kb, 4)},
          'walk_speed_units_per_s': round(0.7 * rt.kb, 4), 'walk_stride_units': round(0.7 * rt.kb, 4),
-         'clips': {n: {'seconds': s, 'frames': CLIP_FRAMES[n], 'loop': l} for n, s, l in CLIPS}}
+         'clips': {n: dict({'seconds': s, 'frames': CLIP_FRAMES[n], 'loop': l}, **(
+             {'lowest_vertex_z': round(MEAS[n]['min_z'], 4), 'footprint_x': round(MEAS[n]['x'][1] - MEAS[n]['x'][0], 4),
+              'footprint_y': round(MEAS[n]['y'][1] - MEAS[n]['y'][0], 4), 'head_height_start': round(MEAS[n]['head'][0], 4),
+              'head_height_end': round(MEAS[n]['head'][-1], 4), 'head_height_max': round(max(MEAS[n]['head']), 4)} if n in MEAS else {}))
+                   for n, s, l in CLIPS}}
     json.dump(d, open(path, 'w'), indent=1)
 
 def ref_framing(t, C):
@@ -519,6 +588,7 @@ def stage_somali():
                              foot_loc=(B('Foot.' + sd), B('Heel.' + sd)), rots={B('Foot.' + sd): 'HindPaw.' + sd})
     cfg = dict(C=Rz(180), floor=FLOOR, root=B('Root'), rear=[B('LowerSpine'), B('Butt')],
                fwd=[B('UpperSpine'), B('Collarbone'), B('Neck')], fwd_end=B('Head'), head=[B('Head')],
+               fwd_src={B('UpperSpine'): 'Spine02', B('Collarbone'): 'Chest', B('Neck'): 'Neck'},
                rots={B('Ear.L'): 'Ear.L', B('Ear.R'): 'Ear.R'},
                tail=[B('TailBase'), B('TailBaseMiddle'), B('TailTipMiddle'), B('TailTip')],
                legs=legs, pawkeys=['FL', 'FR', 'HL', 'HR'])
