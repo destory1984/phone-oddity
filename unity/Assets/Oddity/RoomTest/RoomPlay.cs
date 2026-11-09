@@ -1598,6 +1598,14 @@ namespace Oddity.RoomTest
             return new Plane(Vector3.right,new Vector3(-RoomHalf,0,0)).Raycast(ray,out var wd) && InWindow(ray.GetPoint(wd));
         }
         const float ClickArrive=.05f, ClickGiveUp=.6f;
+        // a real mouse press counts only inside the Game view, 4 px clear of its edges: a press on the window border, the tab bar or another editor window must not walk her there
+        static bool ClickInGame(Vector2 p)
+        {
+            const float Edge=4f;
+            if(p.x<Edge || p.y<Edge || p.x>Screen.width-Edge || p.y>Screen.height-Edge)return false;
+            var over=EditorWindow.mouseOverWindow;
+            return over!=null && over.GetType().Name=="GameView";
+        }
         void ClickAt(Ray ray)
         {
             if(busy)return;
@@ -2253,9 +2261,9 @@ namespace Oddity.RoomTest
         // Alt + wheel tilts the view up or down with the eye where it is (wheel up = look up): 2 degrees a notch, at most 30 either way, eased; it also carries over room cuts
         float camTilt,camTiltWant;const float TiltNotch=2f, TiltMax=30f, TiltUpMax=80f; // Alt + wheel: up to 80 deg up (the ceiling and its lights), 30 deg down
         void TiltNotchBy(int dir){if(insideOn){inTiltWant=Mathf.Clamp(inTiltWant+dir*TiltNotch,-TiltMax,TiltUpMax);Debug.Log("ROOMPLAY_CAMTILT inside deg="+inTiltWant.ToString("0",CultureInfo.InvariantCulture));return;}camTiltWant=Mathf.Clamp(camTiltWant+dir*TiltNotch,-TiltMax,TiltUpMax);Debug.Log("ROOMPLAY_CAMTILT deg="+camTiltWant.ToString("0",CultureInfo.InvariantCulture));}
-        // Shift + arrows move the same camera values while held: Shift+left/right swings (60 deg/s, left = wheel up), Shift+up/down raises or lowers the camera (0.6 m/s, up = higher);
+        // Shift + arrows move the same camera values while held: Shift+left/right swings (60 deg/s, left = wheel up), Shift+up/down raises or lowers the camera (1.2 m/s, up = higher);
         // a tap under 0.15 s still moves one notch. The arrows' normal jobs (turning, zoom) are off while Shift is held.
-        const float ShiftSwingRate=60f, ShiftLiftRate=.6f, ShiftTapSeconds=.15f, ShiftLogGap=.25f;
+        const float ShiftSwingRate=60f, ShiftLiftRate=1.2f, ShiftTapSeconds=.15f, ShiftLogGap=.25f;
         int shSwDir,shTiDir;float shSwHold,shTiHold,shSwMoved,shTiMoved,shSwLog,shTiLog;
         void AddSwing(float deg){if(insideOn)inSwingWant=Mathf.Repeat(inSwingWant+deg,360);else camSwingWant=Mathf.Clamp(camSwingWant+deg,-SwingMax,SwingMax);}
         void AddLift(float m){if(insideOn)inLiftWant=Mathf.Clamp(inLiftWant+m,InsideLiftMin,InsideLiftMax);else camLiftWant=Mathf.Clamp(camLiftWant+m,LiftDown,LiftUp);}
@@ -2616,7 +2624,7 @@ namespace Oddity.RoomTest
                 input=new Vector2((kb.dKey.isPressed?1:0)-(kb.aKey.isPressed?1:0),(kb.wKey.isPressed?1:0)-(kb.sKey.isPressed?1:0));run=kb.shiftKey.isPressed;zoomKey=(kb.downArrowKey.isPressed?1:0)-(kb.upArrowKey.isPressed?1:0);
                 turning=(kb.leftArrowKey.isPressed?1:0)-(kb.rightArrowKey.isPressed?1:0);
                 if(kb.shiftKey.isPressed){camSx=turning;camTy=(kb.upArrowKey.isPressed?1:0)-(kb.downArrowKey.isPressed?1:0);turning=0;zoomKey=0;} // Shift + arrows move the camera instead
-                var mouse=Mouse.current;if(mouse!=null && mouse.leftButton.wasPressedThisFrame && room)ClickAt(cameraView.ScreenPointToRay(mouse.position.ReadValue()));
+                var mouse=Mouse.current;if(mouse!=null && mouse.leftButton.wasPressedThisFrame && room){var mp=mouse.position.ReadValue();if(ClickInGame(mp))ClickAt(cameraView.ScreenPointToRay(mp));else Debug.Log("ROOMPLAY_CLICK ignored at=("+F(mp.x)+","+F(mp.y)+") screen="+Screen.width+"x"+Screen.height+" over="+(EditorWindow.mouseOverWindow!=null?EditorWindow.mouseOverWindow.GetType().Name:"none"));}
                 if(mouse!=null){var sc=mouse.scroll.ReadValue();float wheel=sc.y!=0?sc.y:kb.shiftKey.isPressed?sc.x:0; // Windows may turn Shift + wheel into a sideways scroll
                     if(wheel!=0){if(kb.altKey.isPressed)TiltNotchBy(wheel>0?1:-1);else if(kb.shiftKey.isPressed)SwingNotchBy(wheel>0?1:-1);else if(kb.ctrlKey.isPressed)LiftNotchBy(wheel>0?1:-1);else wheelZoom=Mathf.Clamp(wheelZoom+Mathf.Sign(wheel)*WheelNotch,-1,1);}} // wheel up zooms in, Ctrl + wheel up raises the camera
                 foreach(var entry in Keys)if(!Walk(entry.key) && entry.key!="left" && entry.key!="right" && entry.key!="tab" && entry.key!="o"){ // Tab and O have their own poll (TabPoll)
