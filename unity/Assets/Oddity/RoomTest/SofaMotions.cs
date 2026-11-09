@@ -426,7 +426,7 @@ namespace Oddity.RoomTest
         public readonly Vector3 ScreenCentre;
         readonly Material screenMat; readonly Light light;
         public bool On;
-        static readonly Color[] Palette = { new Color(.95f, .50f, .22f), new Color(.22f, .50f, .98f), new Color(.88f, .88f, .95f), new Color(.30f, .85f, .50f) };
+        static readonly Color[] Palette = { new Color(.80f, .84f, .95f), new Color(.62f, .74f, 1f), new Color(.88f, .90f, .96f), new Color(.72f, .84f, .92f) };
         static readonly Color Off = new Color(.025f, .028f, .035f);
         float t, hold; int from, to; Color shown = Off; float fade;
 
@@ -459,7 +459,7 @@ namespace Oddity.RoomTest
             var live = Color.Lerp(Palette[from], Palette[to], Mathf.SmoothStep(0, 1, Mathf.Clamp01(t / .6f)));
             shown = Color.Lerp(Off, live, fade);
             screenMat.SetColor("_BaseColor", shown); screenMat.color = shown;
-            light.color = live; light.intensity = 1.7f * fade;
+            light.color = Color.Lerp(live, new Color(.75f, .82f, 1f), .6f); light.intensity = .55f * fade;
         }
         public void Dispose() { if (Root != null) SofaRig.Kill(Root.gameObject); }
     }

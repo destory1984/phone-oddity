@@ -83,7 +83,7 @@ namespace Oddity.RoomTest
         public const float ReactionMin = 10f, ReactionMax = 20f; // Seconds between reaction starts.
         public const float LaughSeconds = .6f, SighSeconds = 1.2f; // Reaction pulse lengths.
         const float GestureMin = 1f, GestureMax = 2f; // Brief wave or neck touch, then return to the waist.
-        const float SyllableMin = 6f, SyllableMax = 9f; // Seeded syllable frequency in Hz.
+        const float SyllableMin = 4f, SyllableMax = 6.5f; // Seeded syllable frequency in Hz.
         const float MouthJitterHz = 2.3f, MouthJitterDepth = .3f; // Irregular syllable amplitude.
         const float RollMin = 8f, RollMax = 12f; // Tilt toward the right ear, degrees.
         const float ListenPitch = 10f, TalkPitch = -3f, TalkYaw = 14f; // Downward listening / raised talking gaze.
@@ -91,19 +91,19 @@ namespace Oddity.RoomTest
         const float LaughPitch = -9f, SighPitch = 12f; // Reaction head offsets, degrees.
         const float ShoulderDegrees = 4f, LaughBobHz = 5f, ChestDegrees = 1.2f; // Shoulder rise and torso breath.
         const float BreathHz = .24f; // Breathing cycles per second.
-        const float EarSide = .125f, EarUp = .07f, EarForward = .0f; // Ear area relative to head pivot, metres.
+        const float EarSide = .13f, EarUp = .05f, EarForward = .02f; const float PhoneTopBack = 12f; // Ear area relative to head pivot, metres.
         const float ReferenceShoulders = .3f, ScaleMin = .75f, ScaleMax = 1.3f; // Scale anatomy offsets to the model.
         const float ElbowDown = .30f, ElbowForward = .30f, ElbowOut = .12f; // Forward/down pole, about 45 degrees.
         const float SideOut = .06f, SideDown = .12f, SideForward = .03f; // Lowered phone hand relative to hips.
         const float SupportDown = .045f, SupportBack = .025f; // Left palm under the right elbow.
         const float HipOut = .14f, HipUp = .035f, HipForward = .045f; // Hand-on-hip offset from hips.
-        const float WaveOut = .16f, WaveUp = -.03f, WaveForward = .27f; // Open hand in front of chest.
+        const float WaveOut = .14f, WaveUp = -.02f, WaveForward = .17f; // Open hand in front of chest.
         const float WaveSize = .035f, WaveHz = 1.5f; // Small open-palm wave.
         const float NeckSide = -.085f, NeckDown = -.025f, NeckBack = -.025f; // Neck / hair-end touch.
         const float CurlProximal = 22f, CurlIntermediate = 28f, CurlDistal = 14f; // Grip angles, degrees.
         const float ThumbCurl = 18f, ThumbTipCurl = 12f, RelaxedCurl = .3f; // Thumb grip and left-hand relaxation.
         const float ScreenGap = .0004f, ScreenBorder = .006f; // Screen offset and inset, metres.
-        const float PhoneShade = .045f, ScreenShade = .12f; // Dark phone and inactive call screen.
+        const float PhoneShade = .16f, FrameShade = .34f, ScreenShade = .07f; // Dark phone and inactive call screen.
         const float AxisEpsilon = .000001f, RotationEpsilon = .001f; // Degenerate-axis and unchanged-pose tolerances.
         const float Tau = 2f * Mathf.PI; // Radians per cycle.
 
@@ -118,7 +118,7 @@ namespace Oddity.RoomTest
         readonly Quaternion headFrame;
         readonly float anatomy;
         readonly System.Random rng;
-        readonly Material bodyMaterial, screenMaterial;
+        readonly Material bodyMaterial, frameMaterial, screenMaterial;
         Quaternion[] before, written;
         bool hasWritten, wanted, disposed;
         float time, stateElapsed, beatElapsed, beatDuration, gestureDuration, reactionAt, reactionStart = -1;
@@ -173,7 +173,10 @@ namespace Oddity.RoomTest
             if (shader == null) { SofaRig.Kill(Phone.gameObject); throw new InvalidOperationException("No phone material shader found."); }
             bodyMaterial = new Material(shader); bodyMaterial.color = new Color(PhoneShade, PhoneShade, PhoneShade);
             screenMaterial = new Material(shader); screenMaterial.color = new Color(ScreenShade, ScreenShade, ScreenShade);
-            Part("body", PrimitiveType.Cube, Vector3.zero, new Vector3(SofaGeometry.PhoneW, SofaGeometry.PhoneH, SofaGeometry.PhoneT), bodyMaterial);
+            frameMaterial = new Material(shader); frameMaterial.color = new Color(FrameShade, FrameShade, FrameShade);
+            frameMaterial.SetColor("_BaseColor", frameMaterial.color); bodyMaterial.SetColor("_BaseColor", bodyMaterial.color); screenMaterial.SetColor("_BaseColor", screenMaterial.color);
+            Part("frame", PrimitiveType.Cube, Vector3.zero, new Vector3(SofaGeometry.PhoneW, SofaGeometry.PhoneH, SofaGeometry.PhoneT), frameMaterial);
+            Part("body", PrimitiveType.Cube, Vector3.zero, new Vector3(SofaGeometry.PhoneW - .005f, SofaGeometry.PhoneH - .005f, SofaGeometry.PhoneT + .0008f), bodyMaterial);
             Part("screen", PrimitiveType.Quad, new Vector3(0, 0, -SofaGeometry.PhoneT / 2 - ScreenGap),
                 new Vector3(SofaGeometry.PhoneW - ScreenBorder, SofaGeometry.PhoneH - ScreenBorder * 2, 1), screenMaterial);
             Phone.gameObject.SetActive(false);
@@ -283,6 +286,7 @@ namespace Oddity.RoomTest
 
                 // Recompute after all head/neck/shoulder edits so there is no frame of lag.
                 var axes = HeadAxes(); var phoneUp = axes * Vector3.up; var screenNormal = axes * Vector3.left;
+                phoneUp = Quaternion.AngleAxis(PhoneTopBack, screenNormal) * phoneUp;
                 var phoneRight = Vector3.Cross(screenNormal, phoneUp).normalized;
                 SofaGeometry.Grip(EarTarget, phoneUp, screenNormal, phoneRight, 1, out var wrist, out var fingers, out var palm);
                 var side = hips.position + (right * (ReferenceShoulders / 2 + SideOut) - up * SideDown + forward * SideForward) * anatomy;
@@ -356,7 +360,7 @@ namespace Oddity.RoomTest
             if (hasWritten) ReadPose();
             disposed = true; wanted = Talking = false; Weight = MouthOpen = Smile = 0;
             SofaRig.Kill(Phone != null ? Phone.gameObject : null);
-            Release(bodyMaterial); Release(screenMaterial);
+            Release(bodyMaterial); Release(frameMaterial); Release(screenMaterial);
         }
 
         static void Release(Material material)
