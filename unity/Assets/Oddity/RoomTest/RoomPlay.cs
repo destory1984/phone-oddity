@@ -2481,7 +2481,7 @@ namespace Oddity.RoomTest
         }
         void Log(string key){Debug.Log("ROOMPLAY key="+key+" clip="+Keys[current].clip+" x="+F(x)+" z="+F(z)+" yaw="+F(yaw)+" heading="+F(heading)+" zoom="+F(zoom)+" floor="+F(floorError)+(room?" fov="+F(cameraView.fieldOfView)+" bodyPath="+F(wantPath)+" aimPath="+F(focusPath):""));wantPath=focusPath=0;}
         const string DefaultLine="6T-O2";
-        static readonly string[] HiddenLines={"6T-I1","6T-O1"}; // hidden for now (2026-11-07): left out of the N / Shift+N cycle, still loadable with ODDITY_MODEL
+        static readonly string[] HiddenLines={"6T-I1","6T-O1","6T-N2"}; // hidden for now (I1, O1 2026-11-07; N2 2026-11-10, a test branch folded into N1-100): left out of the N / Shift+N cycle, still loadable with ODDITY_MODEL
         // the newest imported vrm of a line in Assets/Models/test, as an asset path
         static string NewestInTest(string line)
         {
@@ -2519,8 +2519,8 @@ namespace Oddity.RoomTest
                 var copy=Path.Combine(Application.dataPath,"Models/test",Path.GetFileName(latest));
                 if(Path.GetFullPath(latest)!=Path.GetFullPath(copy))File.Copy(latest,copy,true);
                 AssetDatabase.ImportAsset(asset,ImportAssetOptions.ForceSynchronousImport|ImportAssetOptions.ForceUpdate);
-                LoadModel(asset);Notice("불러오기 완료 "+name.Replace("harin-",""));
-                Debug.Log("ROOMPLAY_RELOAD model="+modelName+" seconds="+F((float)timer.Elapsed.TotalSeconds)+" playing="+EditorApplication.isPlaying+" x="+F(x)+" clip="+Keys[current].clip);
+                LoadModel(asset);long ms=timer.ElapsedMilliseconds;Notice("불러오기 완료 "+name.Replace("harin-","")+" "+ms.ToString("N0",CultureInfo.InvariantCulture)+" ms");
+                Debug.Log("ROOMPLAY_RELOAD model="+modelName+" seconds="+F((float)timer.Elapsed.TotalSeconds)+" ms="+ms+" playing="+EditorApplication.isPlaying+" x="+F(x)+" clip="+Keys[current].clip);
             }catch(Exception e){Notice("불러오기 실패: "+e.Message);}
             busy=false;
         }
