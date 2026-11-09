@@ -123,7 +123,7 @@ namespace Oddity.RoomTest
                 zeroTwoAudio=new ZeroTwoDanceAudio(zeroTwoSource,zeroTwoTrack);
                 zeroTwoSource.mute=Environment.GetEnvironmentVariable("ODDITY_DANCEMUSIC")!="1"; // the dance music is muted by default (the track still runs, so the dance keeps its timing); ODDITY_DANCEMUSIC=1 plays it
                 Debug.Log("ZEROTWO_AUDIO loaded="+zeroTwoSource.clip.name+" seconds="+F(zeroTwoSource.clip.samples/(float)zeroTwoSource.clip.frequency)+" samples="+zeroTwoSource.clip.samples+" imported="+(zeroTwoTrack!=null));
-                cameraView=cam;cam.aspect=16f/9;Smooth(cam);Letterbox();cam.gameObject.AddComponent<AudioListener>();room=Environment.GetEnvironmentVariable("ODDITY_ROOM")!="0";apt=room && Environment.GetEnvironmentVariable("ODDITY_HOUSE")!="room";if(room)Room(cam);else Background(cam);blob=RoomTestRunner.MakeBlob();blob.localScale=new Vector3(.75f,.4f,1);
+                cameraView=cam;cam.aspect=16f/9;Smooth(cam);Letterbox();cam.gameObject.AddComponent<AudioListener>();room=Environment.GetEnvironmentVariable("ODDITY_ROOM")!="0";var houseEnv=Environment.GetEnvironmentVariable("ODDITY_HOUSE");apt=room && houseEnv!="room";one=apt && houseEnv!="apt";Apartment.Use(one?OneRoom.Layout:null);Debug.Log("ROOMPLAY_HOUSE "+(one?"oneroom":apt?"apt":"room"));if(room)Room(cam);else Background(cam);blob=RoomTestRunner.MakeBlob();blob.localScale=new Vector3(.75f,.4f,1);
                 SetWalk(Environment.GetEnvironmentVariable("ODDITY_PLAYWALK")??"KaWalk01");
                 var sitClip=Environment.GetEnvironmentVariable("ODDITY_PLAYSIT");if(!string.IsNullOrWhiteSpace(sitClip))Keys[SitIndex].clip=sitClip; // which clip C sits with
                 var curlClip=Environment.GetEnvironmentVariable("ODDITY_PLAYCURL");if(!string.IsNullOrWhiteSpace(curlClip))Keys[CurlIndex].clip=curlClip; // and V
@@ -132,7 +132,7 @@ namespace Oddity.RoomTest
                 PlaceSofa();
                 BuildPerches();
                 SpawnPets();
-                if(apt){heading=yaw=targetYaw=turnStart=45;turnTime=1;Select(9);} // she starts facing the living room's camera (north-east)
+                if(apt){startYaw=Apartment.StartYaw;heading=yaw=targetYaw=turnStart=startYaw;turnTime=1;Select(9);} // she starts facing the house's first camera
                 var at=Environment.GetEnvironmentVariable("ODDITY_HARINAT"); // "x,z,yaw": where Harin starts and which way she faces (0 = north, 180 = south), for lighting tests
                 if(!string.IsNullOrWhiteSpace(at)){var v=at.Split(',').Select(t=>float.Parse(t,CultureInfo.InvariantCulture)).ToArray();x=v[0];z=v[1];heading=yaw=targetYaw=turnStart=startYaw=v[2];Debug.Log("ROOMPLAY_HARINAT x="+F(x)+" z="+F(z)+" yaw="+F(yaw));}
                 var text=Environment.GetEnvironmentVariable("ODDITY_PLAYKEYS");scripted=!string.IsNullOrWhiteSpace(text);
@@ -287,15 +287,28 @@ namespace Oddity.RoomTest
         static Vector3 Facing(Transform root){var f=Mark(root,"Front");var d=f!=null?Vector3.ProjectOnPlane(f.position-root.position,Vector3.up):Vector3.forward;return d.sqrMagnitude>1e-6f?d.normalized:Vector3.forward;}
         // turns a prop about its origin so its Front mark points along dir
         static void Face(Transform root,Vector3 dir){root.rotation=Quaternion.AngleAxis(Vector3.SignedAngle(Facing(root),dir,Vector3.up),Vector3.up)*root.rotation;} // a turn about the vertical (FromToRotation flips a prop upside down when the two directions are opposite)
+        // the studio's bed is a second seat of the sofa object: an invisible box collider (the mattress top, for the rays that find the surface) and a seat mark, so K, C and the cats treat it like a cushion
+        void AddBedSeat()
+        {
+            var size=Apartment.BedSize;
+            var c=GameObject.CreatePrimitive(PrimitiveType.Cube);c.name="BedProxy";DestroyImmediate(c.GetComponent<Collider>());DestroyImmediate(c.GetComponent<MeshRenderer>());
+            c.transform.SetParent(sofa,false);c.transform.rotation=Quaternion.identity;
+            c.transform.position=new Vector3(size.x/2,size.y/2,Apartment.BedSeat.z);c.transform.localScale=size/sofa.localScale.x;
+            var m=new GameObject("SeatBed").transform;m.SetParent(sofa,false);m.position=Apartment.BedSeat;
+            var bf=Apartment.BedFront;var bfe=Environment.GetEnvironmentVariable("ODDITY_BEDFRONT"); // "x,z": the direction she faces on the bed (tuning)
+            if(!string.IsNullOrWhiteSpace(bfe)){var q=bfe.Split(',').Select(t=>float.Parse(t,CultureInfo.InvariantCulture)).ToArray();bf=new Vector3(q[0],0,q[1]).normalized;}
+            seats.Add((m,bf,StandOff+.2f));
+        }
         void PlaceSofa()
         {
             if(Environment.GetEnvironmentVariable("ODDITY_SOFA")=="0")return;
             seats.Clear();
             var s=LoadProp("sofa");
             if(s!=null){sofa=s.transform;sofa.position=apt?Apartment.SofaAt:room?new Vector3(-.75f,0,1.5f):new Vector3(0,0,SofaZ);Face(sofa,apt?Apartment.SofaFace:Vector3.back); // the seat faces the camera
+                if(apt && Apartment.SofaScale!=1)sofa.localScale=Vector3.one*Apartment.SofaScale; // the studio's loveseat is the prop scaled down
                 Leather(sofa);
                 foreach(var t in sofa.GetComponentsInChildren<Transform>().Where(t=>t.name.StartsWith("Seat")).OrderBy(t=>t.position.x))seats.Add((t,Facing(sofa),StandOff+.2f));} // the sofa seat is deep, she gets up clear of it
-            var table=LoadProp("table");
+            var table=apt && !Apartment.HasTable?null:LoadProp("table"); // the studio has no dining set
             tableRoot=table!=null?table.transform:null;
             if(table!=null){table.transform.position=apt?Apartment.TableAt:room?new Vector3(.70f,0,-.45f):new Vector3(0,0,TableZ);Face(table.transform,apt?Apartment.TableFace:Vector3.right);
                 foreach(var spot in table.GetComponentsInChildren<Transform>().Where(t=>t.name.StartsWith("Chair")).OrderBy(t=>t.name).ToList()){
@@ -304,6 +317,7 @@ namespace Oddity.RoomTest
                     var seat=Mark(chair.transform,"Seat");if(seat!=null)seats.Add((seat,Facing(chair.transform),-StandOff)); // a chair is left from behind, the table is in front
                 }}
             if(tableRoot!=null)Laptop(tableRoot,apt?-90:0);
+            if(apt && Apartment.HasBed && sofa!=null)AddBedSeat();
             if(sofa==null && seats.Count>0)sofa=seats[0].mark.root;
             propHits.Clear();foreach(var root in seats.Select(t=>t.mark.root).Distinct())foreach(var mf in root.GetComponentsInChildren<MeshFilter>())if(mf.sharedMesh!=null){var c=mf.gameObject.AddComponent<MeshCollider>();c.sharedMesh=mf.sharedMesh;propHits.Add(c);} // only for PropTop's rays
             clickHits.Clear();clickHits.AddRange(propHits);
@@ -381,7 +395,7 @@ namespace Oddity.RoomTest
         void SpawnTabby()
         {
             if(!File.Exists(Path.Combine(Application.dataPath,"../"+TabbySharedFile))){Debug.LogWarning("ROOMPLAY_TABBY file missing "+TabbySharedFile+", no tabby cat");return;}
-            if(apt && PetEnv("ODDITY_TABBYYAW")==null)TabbyYaw=30;
+            if(apt && PetEnv("ODDITY_TABBYYAW")==null)TabbyYaw=Apartment.TabbyYaw;
             var a=PetEnv("ODDITY_TABBYSPOT")!=null?PetEnv("ODDITY_TABBYSPOT").Split(',').Select(t=>float.Parse(t,CultureInfo.InvariantCulture)).ToArray():apt?new[]{Apartment.TabbyStart.x,Apartment.TabbyStart.y}:new[]{1.35f,-1.15f};
             if(!SpawnShared("TABBY","tabby",TabbySharedFile,TabbyYaw,new Vector2(a[0],a[1]),true,TabbyBodyLength,new[]{"Pelvis"},new[]{"Head"}))Debug.LogWarning("ROOMPLAY_TABBY could not be spawned");
         }
@@ -925,11 +939,11 @@ namespace Oddity.RoomTest
             var counterStand=NearestFree(apt?Apartment.CounterStand:new Vector2(1.05f,1.10f));
             float runYaw=apt?-90:180; // the apartment's counter run and fridge are on the east wall: a cat sits on them facing west
             perches["counter"]=new Perch{name="counter",stand=counterStand,land=apt?Apartment.CounterLand[0]:new Vector2(1.17f,1.50f),yaw=runYaw,pick=c=>Is(c,"counter")};
-            perches["fridge"]=new Perch{name="fridge",stand=counterStand,land=apt?Apartment.FridgeLand:new Vector2(1.70f,1.62f),yaw=runYaw,pick=c=>Is(c,"fridge")};
+            if(!apt || Apartment.HasFridge)perches["fridge"]=new Perch{name="fridge",stand=counterStand,land=apt?Apartment.FridgeLand:new Vector2(1.70f,1.62f),yaw=runYaw,pick=c=>Is(c,"fridge")};
             if(apt){
                 perches["sill"]=new Perch{name="sill",stand=NearestFree(new Vector2(Apartment.SillLand[0].x,Apartment.WindowSpot.y)),land=Apartment.SillLand[0],yaw=180,pick=c=>Is(c,"sill")};
-                perches["ledge"]=new Perch{name="ledge",stand=NearestFree(new Vector2(Apartment.LedgeLand[0].x,.75f)),land=Apartment.LedgeLand[0],yaw=180,pick=c=>Is(c,"ledge")};
-                perches["teatable"]=new Perch{name="teatable",stand=NearestFree(new Vector2(Apartment.TeaX1+.35f,(Apartment.TeaZ0+Apartment.TeaZ1)/2)),land=new Vector2((Apartment.TeaX0+Apartment.TeaX1)/2,(Apartment.TeaZ0+Apartment.TeaZ1)/2),yaw=-90,pick=c=>Is(c,"teatable")}; // a cat on the tea table faces the sofa
+                if(Apartment.HasLedge)perches["ledge"]=new Perch{name="ledge",stand=NearestFree(new Vector2(Apartment.LedgeLand[0].x,.75f)),land=Apartment.LedgeLand[0],yaw=180,pick=c=>Is(c,"ledge")};
+                if(Apartment.HasTea)perches["teatable"]=new Perch{name="teatable",stand=NearestFree(new Vector2(Apartment.TeaX1+.35f,(Apartment.TeaZ0+Apartment.TeaZ1)/2)),land=new Vector2((Apartment.TeaX0+Apartment.TeaX1)/2,(Apartment.TeaZ0+Apartment.TeaZ1)/2),yaw=-90,pick=c=>Is(c,"teatable")}; // a cat on the tea table faces the sofa
             }else perches["sill"]=new Perch{name="sill",stand=NearestFree(new Vector2(-1.38f,.2f)),land=new Vector2(-1.88f,.2f),yaw=-90,pick=c=>Is(c,"sill")};
             if(tableRoot!=null){
                 var lap=tableRoot.Find("Laptop");
@@ -1126,14 +1140,14 @@ namespace Oddity.RoomTest
             var cp=PetXZ(p);string place=act;Vector2 at=cp;bool travel=true;
             switch(act){
                 case "wander":case "rug":{
-                    Func<Vector2> gen=apt?(act=="rug"?(Func<Vector2>)(()=>new Vector2(Rnd(1.4f,2.7f),Rnd(2.55f,3.8f))):(Func<Vector2>)AptWander):act=="rug"?(Func<Vector2>)(()=>new Vector2(Rnd(-1.25f,-.25f),Rnd(.4f,1.0f))):(()=>new Vector2(Rnd(-1.6f,1.6f),Rnd(-1.6f,1.2f)));
+                    Func<Vector2> gen=apt?(act=="rug"?(Func<Vector2>)(()=>new Vector2(Rnd(Apartment.RugBox.xMin,Apartment.RugBox.xMax),Rnd(Apartment.RugBox.yMin,Apartment.RugBox.yMax))):(Func<Vector2>)AptWander):act=="rug"?(Func<Vector2>)(()=>new Vector2(Rnd(-1.25f,-.25f),Rnd(.4f,1.0f))):(()=>new Vector2(Rnd(-1.6f,1.6f),Rnd(-1.6f,1.2f)));
                     var t=AiFloorPoint(p,gen);if(t==null)return false;
                     at=t.Value;place=act=="rug"?"rug":"floor";PetGoTo(p,"floor",at,null,cp);p.aiDur=Rnd(3,8);break;}
                 case "sofa":{
                     var sp=FreeSpot("sofa",p,cp,true);if(sp==null)return false;
                     at=sp.land;PetGoToSofa(p,sp,cp);if(p.somali)p.arriveRest=AiRestKind(p,act);p.aiDur=Rnd(10,25);break;}
                 case "window":{
-                    float wz=Rnd(0f,1.1f);var spot=NearestFree(apt?new Vector2(Rnd(.8f,1.5f),Apartment.WindowSpot.y):new Vector2(-1.40f,wz));if(!FarFromOthers(p,spot))return false;
+                    float wz=Rnd(0f,1.1f);var spot=NearestFree(apt?new Vector2(Rnd(Apartment.WindowRangeX.x,Apartment.WindowRangeX.y),Apartment.WindowSpot.y):new Vector2(-1.40f,wz));if(!FarFromOthers(p,spot))return false;
                     at=spot;PetGoTo(p,"window",spot,null,apt?new Vector2(spot.x,Apartment.WindowLook.y):new Vector2(-RoomHalf,wz));p.aiDur=Rnd(6,15);break;}
                 case "harin":{
                     var hp=new Vector2(x,z);var dir=cp-hp;if(dir.sqrMagnitude<1e-4f)dir=Vector2.right;dir.Normalize();
@@ -1297,7 +1311,7 @@ namespace Oddity.RoomTest
             p.spot=sp;
             if(sp!=null)Debug.Log("ROOMPLAY_"+p.tag+" reserve="+sp.key);
         }
-        bool SpotTaken(Spot sp,Pet except){foreach(var o in pets)if(o!=except && (o.spot==sp || o.after==sp || o.transit==sp))return true;return false;}
+        bool SpotTaken(Spot sp,Pet except){if(sp.kind=="sofa" && HarinOnSeat(sp.mark))return true;foreach(var o in pets)if(o!=except && (o.spot==sp || o.after==sp || o.transit==sp))return true;return false;}
         // a free spot of that kind ("sofa", "sill", ...): the nearest to near, or a random one
         Spot FreeSpot(string kind,Pet p,Vector2 near,bool random=false)
         {
@@ -1367,9 +1381,27 @@ namespace Oddity.RoomTest
         Vector2 FootOff(Pet p){var o=p.root.rotation*new Vector3(p.cOff.x,0,p.cOff.y);return new Vector2(o.x,o.z);}
         Vector2 FootCentre(Pet p)=>PetXZ(p)+FootOff(p);
         string LevelOf(Pet p)=>p.job!=0?null:p.perch!=null?p.perch.name:p.onSofa?"sofa":"floor"; // null: in the air
+        // Harin and the cats are solid to each other (BodyBlock): her step may not end inside a cat standing on the floor, it slides round the cat; seats are shared by nobody
+        Vector2 HarinBodyBlock(Vector2 from,Vector2 next)
+        {
+            foreach(var o in pets){
+                if(o.root==null || LevelOf(o)!="floor")continue;
+                var slid=BodyBlock.Slide(from,next,FootCentre(o),BodyBlock.Need(o.radius));
+                if((slid-next).sqrMagnitude>1e-10f){LogBlock("HARIN",o.tag);next=Collide(from,slid);}
+            }
+            return next;
+        }
+        float blockLogAt;
+        void LogBlock(string who,string by){if(Time.unscaledTime-blockLogAt<.5f)return;blockLogAt=Time.unscaledTime;Debug.Log("ROOMPLAY_BLOCK who="+who+" by="+by+" harin=("+F(x)+","+F(z)+")");}
+        bool CatOnSeat(Transform mark){foreach(var o in pets)if(o.onSofa && o.seat==mark)return true;return false;}
+        bool HarinOnSeat(Transform mark)=>mark!=null && chairSat==null && !onFloor && (current==SitIndex || current==CurlIndex || current==NapIndex) && Vector3.Distance(mark.position,seatAt)<.05f;
         Vector2 PetSeparate(Pet p,Vector2 from,Vector2 next)
         {
             if(p.perch!=null || p.onSofa)return next;
+            { // Harin is solid too: the cat's foot centre may not enter her circle, it slides round it
+                var hc=new Vector2(x,z);var fo=FootOff(p);var slid=BodyBlock.Slide(from+fo,next+fo,hc,BodyBlock.Need(p.radius));
+                if((slid-(next+fo)).sqrMagnitude>1e-10f){LogBlock(p.tag,"HARIN");next=Collide(from,slid-fo);}
+            }
             for(int pass=0;pass<2;pass++)foreach(var o in pets){
                 if(o==p || o.root==null || LevelOf(o)!="floor")continue;
                 var cn=next+FootOff(p);var co=FootCentre(o);float need=p.radius+o.radius+.01f;var d=cn-co;
@@ -1593,8 +1625,9 @@ namespace Oddity.RoomTest
         bool WindowRay(Ray ray)
         {
             if(apt){
-                if(!new Plane(Vector3.forward,new Vector3(0,0,1.30f)).Raycast(ray,out var d))return false;var q=ray.GetPoint(d);
-                return q.x>Apartment.SillX0-.06f && q.x<Apartment.SillX1+.06f && q.y>Apartment.SillTop-.06f && q.y<Apartment.SillWinTop+.06f;}
+                if(Apartment.Peep && ray.origin.z<Apartment.WinPlaneZ)return false; // the studio's camera is outside: the glass lets the click through to the room
+                if(!new Plane(Vector3.forward,new Vector3(0,0,Apartment.WinPlaneZ)).Raycast(ray,out var d))return false;var q=ray.GetPoint(d);
+                return q.x>Apartment.WinX0-.06f && q.x<Apartment.WinX1+.06f && q.y>Apartment.WinY0-.06f && q.y<Apartment.WinY1+.06f;}
             return new Plane(Vector3.right,new Vector3(-RoomHalf,0,0)).Raycast(ray,out var wd) && InWindow(ray.GetPoint(wd));
         }
         const float ClickArrive=.05f, ClickGiveUp=.6f;
@@ -1653,7 +1686,7 @@ namespace Oddity.RoomTest
                 while(hPathI<hPath.Count-1 && (hPath[hPathI]-p).sqrMagnitude<.0025f)hPathI++;
                 lastLeg=hPathI==hPath.Count-1;tgt=lastLeg?clickGoal.Value:hPath[hPathI];}
             var d=tgt-p;
-            var next=Collide(p,p+d.normalized*Mathf.Min(speed*dt,d.magnitude));
+            var next=HarinBodyBlock(p,Collide(p,p+d.normalized*Mathf.Min(speed*dt,d.magnitude)));
             if((next-p).sqrMagnitude<1e-10f)clickStuck+=dt;else clickStuck=0;
             bool canReplan=hPath!=null && !hReplanned;
             if(canReplan && clickStuck>1f){hReplanned=true;clickStuck=0;HarinPlan(true);return Vector2.zero;} // blocked for 1 s: one replan
@@ -1668,7 +1701,8 @@ namespace Oddity.RoomTest
         }
         void ScriptClick(string key)
         {
-            Vector3 target=key=="clickwindow"?(apt?new Vector3(1.15f,1.2f,1.3f):new Vector3(-RoomHalf,(WinY.x+WinY.y)/2,(WinZ.x+WinZ.y)/2)):key=="clicksofa"&&sofa!=null?SeatOf("SeatL",sofa):key=="clicksofar"&&sofa!=null?SeatOf("SeatR",sofa):key=="clicksofac"&&sofa!=null?SeatOf("SeatC",sofa):key=="clicktable"&&tableRoot!=null?tableRoot.position+Vector3.up*.7f:key=="clickcounter"?(apt?new Vector3(4.08f,.86f,6.68f):new Vector3(1.17f,.86f,1.5f)):key=="clickfridge"?(apt?new Vector3(4.03f,1.2f,8.5f):new Vector3(1.7f,1.2f,1.5f)):key=="clickteatable"?new Vector3((Apartment.TeaX0+Apartment.TeaX1)/2,.4f,(Apartment.TeaZ0+Apartment.TeaZ1)/2):key=="clicksill"?(apt?new Vector3(1.15f,.45f,1.45f):new Vector3(-1.85f,.85f,.2f)):key=="clickledge"?new Vector3(.8f,.9f,.15f):ScriptFloorPoint();
+            if(apt && ((key=="clicktable" && tableRoot==null) || (key=="clickfridge" && !Apartment.HasFridge) || (key=="clickteatable" && !Apartment.HasTea) || (key=="clickledge" && !Apartment.HasLedge))){Notice("이 집에는 그런 가구가 없음");return;}
+            Vector3 target=key=="clickwindow"?(apt?new Vector3((Apartment.WinX0+Apartment.WinX1)/2,(Apartment.WinY0+Apartment.WinY1)/2,Apartment.WinPlaneZ):new Vector3(-RoomHalf,(WinY.x+WinY.y)/2,(WinZ.x+WinZ.y)/2)):key=="clicksofa"&&sofa!=null?SeatOf("SeatL",sofa):key=="clicksofar"&&sofa!=null?SeatOf("SeatR",sofa):key=="clicksofac"&&sofa!=null?SeatOf("SeatC",sofa):key=="clicktable"&&tableRoot!=null?tableRoot.position+Vector3.up*.7f:key=="clickcounter"?(apt?new Vector3(Apartment.CounterLand[0].x,.86f,Apartment.CounterLand[0].y):new Vector3(1.17f,.86f,1.5f)):key=="clickfridge"?(apt?new Vector3(4.03f,1.2f,8.5f):new Vector3(1.7f,1.2f,1.5f)):key=="clickteatable"?new Vector3((Apartment.TeaX0+Apartment.TeaX1)/2,.4f,(Apartment.TeaZ0+Apartment.TeaZ1)/2):key=="clicksill"?(apt?new Vector3((Apartment.SillLand[0].x+Apartment.SillLand[Apartment.SillLand.Length-1].x)/2,Apartment.WinY0,Apartment.SillLand[0].y):new Vector3(-1.85f,.85f,.2f)):key=="clickledge"?new Vector3(.8f,.9f,.15f):ScriptFloorPoint();
             ClickAt(new Ray(cameraView.transform.position,target-cameraView.transform.position));
         }
         // clickfloor's fixed point (.9, .9); ODDITY_CLICKXZ="x,z" picks another one for a path test
@@ -1679,7 +1713,7 @@ namespace Oddity.RoomTest
             if(!string.IsNullOrWhiteSpace(v)){
                 var pts=v.Split(';');var q=pts[scriptPoint++%pts.Length].Split(',');
                 if(q.Length==2 && float.TryParse(q[0],NumberStyles.Float,CultureInfo.InvariantCulture,out var cx) && float.TryParse(q[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var cz))return new Vector3(cx,0,cz);}
-            return new Vector3(.9f,0,.9f);
+            return Apartment.Peep?new Vector3(1.7f,0,2.9f):new Vector3(.9f,0,.9f);
         }
         Vector3 SeatOf(string name,Transform root){var t=seats.FirstOrDefault(s=>s.mark.root==root && s.mark.name==name).mark;return t!=null?t.position:root.position;}
         // furniture footprints on the floor (world boxes of each prop's meshes), grown by her body radius; walking into one slides along its side
@@ -1719,8 +1753,9 @@ namespace Oddity.RoomTest
             if(clips[index]!=null && FloorClip(Keys[index].clip)){onFloor=true;Select(index);Notice("바닥 "+Keys[index].clip);return;}
             onFloor=false;
             if(seats.Count==0 || clips[index]==null){Notice("앉을 자리가 없거나 앉기 클립이 없음");return;}
-            var pool=sofaOnly?seats.Where(t=>t.mark.root==sofa && t.mark.name=="SeatC").ToList():seats;if(pool.Count==0)pool=seats;
+            var pool=sofaOnly?seats.Where(t=>t.mark.root==sofa && t.mark.name==(apt && Apartment.HasBed?"SeatBed":"SeatC")).ToList():seats;if(pool.Count==0)pool=seats; // the nap: the sofa's middle seat, in the studio the bed
             if(only!=null){var one=seats.Where(t=>t.mark==only).ToList();if(one.Count>0)pool=one;}
+            pool=pool.Where(t=>!CatOnSeat(t.mark)).ToList();if(pool.Count==0){Notice("고양이가 그 자리에 있어요");return;} // a seat a cat lies on is not hers
             var seat=pool.OrderBy(t=>new Vector2(t.mark.position.x-x,t.mark.position.z-z).sqrMagnitude).First();
             if(chairJob!=null)return;
             if(chairSat!=null){if(seat.mark==chairSat.mark){SelectRaw(index);Notice("앉기 "+chairSat.chair.name+" "+Keys[index].clip);}else StartChairStand(-1);return;} // another seat: get up first
@@ -1961,14 +1996,14 @@ namespace Oddity.RoomTest
         // ODDITY_ROOM (default on; 0 is the old painted dusk): a 4 x 4 m room seen from high in the front right corner, looking down like a doll house
         bool room;float roomZoom;
         // ODDITY_HOUSE: apt (default) is the 17-pyeong flat in Apartment.cs with one camera per room, room is the old 4 x 4 m room
-        bool apt;Apartment.View aptView;
+        bool apt,one;Apartment.View aptView; // one: the 5-pyeong studio seen from across the street (the default house); apt: the 17-pyeong flat, ODDITY_HOUSE=apt
         static readonly Vector3 RoomEye=new Vector3(2.35f,2.9f,-2.55f), RoomAim=new Vector3(-.25f,.35f,.45f);
         Vector3 curEye=RoomEye,curAim=RoomAim;float curFov=RoomFov;
         const float RoomHalf=2f, RoomFov=46;
         // the apartment: the shell, doors and plain-box furniture from Apartment.cs; she starts in the living room, every room has its own camera (AptTick cuts between them)
         void AptRoom(Camera cam)
         {
-            cam.clearFlags=CameraClearFlags.SolidColor;cam.backgroundColor=new Color(.16f,.15f,.13f);
+            cam.clearFlags=CameraClearFlags.SolidColor;cam.backgroundColor=one?new Color(.55f,.62f,.70f):new Color(.16f,.15f,.13f);
             RenderSettings.ambientLight=new Color(.55f,.53f,.48f);
             var root=new GameObject("Apartment").transform;
             furniture.Clear();perchCols.Clear();perchOf.Clear();
@@ -1982,10 +2017,11 @@ namespace Oddity.RoomTest
             Sun();
             LimX0=Apartment.LimX0;LimX1=Apartment.LimX1;ZNear=Apartment.LimZ0;ZFar=Apartment.LimZ1;
             x=Apartment.HarinStart.x;z=Apartment.HarinStart.y;
-            heading=yaw=targetYaw=turnStart=45;turnTime=1; // she starts facing the living room's camera (north-east)
-            if(PetEnv("ODDITY_SOMALIYAW")==null)SomaliYaw=60;if(PetEnv("ODDITY_WHITEYAW")==null)WhiteYaw=20; // the cats start facing the living room's camera (north-east)
-            var rd=aptView.Room("living");curEye=rd.eye;curAim=rd.aim;curFov=rd.fov;cam.fieldOfView=curFov;
+            startYaw=Apartment.StartYaw;heading=yaw=targetYaw=turnStart=startYaw;turnTime=1; // she starts facing the living room's camera (north-east); in the studio the street
+            if(PetEnv("ODDITY_SOMALIYAW")==null)SomaliYaw=Apartment.SomaliYaw;if(PetEnv("ODDITY_WHITEYAW")==null)WhiteYaw=Apartment.WhiteYaw; // the cats start facing the living room's camera (north-east)
+            var rd=aptView.Room(one?"main":"living");curEye=rd.eye;curAim=rd.aim;curFov=rd.fov;cam.fieldOfView=curFov;
             cam.transform.position=curEye;cam.transform.LookAt(curAim);
+            if(one){aptForced=true;aptView.ShowAll(true);PeepInit(cam);} // the studio: every wall and the ceiling shown, one camera outside the window
             Debug.Log("ROOMPLAY_APT walls="+aptView.PieceCount+" rooms="+string.Join(",",aptView.rooms.Select(r=>r.name+"(hidden "+aptView.HiddenCount(r.name)+": "+aptView.HiddenNames(r.name)+")")));
         }
         // the camera follows the room of the controlled character (Harin or the cat under control): a cut when its centre is 0.2 m past a door's threshold, the walls between that camera and the room are cut away.
@@ -2003,7 +2039,7 @@ namespace Oddity.RoomTest
         bool orbitWant=OrbitEnv,orbitOn,orbitAuto;float orbitT,orbitAngle,orbitLog;const float OrbitSeconds=12f;
         void StartOrbit()
         {
-            if(!apt || aptView==null)return;
+            if(!apt || aptView==null || one)return;
             if(insideOn)InsideOff(false);
             orbitOn=true;orbitAuto=true;orbitT=0;orbitAngle=Apartment.OrbitFacingYaw;aptForced=true;aptView.ShowAll(true);aptView.SetLamps(true);
             clickGoal=null;clickSeat=null;x=Apartment.OrbitCentre.x;z=Apartment.OrbitCentre.y;
@@ -2038,6 +2074,7 @@ namespace Oddity.RoomTest
         {
             insideOn=false;if(aptView==null)return;
             aptView.SetInside(false);
+            if(one)aptView.ShowAll(true); // the studio's outside camera sees every wall
             if(restore && aptView.current!=null){var rd=aptView.Room(aptView.current);curEye=rd.eye;curAim=rd.aim;curFov=rd.fov;roomFocusSet=false;}
             Debug.Log("ROOMPLAY_INSIDE off room="+aptView.current+" cam="+F(cameraView.transform.position.x)+","+F(cameraView.transform.position.y)+","+F(cameraView.transform.position.z));
         }
@@ -2074,6 +2111,7 @@ namespace Oddity.RoomTest
         void AptForce(string name)
         {
             if(aptView==null)return;
+            if(one){Notice("이 집은 창밖 카메라 하나뿐 (I 는 방 안 카메라)");return;}
             if(insideOn)InsideOff(false);
             orbitOn=false;orbitWant=false;
             if(name.StartsWith("corner")){ // wide stills from the living room's corners with the ceiling, the walls and the lights on
@@ -2103,10 +2141,9 @@ namespace Oddity.RoomTest
         // a random floor point for a wandering cat: the living room most, the kitchen's passage, the balcony
         Vector2 AptWander()
         {
-            float r=Rnd(0,100);
-            if(r<60)return new Vector2(Rnd(1.0f,4.0f),Rnd(1.7f,4.8f));
-            if(r<85)return new Vector2(Rnd(2.7f,3.4f),Rnd(5.4f,8.6f));
-            return new Vector2(Rnd(.5f,3.4f),Rnd(.5f,.95f));
+            var boxes=Apartment.WanderBoxes;var w=Apartment.WanderWeights;float r=Rnd(0,w.Sum());int i=0;
+            for(;i<boxes.Length-1;i++){if(r<w[i])break;r-=w[i];}
+            var b=boxes[i];return new Vector2(Rnd(b.xMin,b.xMax),Rnd(b.yMin,b.yMax));
         }
         void Room(Camera cam)
         {
@@ -2237,6 +2274,7 @@ namespace Oddity.RoomTest
             // ODDITY_LAMP=1 turns the ceiling lamp on; by default only the window sun lights the room, with a brighter ambient fill
             bool lamp=Environment.GetEnvironmentVariable("ODDITY_LAMP")=="1" || OrbitEnv;
             RenderSettings.ambientLight=lamp?(apt?new Color(.40f,.39f,.38f):new Color(.26f,.26f,.27f)):apt?new Color(.55f,.54f,.52f):new Color(.40f,.39f,.38f); // the apartment's rooms away from the sun are lit by this alone: a little brighter
+            if(one && lamp){keyLight.intensity=.04f;RenderSettings.ambientLight=new Color(.12f,.13f,.18f);} // the studio at night: only its LEDs and a faint blue fill
             if(apt){aptView?.SetLamps(lamp);if(lamp)Debug.Log("ROOMPLAY_LAMP on LED intensities/range: "+aptView?.LampInfo()+" ambient="+RenderSettings.ambientLight.r.ToString("0.00",CultureInfo.InvariantCulture));}else if(lamp)CeilingLamp();
         }
         // a fluorescent tube on the ceiling: two cool white point lights along its length light the room from above, no shadows
@@ -2257,16 +2295,16 @@ namespace Oddity.RoomTest
         float camLift,camLiftWant;const float LiftNotch=.15f, LiftDown=-1.2f, LiftUp=3.5f;
         // Shift + wheel swings the camera left or right round the room's aim point (wheel up = left): 5 degrees a notch, at most 60 either way, eased; it also carries over room cuts
         float camSwing,camSwingWant;const float SwingNotch=5f, SwingMax=60f;
-        void SwingNotchBy(int dir){if(insideOn){inSwingWant=Mathf.Repeat(inSwingWant+dir*SwingNotch,360);Debug.Log("ROOMPLAY_CAMSWING inside deg="+inSwingWant.ToString("0",CultureInfo.InvariantCulture));return;}camSwingWant=Mathf.Clamp(camSwingWant+dir*SwingNotch,-SwingMax,SwingMax);Debug.Log("ROOMPLAY_CAMSWING deg="+camSwingWant.ToString("0",CultureInfo.InvariantCulture));}
+        void SwingNotchBy(int dir){if(Peeping){peepSlideWant=Mathf.Clamp(peepSlideWant-dir*PeepSlideNotch,-PeepSlideMax,PeepSlideMax);peepTouched=Time.unscaledTime;return;}if(insideOn){inSwingWant=Mathf.Repeat(inSwingWant+dir*SwingNotch,360);Debug.Log("ROOMPLAY_CAMSWING inside deg="+inSwingWant.ToString("0",CultureInfo.InvariantCulture));return;}camSwingWant=Mathf.Clamp(camSwingWant+dir*SwingNotch,-SwingMax,SwingMax);Debug.Log("ROOMPLAY_CAMSWING deg="+camSwingWant.ToString("0",CultureInfo.InvariantCulture));}
         // Alt + wheel tilts the view up or down with the eye where it is (wheel up = look up): 2 degrees a notch, at most 30 either way, eased; it also carries over room cuts
         float camTilt,camTiltWant;const float TiltNotch=2f, TiltMax=30f, TiltUpMax=80f; // Alt + wheel: up to 80 deg up (the ceiling and its lights), 30 deg down
-        void TiltNotchBy(int dir){if(insideOn){inTiltWant=Mathf.Clamp(inTiltWant+dir*TiltNotch,-TiltMax,TiltUpMax);Debug.Log("ROOMPLAY_CAMTILT inside deg="+inTiltWant.ToString("0",CultureInfo.InvariantCulture));return;}camTiltWant=Mathf.Clamp(camTiltWant+dir*TiltNotch,-TiltMax,TiltUpMax);Debug.Log("ROOMPLAY_CAMTILT deg="+camTiltWant.ToString("0",CultureInfo.InvariantCulture));}
+        void TiltNotchBy(int dir){if(Peeping){peepTiltWant=Mathf.Clamp(peepTiltWant+dir*2f,-PeepTiltMax,PeepTiltMax);peepTouched=Time.unscaledTime;return;}if(insideOn){inTiltWant=Mathf.Clamp(inTiltWant+dir*TiltNotch,-TiltMax,TiltUpMax);Debug.Log("ROOMPLAY_CAMTILT inside deg="+inTiltWant.ToString("0",CultureInfo.InvariantCulture));return;}camTiltWant=Mathf.Clamp(camTiltWant+dir*TiltNotch,-TiltMax,TiltUpMax);Debug.Log("ROOMPLAY_CAMTILT deg="+camTiltWant.ToString("0",CultureInfo.InvariantCulture));}
         // Shift + arrows move the same camera values while held: Shift+left/right swings (60 deg/s, left = wheel up), Shift+up/down raises or lowers the camera (1.2 m/s, up = higher);
         // a tap under 0.15 s still moves one notch. The arrows' normal jobs (turning, zoom) are off while Shift is held.
         const float ShiftSwingRate=60f, ShiftLiftRate=1.2f, ShiftTapSeconds=.15f, ShiftLogGap=.25f;
         int shSwDir,shTiDir;float shSwHold,shTiHold,shSwMoved,shTiMoved,shSwLog,shTiLog;
-        void AddSwing(float deg){if(insideOn)inSwingWant=Mathf.Repeat(inSwingWant+deg,360);else camSwingWant=Mathf.Clamp(camSwingWant+deg,-SwingMax,SwingMax);}
-        void AddLift(float m){if(insideOn)inLiftWant=Mathf.Clamp(inLiftWant+m,InsideLiftMin,InsideLiftMax);else camLiftWant=Mathf.Clamp(camLiftWant+m,LiftDown,LiftUp);}
+        void AddSwing(float deg){if(Peeping){peepPanWant=Mathf.Clamp(peepPanWant+deg,-PeepPanMax,PeepPanMax);peepTouched=Time.unscaledTime;return;}if(insideOn)inSwingWant=Mathf.Repeat(inSwingWant+deg,360);else camSwingWant=Mathf.Clamp(camSwingWant+deg,-SwingMax,SwingMax);}
+        void AddLift(float m){if(Peeping){peepTiltWant=Mathf.Clamp(peepTiltWant+m*12f,-PeepTiltMax,PeepTiltMax);peepTouched=Time.unscaledTime;return;}if(insideOn)inLiftWant=Mathf.Clamp(inLiftWant+m,InsideLiftMin,InsideLiftMax);else camLiftWant=Mathf.Clamp(camLiftWant+m,LiftDown,LiftUp);}
         void LogSwing(){Debug.Log("ROOMPLAY_CAMSWING "+(insideOn?"inside ":"")+"deg="+(insideOn?inSwingWant:camSwingWant).ToString("0",CultureInfo.InvariantCulture)+" shift=1");}
         void LogLift(){Debug.Log("ROOMPLAY_CAMLIFT "+(insideOn?"inside height=":"lift=")+(insideOn?inLiftWant:camLiftWant).ToString("0.00",CultureInfo.InvariantCulture)+" shift=1");}
         void ShiftArrowTick(float dt,int sx,int ty)
@@ -2284,7 +2322,38 @@ namespace Oddity.RoomTest
             }
             if(ty!=0){float step=ShiftLiftRate*dt;AddLift(ty*step);shTiHold+=dt;shTiMoved+=step;shTiLog+=dt;if(shTiLog>=ShiftLogGap){shTiLog=0;LogLift();}}
         }
-        void LiftNotchBy(int dir){if(insideOn){inLiftWant=Mathf.Clamp(inLiftWant+dir*LiftNotch,InsideLiftMin,InsideLiftMax);Debug.Log("ROOMPLAY_CAMLIFT inside height="+inLiftWant.ToString("0.00",CultureInfo.InvariantCulture));return;}camLiftWant=Mathf.Clamp(camLiftWant+dir*LiftNotch,LiftDown,LiftUp);Debug.Log("ROOMPLAY_CAMLIFT lift="+camLiftWant.ToString("0.00",CultureInfo.InvariantCulture)+" eye="+(curEye.y+camLiftWant).ToString("0.00",CultureInfo.InvariantCulture));}
+        void LiftNotchBy(int dir){if(Peeping){peepLiftWant=Mathf.Clamp(peepLiftWant+dir*LiftNotch,-PeepLiftMax,PeepLiftMax);peepTouched=Time.unscaledTime;return;}if(insideOn){inLiftWant=Mathf.Clamp(inLiftWant+dir*LiftNotch,InsideLiftMin,InsideLiftMax);Debug.Log("ROOMPLAY_CAMLIFT inside height="+inLiftWant.ToString("0.00",CultureInfo.InvariantCulture));return;}camLiftWant=Mathf.Clamp(camLiftWant+dir*LiftNotch,LiftDown,LiftUp);Debug.Log("ROOMPLAY_CAMLIFT lift="+camLiftWant.ToString("0.00",CultureInfo.InvariantCulture)+" eye="+(curEye.y+camLiftWant).ToString("0.00",CultureInfo.InvariantCulture));}
+        // the studio's peeping camera: outside the south window across the street (OneRoom.PeepEye, ODDITY_PEEP="x,y,z,fov" tunes it). Arrows and the wheel zoom (fov 30 -> 6, like binoculars), Shift + left/right pans (+-25 deg, left positive),
+        // Shift + up/down (or Alt + wheel) tilts (+-15 deg), Ctrl + wheel raises or lowers the camera (+-1.5 m), Shift + wheel slides it along the street (+-3 m). With a narrow lens (fov under 15) it re-aims by itself to keep the steered one in frame, unless the player panned in the last 2 s
+        bool Peeping=>one && !insideOn;
+        Vector3 peepEye=OneRoom.PeepEye,peepAim=OneRoom.PeepAim;float peepPan,peepPanWant,peepTilt,peepTiltWant,peepSlide,peepSlideWant,peepLift,peepLiftWant,peepTouched=-10,peepAutoW,peepLog;Vector3 peepFocus;bool peepFocusSet;
+        const float PeepFovFar=30f,PeepFovNear=6f,PeepPanMax=25f,PeepTiltMax=15f,PeepSlideMax=3f,PeepSlideNotch=.3f,PeepLiftMax=1.5f,PeepAutoFov=15f,PeepAutoFull=9f,PeepIdle=2f;
+        void PeepInit(Camera cam)
+        {
+            float fov0=OneRoom.PeepFov;var env=Environment.GetEnvironmentVariable("ODDITY_PEEP");
+            if(!string.IsNullOrWhiteSpace(env)){var v=env.Split(',').Select(t=>float.Parse(t,CultureInfo.InvariantCulture)).ToArray();if(v.Length>=3)peepEye=new Vector3(v[0],v[1],v[2]);if(v.Length>=4)fov0=v[3];}
+            roomZoom=Mathf.Clamp01(Mathf.Log(fov0/PeepFovFar)/Mathf.Log(PeepFovNear/PeepFovFar));
+            cam.fieldOfView=fov0;cam.transform.position=peepEye;cam.transform.LookAt(peepAim);
+            Debug.Log("ROOMPLAY_PEEP init eye=("+F(peepEye.x)+","+F(peepEye.y)+","+F(peepEye.z)+") aim=("+F(peepAim.x)+","+F(peepAim.y)+","+F(peepAim.z)+") fov="+F(fov0));
+        }
+        void PeepFrame(float dt)
+        {
+            peepPan=Mathf.MoveTowards(peepPan,peepPanWant,dt*40f);peepTilt=Mathf.MoveTowards(peepTilt,peepTiltWant,dt*25f);peepSlide=Mathf.MoveTowards(peepSlide,peepSlideWant,dt*3f);peepLift=Mathf.MoveTowards(peepLift,peepLiftWant,dt*2f);
+            float fov=PeepFovFar*Mathf.Pow(PeepFovNear/PeepFovFar,roomZoom);
+            var eye=new Vector3(peepEye.x+peepSlide,peepEye.y+peepLift,peepEye.z);
+            Vector3 want;
+            if(ctl!=null)want=ctl.root.position+Vector3.up*.15f;
+            else{var chest=anim!=null?(anim.GetBoneTransform(HumanBodyBones.Chest)??anim.GetBoneTransform(HumanBodyBones.Hips)):null;want=chest!=null?chest.position:new Vector3(x,1.1f,z);}
+            if(!peepFocusSet){peepFocus=want;peepFocusSet=true;}
+            peepFocus=Vector3.Lerp(peepFocus,want,1-Mathf.Exp(-4*dt));
+            float wAuto=Mathf.SmoothStep(0,1,Mathf.InverseLerp(PeepAutoFov,PeepAutoFull,fov)); // 0 above fov 15, full at 9 and below
+            peepAutoW=Mathf.MoveTowards(peepAutoW,Time.unscaledTime-peepTouched>PeepIdle?wAuto:0,dt/.6f);
+            var aim=Vector3.Lerp(peepAim,peepFocus,peepAutoW);
+            var rot=Quaternion.AngleAxis(-peepPan,Vector3.up)*Quaternion.LookRotation(aim-eye,Vector3.up);
+            rot=Quaternion.AngleAxis(-peepTilt,rot*Vector3.right)*rot;
+            cameraView.fieldOfView=fov;cameraView.transform.SetPositionAndRotation(eye,rot);
+            if(Time.unscaledTime-peepLog>1f){peepLog=Time.unscaledTime;Debug.Log("ROOMPLAY_PEEP fov="+F(fov)+" pan="+F(peepPan)+" tilt="+F(peepTilt)+" cam=("+F(eye.x)+","+F(eye.y)+","+F(eye.z)+") auto="+F(peepAutoW));}
+        }
         const float RoomFovNear=5f, RoomSlack=.3f, RoomFollow=5f;
         void RoomFrame(float dt,float zoomKey)
         {
@@ -2294,6 +2363,7 @@ namespace Oddity.RoomTest
             if(insideOn){insideZoom=roomZoom;roomZoom=outZoom;}
             if(apt)AptTick();
             if(insideOn){InsideFrame(dt);return;}
+            if(one){PeepFrame(dt);return;}
             camLift=Mathf.MoveTowards(camLift,camLiftWant,dt*1.5f);camSwing=Mathf.MoveTowards(camSwing,camSwingWant,dt*60f);camTilt=Mathf.MoveTowards(camTilt,camTiltWant,dt*24f);
             var eye=curAim+Quaternion.AngleAxis(camSwing,Vector3.up)*(curEye+Vector3.up*camLift-curAim);
             float fov=curFov*Mathf.Pow(RoomFovNear/curFov,roomZoom); // even steps from the room's lens (46 degrees in the old room) to 5
@@ -2649,7 +2719,7 @@ namespace Oddity.RoomTest
             run=run && clips[11]!=null;float pace=run?runSpeed:speed;
             var wish=input.normalized;if(goWish!=Vector2.zero){wish=goWish;run=false;pace=speed;}else if(room && wish!=Vector2.zero){var fw=MoveFwd();var rt=new Vector3(fw.z,0,-fw.x);var w3=rt*wish.x+fw*wish.y;wish=new Vector2(w3.x,w3.z);} // W walks away from the camera
             var next=new Vector2(Mathf.Clamp(x+wish.x*pace*dt,LimX0,LimX1),Mathf.Clamp(z+wish.y*pace*dt,ZNear,ZFar));
-            next=Collide(new Vector2(x,z),next);
+            next=Collide(new Vector2(x,z),next);next=HarinBodyBlock(new Vector2(x,z),next);
             if((next-new Vector2(x,z)).sqrMagnitude<1e-10f||clips[10]==null)wish=Vector2.zero;
             int dir=wish==Vector2.zero?0:run?2:1;
             // letting go of the walk or run keys holds her in that stride (space returns to the idle); a scripted run still goes back to the idle

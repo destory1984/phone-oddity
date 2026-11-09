@@ -10,12 +10,28 @@ namespace Oddity.RoomTest
     // the plain-box furniture; Walls()/Furniture() are pure data for FloorPath tests; View decides which room is shown and which walls are cut away.
     public static class Apartment
     {
-        public const float H = 2.4f, X1 = 4.38f, ZN = 10.15f;
+        // the house in use: the 17-pyeong flat (default) or another layout (OneRoom.Layout); RoomPlay picks it once at start, tests switch it with Use() and put it back with Use(null)
+        public sealed class Layout
+        {
+            public string name; public float H, X1, ZN, limX0, limX1, limZ0, limZ1;
+            public Func<List<WallDef>> walls; public Func<List<RoomDef>> rooms; public Func<List<DoorDef>> doors; public Func<List<FurnBox>> furniture; public Func<List<LeafDef>> leaves; public Func<List<Fixture>> fixtures; public Func<List<Rect>> props;
+            public Vector2 harinStart, somaliStart, whiteStart, tabbyStart, windowSpot, windowLook, windowRangeX; public float windowYaw, startYaw, somaliYaw, whiteYaw, tabbyYaw;
+            public Vector3 sunThrough, sunOnto, lampAt, sofaAt, sofaFace, tableAt, tableFace, bedSeat, bedFront, bedSize; public float sofaScale = 1;
+            public bool hasTable, hasTea, hasFridge, hasLedge, hasBed, sky = true, peep;
+            public Vector2 counterStand, fridgeLand; public Vector2[] counterLand = new Vector2[0], sillLand = new Vector2[0], ledgeLand = new Vector2[0];
+            public Rect rugBox; public Rect[] wander = new Rect[0]; public float[] wanderWeight = new float[0];
+            public float winPlaneZ, winX0, winX1, winY0, winY1; // the window a click can hit (the plane's z and the opening on it)
+            public Action<Transform> floorExtras; public Action<Transform, List<Rect>> furnExtras; // layout-only parts of Build
+        }
+        static Layout cur, aptCache;
+        public static Layout Cur => cur ?? (cur = AptLayout());
+        public static void Use(Layout l) { cur = l ?? AptLayout(); insideObs = null; insideBoxes = null; insideSight = null; }
+        public static float H => Cur.H; public static float X1 => Cur.X1; public static float ZN => Cur.ZN;
         // the walkable box: 0.2 m inside the outer walls (the old room kept the same margin)
-        public const float LimX0 = .2f, LimX1 = X1 - .2f, LimZ0 = .2f, LimZ1 = ZN - .2f;
-        static readonly Color Wall = new Color(.90f, .86f, .79f), CeilCol = new Color(.96f, .95f, .93f), BaseCol = new Color(.95f, .94f, .90f), Trim = new Color(.62f, .42f, .26f), Alu = new Color(.74f, .75f, .77f);
+        public static float LimX0 => Cur.limX0; public static float LimX1 => Cur.limX1; public static float LimZ0 => Cur.limZ0; public static float LimZ1 => Cur.limZ1;
+        public static readonly Color Wall = new Color(.90f, .86f, .79f), CeilCol = new Color(.96f, .95f, .93f), BaseCol = new Color(.95f, .94f, .90f), Trim = new Color(.62f, .42f, .26f), Alu = new Color(.74f, .75f, .77f);
 
-        public struct Opening { public float a, b, y0, y1; public bool door, window, slider; public string name; }
+        public struct Opening { public float a, b, y0, y1; public bool door, window, slider, alu; public string name; }
         public sealed class WallDef
         {
             public string name; public float x0, x1, z0, z1; public readonly List<Opening> openings = new List<Opening>();
@@ -26,14 +42,15 @@ namespace Oddity.RoomTest
         public sealed class DoorDef { public string name, a, b; public Vector2 centre, axis; public float half; } // axis: the unit direction from room a to room b
         public sealed class FurnBox { public string name; public float x0, x1, y0, y1, z0, z1; public Color color; public bool block; public string perch; }
 
-        static Opening Door(string n, float a, float b, bool slider = false) => new Opening { a = a, b = b, y0 = 0, y1 = 2.1f, door = true, slider = slider, name = n };
-        static Opening Win(string n, float a, float b, float y0, float y1) => new Opening { a = a, b = b, y0 = y0, y1 = y1, window = true, name = n };
-        static WallDef W(string name, float x0, float x1, float z0, float z1, params Opening[] ops) { var w = new WallDef { name = name, x0 = x0, x1 = x1, z0 = z0, z1 = z1 }; w.openings.AddRange(ops); return w; }
+        public static Opening Door(string n, float a, float b, bool slider = false) => new Opening { a = a, b = b, y0 = 0, y1 = 2.1f, door = true, slider = slider, name = n };
+        public static Opening Win(string n, float a, float b, float y0, float y1) => new Opening { a = a, b = b, y0 = y0, y1 = y1, window = true, name = n };
+        public static WallDef W(string name, float x0, float x1, float z0, float z1, params Opening[] ops) { var w = new WallDef { name = name, x0 = x0, x1 = x1, z0 = z0, z1 = z1 }; w.openings.AddRange(ops); return w; }
 
         // ---- doors and windows: bath door z 5.30..6.15 and bedroom door z 7.95..8.80 in the kitchen's west wall, kitchen <-> entrance arch x 2.5..3.6, kitchen <-> living sliding door 1.8 m, living <-> balcony sliding glass 2.3 m
         public const float BathDoorA = 5.30f, BathDoorB = 6.15f, BedDoorA = 7.95f, BedDoorB = 8.80f, ArchA = 2.5f, ArchB = 3.6f, KitSlideA = 2.45f, KitSlideB = 4.25f, GlassA = 1.95f, GlassB = 4.25f, FrontA = 3.0f, FrontB = 3.9f;
         public const float SillX0 = .6f, SillX1 = 1.7f, SillTop = .45f, SillWinTop = 2.0f; // the living room's south window above the deep sill, in the partition at z 1.20 -> 1.30
-        public static List<WallDef> Walls() => new List<WallDef> {
+        public static List<WallDef> Walls() => Cur.walls();
+        static List<WallDef> AptWalls() => new List<WallDef> {
             W("bal_S", -.2f, X1 + .2f, -.2f, 0, Win("balcony_window", .2f, X1 - .2f, .9f, 2.2f)),
             W("bal_W", -.2f, 0, 0, 1.25f), W("bal_E", X1, X1 + .2f, 0, 1.25f),
             W("part_BL", 0, X1, 1.20f, 1.30f, Win("living_window", SillX0, SillX1, SillTop, SillWinTop), Door("balcony_slider", GlassA, GlassB, true)),
@@ -53,7 +70,8 @@ namespace Oddity.RoomTest
 
         // one fixed camera per room, about 20-25 degrees down with the eye 2.4-2.5 m high, pulled back outside the cut-away walls (narrow lens) so a standing Harin's face is readable: living from the north-east, kitchen from the south-west (the living side), bedroom from the south-east,
         // bath and entrance from the south-west, balcony from the north-west. ODDITY_APTCAM="name=ex,ey,ez,ax,ay,az,fov;..." overrides for tuning
-        public static List<RoomDef> Rooms()
+        public static List<RoomDef> Rooms() => Cur.rooms();
+        static List<RoomDef> AptRooms()
         {
             var l = new List<RoomDef> {
                 new RoomDef{name="balcony",floor=Rect.MinMaxRect(0,0,X1,1.20f),color=new Color(.64f,.62f,.58f),eye=new Vector3(-1.7f,2.5f,4.5f),aim=new Vector3(2.19f,.4f,.6f),fov=36},
@@ -74,7 +92,8 @@ namespace Oddity.RoomTest
             return l;
         }
 
-        public static List<DoorDef> Doors() => new List<DoorDef> {
+        public static List<DoorDef> Doors() => Cur.doors();
+        static List<DoorDef> AptDoors() => new List<DoorDef> {
             new DoorDef{name="kitchen_slider",a="living",b="kitchen",centre=new Vector2((KitSlideA+KitSlideB)/2,5.09f),axis=new Vector2(0,1),half=(KitSlideB-KitSlideA)/2},
             new DoorDef{name="balcony_slider",a="living",b="balcony",centre=new Vector2((GlassA+GlassB)/2,1.25f),axis=new Vector2(0,-1),half=(GlassB-GlassA)/2},
             new DoorDef{name="entrance_arch",a="kitchen",b="entrance",centre=new Vector2((ArchA+ArchB)/2,8.90f),axis=new Vector2(0,1),half=(ArchB-ArchA)/2},
@@ -84,26 +103,78 @@ namespace Oddity.RoomTest
 
         // ---- the glb props' places (the sofa against the west wall facing east, the dining table on the kitchen's west wall with its two chairs along the wall)
         public const float TeaX0 = 1.96f, TeaX1 = 2.46f, TeaZ0 = 2.72f, TeaZ1 = 3.62f; // the tea table in front of the sofa (sofa front at x 0.82)
-        public static readonly Vector3 SofaAt = new Vector3(.425f, 0, 3.17f), TableAt = new Vector3(2.69f, 0, 7.05f);
-        public static readonly Vector3 SofaFace = Vector3.right, TableFace = Vector3.forward;
-        public static readonly Vector2 HarinStart = new Vector2(3.05f, 3.0f), SomaliStart = new Vector2(1.7f, 4.1f), WhiteStart = new Vector2(3.1f, 2.15f), TabbyStart = new Vector2(3.4f, 4.3f);
-        public static readonly Vector2 WindowSpot = new Vector2(1.15f, 1.95f), WindowLook = new Vector2(1.15f, 1.3f); // the floor in front of the sill, and what Harin faces there
-        public const float WindowYaw = 180;
-        public static readonly Vector3 SunThrough = new Vector3(2.2f, 1.5f, -.1f), SunOnto = new Vector3(.45f, .45f, 3.17f); // the balcony window's middle to the sofa seat
-        public static readonly Vector3 LampAt = new Vector3(2.19f, 2.42f, 3.17f);
-        // the counter run on the east wall of the kitchen (with the fridge at its north end), the sill, and the balcony ledge: where a cat lands and the floor it hops from
-        public static readonly Vector2 CounterStand = new Vector2(3.45f, 6.7f), FridgeLand = new Vector2(4.03f, 8.5f);
-        public static readonly Vector2[] CounterLand = { new Vector2(4.08f, 6.68f), new Vector2(4.08f, 7.9f) };
-        public static readonly Vector2[] SillLand = { new Vector2(.9f, 1.45f), new Vector2(1.4f, 1.45f) };
-        public static readonly Vector2[] LedgeLand = { new Vector2(.5f, .15f), new Vector2(1.1f, .15f) };
+        public static Vector3 SofaAt => Cur.sofaAt;
+        public static Vector3 TableAt => Cur.tableAt;
+        public static Vector3 SofaFace => Cur.sofaFace;
+        public static Vector3 TableFace => Cur.tableFace;
+        public static float SofaScale => Cur.sofaScale;
+        public static Vector2 HarinStart => Cur.harinStart;
+        public static Vector2 SomaliStart => Cur.somaliStart;
+        public static Vector2 WhiteStart => Cur.whiteStart;
+        public static Vector2 TabbyStart => Cur.tabbyStart;
+        public static Vector2 WindowSpot => Cur.windowSpot;
+        public static Vector2 WindowLook => Cur.windowLook;
+        public static Vector2 WindowRangeX => Cur.windowRangeX; // the floor in front of the sill, and what Harin faces there
+        public static float WindowYaw => Cur.windowYaw;
+        public static float StartYaw => Cur.startYaw;
+        public static float SomaliYaw => Cur.somaliYaw;
+        public static float WhiteYaw => Cur.whiteYaw;
+        public static float TabbyYaw => Cur.tabbyYaw;
+        public static Vector3 SunThrough => Cur.sunThrough;
+        public static Vector3 SunOnto => Cur.sunOnto;
+        public static Vector3 LampAt => Cur.lampAt; // the balcony window's middle to the sofa seat
+        // the counter run, the sill, and the balcony ledge: where a cat lands and the floor it hops from
+        public static Vector2 CounterStand => Cur.counterStand;
+        public static Vector2 FridgeLand => Cur.fridgeLand;
+        public static Vector2[] CounterLand => Cur.counterLand;
+        public static Vector2[] SillLand => Cur.sillLand;
+        public static Vector2[] LedgeLand => Cur.ledgeLand;
+        public static bool HasTable => Cur.hasTable;
+        public static bool HasTea => Cur.hasTea;
+        public static bool HasFridge => Cur.hasFridge;
+        public static bool HasLedge => Cur.hasLedge;
+        public static bool HasBed => Cur.hasBed;
+        public static bool Peep => Cur.peep;
+        public static string LayoutName => Cur.name;
+        public static Vector3 BedSeat => Cur.bedSeat;
+        public static Vector3 BedFront => Cur.bedFront;
+        public static Vector3 BedSize => Cur.bedSize;
+        public static float WinPlaneZ => Cur.winPlaneZ;
+        public static float WinX0 => Cur.winX0;
+        public static float WinX1 => Cur.winX1;
+        public static float WinY0 => Cur.winY0;
+        public static float WinY1 => Cur.winY1;
+        public static Rect RugBox => Cur.rugBox; public static Rect[] WanderBoxes => Cur.wander; public static float[] WanderWeights => Cur.wanderWeight;
+
+        static Layout AptLayout()
+        {
+            if (aptCache != null) return aptCache;
+            return aptCache = new Layout {
+                name = "apt", H = 2.4f, X1 = 4.38f, ZN = 10.15f, limX0 = .2f, limX1 = 4.38f - .2f, limZ0 = .2f, limZ1 = 10.15f - .2f,
+                walls = AptWalls, rooms = AptRooms, doors = AptDoors, furniture = AptFurniture, leaves = AptLeaves, fixtures = AptFixtures, props = AptProps,
+                sofaAt = new Vector3(.425f, 0, 3.17f), tableAt = new Vector3(2.69f, 0, 7.05f), sofaFace = Vector3.right, tableFace = Vector3.forward,
+                harinStart = new Vector2(3.05f, 3.0f), somaliStart = new Vector2(1.7f, 4.1f), whiteStart = new Vector2(3.1f, 2.15f), tabbyStart = new Vector2(3.4f, 4.3f),
+                windowSpot = new Vector2(1.15f, 1.95f), windowLook = new Vector2(1.15f, 1.3f), windowRangeX = new Vector2(.8f, 1.5f), windowYaw = 180, startYaw = 45, somaliYaw = 60, whiteYaw = 20, tabbyYaw = 30,
+                sunThrough = new Vector3(2.2f, 1.5f, -.1f), sunOnto = new Vector3(.45f, .45f, 3.17f), lampAt = new Vector3(2.19f, 2.42f, 3.17f),
+                hasTable = true, hasTea = true, hasFridge = true, hasLedge = true, hasBed = false,
+                counterStand = new Vector2(3.45f, 6.7f), fridgeLand = new Vector2(4.03f, 8.5f),
+                counterLand = new[] { new Vector2(4.08f, 6.68f), new Vector2(4.08f, 7.9f) }, sillLand = new[] { new Vector2(.9f, 1.45f), new Vector2(1.4f, 1.45f) }, ledgeLand = new[] { new Vector2(.5f, .15f), new Vector2(1.1f, .15f) },
+                rugBox = Rect.MinMaxRect(1.4f, 2.55f, 2.7f, 3.8f),
+                wander = new[] { Rect.MinMaxRect(1.0f, 1.7f, 4.0f, 4.8f), Rect.MinMaxRect(2.7f, 5.4f, 3.4f, 8.6f), Rect.MinMaxRect(.5f, .5f, 3.4f, .95f) }, wanderWeight = new[] { 60f, 25f, 15f },
+                winPlaneZ = 1.30f, winX0 = SillX0, winX1 = SillX1, winY0 = SillTop, winY1 = SillWinTop,
+                floorExtras = AptFloorExtras, furnExtras = AptFurnExtras,
+            };
+        }
 
         // approximate footprints of the glb props for planner tests (the game measures the real meshes)
-        public static List<Rect> PropFootprints() => new List<Rect> {
+        public static List<Rect> PropFootprints() => Cur.props();
+        static List<Rect> AptProps() => new List<Rect> {
             Rect.MinMaxRect(.03f, 2.37f, .82f, 3.97f), Rect.MinMaxRect(2.31f, 6.675f, 3.065f, 7.425f), Rect.MinMaxRect(2.45f, 6.17f, 2.93f, 6.68f), Rect.MinMaxRect(2.45f, 7.42f, 2.93f, 7.93f) };
 
-        static FurnBox Fb(string name, float x0, float x1, float y0, float y1, float z0, float z1, Color c, bool block = false, string perch = null)
+        public static FurnBox Fb(string name, float x0, float x1, float y0, float y1, float z0, float z1, Color c, bool block = false, string perch = null)
             => new FurnBox { name = name, x0 = x0, x1 = x1, y0 = y0, y1 = y1, z0 = z0, z1 = z1, color = c, block = block, perch = perch };
-        public static List<FurnBox> Furniture()
+        public static List<FurnBox> Furniture() => Cur.furniture();
+        static List<FurnBox> AptFurniture()
         {
             Color white = new Color(.93f, .93f, .91f), top = new Color(.30f, .30f, .32f), steel = new Color(.80f, .81f, .82f), dark = new Color(.12f, .12f, .13f), oak = new Color(.74f, .57f, .40f);
             var l = new List<FurnBox> {
@@ -198,13 +269,14 @@ namespace Oddity.RoomTest
         // ---- finishing: door leaves, sliding panels, LED ceiling fixtures and the orbit shot's numbers (data, so the tests can read them)
         public sealed class LeafDef { public string name, wall; public Vector2 hinge, dir; public float w; public Color color; }
         const float LeafAngle = 95f, LeafThick = .04f;
-        static LeafDef Leaf(string name, string wall, float hx, float hz, Vector2 closed, Vector2 into, float gap, Color c)
+        public static LeafDef Leaf(string name, string wall, float hx, float hz, Vector2 closed, Vector2 into, float gap, Color c)
         {
             float a = LeafAngle * Mathf.Deg2Rad; var dir = closed * Mathf.Cos(a) + into * Mathf.Sin(a);
             return new LeafDef { name = name, wall = wall, hinge = new Vector2(hx, hz), dir = dir.normalized, w = gap - .08f, color = c };
         }
         // hinged leaves swung open about 95 degrees into their room, hinge on the low-coordinate jamb, so each gap keeps 0.4 m of clear floor beside the leaf
-        public static List<LeafDef> Leaves() => new List<LeafDef> {
+        public static List<LeafDef> Leaves() => Cur.leaves();
+        static List<LeafDef> AptLeaves() => new List<LeafDef> {
             Leaf("bath_door", "kit_W_bath", 2.21f, BathDoorA + .04f, new Vector2(0, 1), new Vector2(-1, 0), BathDoorB - BathDoorA, new Color(.94f, .93f, .90f)),
             Leaf("bedroom_door", "kit_W_bed", 2.21f, BedDoorA + .04f, new Vector2(0, 1), new Vector2(-1, 0), BedDoorB - BedDoorA, new Color(.94f, .93f, .90f)),
             Leaf("front_door", "ent_N", FrontA + .04f, ZN, new Vector2(1, 0), new Vector2(0, -1), FrontB - FrontA, new Color(.84f, .80f, .74f)),
@@ -228,7 +300,8 @@ namespace Oddity.RoomTest
 
         public struct Fixture { public string name, room; public float x, z, sx, sz; public bool round; public float power, range; }
         // Korean flush LED lights on the 2.40 m ceiling (0.04 thick): a 1.0 x 0.5 panel in the living room, a bar over the kitchen counter, small flushes elsewhere (sx, sz: size along x and z, round ones use sx as the diameter)
-        public static List<Fixture> Fixtures() => new List<Fixture> {
+        public static List<Fixture> Fixtures() => Cur.fixtures();
+        static List<Fixture> AptFixtures() => new List<Fixture> {
             new Fixture{name="led_living",room="living",x=2.19f,z=3.17f,sx=1.0f,sz=.5f,power=2.4f,range=7f},
             new Fixture{name="led_kitchen",room="kitchen",x=3.80f,z=6.70f,sx=.12f,sz=1.4f,power=1.5f,range=5f},
             new Fixture{name="led_balcony",room="balcony",x=2.19f,z=.60f,sx=.24f,sz=.24f,round=true,power=.9f,range=4f},
@@ -363,7 +436,7 @@ namespace Oddity.RoomTest
 
         // ---- the builder
         public sealed class WallPiece { public string name, wall; public Renderer r; public Vector3 min, max; }
-        static GameObject Box(Transform p, string name, float x0, float x1, float y0, float y1, float z0, float z1, Color c)
+        public static GameObject Box(Transform p, string name, float x0, float x1, float y0, float y1, float z0, float z1, Color c)
         {
             var g = RoomPlayRunner.Part(PrimitiveType.Cube, p, new Vector3((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2), new Vector3(x1 - x0, y1 - y0, z1 - z0), c);
             g.name = name; return g;
@@ -497,9 +570,7 @@ namespace Oddity.RoomTest
                 var f = r.floor; float y = r.floorY;
                 Box(root, "floor_" + r.name, f.xMin, f.xMax, y - .03f, y, f.yMin, f.yMax, r.color);
             }
-            // the solid blocks (built-in storage, utility shaft) get a floor too, so cutting their walls away leaves floor and not a hole
-            Box(root, "floor_closet", 0, .71f, -.03f, 0, 5.14f, 7.29f, new Color(.80f, .85f, .87f));
-            Box(root, "floor_chase", 2.31f, 2.62f, -.08f, -.05f, 8.95f, ZN, new Color(.58f, .58f, .57f));
+            Cur.floorExtras?.Invoke(root);
             foreach (var w in Walls())
             {
                 var holder = new GameObject("wall_" + w.name).transform; holder.SetParent(root, false);
@@ -516,11 +587,14 @@ namespace Oddity.RoomTest
             ceil.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
             var lampList = new List<(string, Light)>();
             foreach (var fx in Fixtures()) MakeFixture(root, fx, ceilParts, lampList);
-            // the view out of the balcony window: a painted card 1.2 m outside, facing in
-            var sky = GameObject.CreatePrimitive(PrimitiveType.Quad); UnityEngine.Object.Destroy(sky.GetComponent<Collider>()); sky.name = "Sky"; sky.transform.SetParent(root, false);
-            float ww = (X1 - .4f), hh = 1.3f;
-            sky.transform.SetPositionAndRotation(new Vector3(X1 / 2, 1.55f + .25f, -1.4f), Quaternion.Euler(0, 180, 0)); sky.transform.localScale = new Vector3(ww * 2.4f, hh * 2.4f, 1);
-            var sr = sky.GetComponent<Renderer>(); sr.material = new Material(Shader.Find("Universal Render Pipeline/Unlit")) { color = Color.white, mainTexture = streetView }; sr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            if (Cur.sky)
+            {
+                // the view out of the balcony window: a painted card 1.2 m outside, facing in
+                var sky = GameObject.CreatePrimitive(PrimitiveType.Quad); UnityEngine.Object.Destroy(sky.GetComponent<Collider>()); sky.name = "Sky"; sky.transform.SetParent(root, false);
+                float ww = (X1 - .4f), hh = 1.3f;
+                sky.transform.SetPositionAndRotation(new Vector3(X1 / 2, 1.55f + .25f, -1.4f), Quaternion.Euler(0, 180, 0)); sky.transform.localScale = new Vector3(ww * 2.4f, hh * 2.4f, 1);
+                var sr = sky.GetComponent<Renderer>(); sr.material = new Material(Shader.Find("Universal Render Pipeline/Unlit")) { color = Color.white, mainTexture = streetView }; sr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
             // furniture boxes
             var fr = new GameObject("Furniture").transform; fr.SetParent(root, false);
             foreach (var b in Furniture())
@@ -529,6 +603,28 @@ namespace Oddity.RoomTest
                 if (b.block) furnitureOut.Add(Rect.MinMaxRect(b.x0, b.z0, b.x1, b.z1));
                 if (b.perch != null) perchBox(b.perch, b.x0, b.x1, b.y0, b.y1, b.z0, b.z1);
             }
+            Cur.furnExtras?.Invoke(fr, furnitureOut);
+            var view = new View(rooms, doors, pieces);
+            foreach (var (rn, lt) in lampList) view.AddLamp(rn, lt);
+            var wallRenderers = new HashSet<Renderer>(pieces.Select(q => q.r));
+            var frameSet = new HashSet<Renderer>(frames.Select(q => q.Item2));
+            var ceilSet = new HashSet<Renderer>(ceilParts);
+            foreach (var r in root.GetComponentsInChildren<Renderer>(true)) if (!wallRenderers.Contains(r) && !frameSet.Contains(r) && !ceilSet.Contains(r) && r != ceil.GetComponent<Renderer>()) view.AddStatic(r);
+            view.SetCeiling(ceil.GetComponent<Renderer>(), ceilParts);
+            foreach (var (wn, r) in frames) view.AddFrame(wn, r);
+            return view;
+        }
+        public static GameObject Part(Transform p, PrimitiveType t, Vector3 pos, Vector3 size, Color c) => RoomPlayRunner.Part(t, p, pos, size, c);
+
+
+        static void AptFloorExtras(Transform root)
+        {
+            // the solid blocks (built-in storage, utility shaft) get a floor too, so cutting their walls away leaves floor and not a hole
+            Box(root, "floor_closet", 0, .71f, -.03f, 0, 5.14f, 7.29f, new Color(.80f, .85f, .87f));
+            Box(root, "floor_chase", 2.31f, 2.62f, -.08f, -.05f, 8.95f, ZN, new Color(.58f, .58f, .57f));
+        }
+        static void AptFurnExtras(Transform fr, List<Rect> furnitureOut)
+        {
             // a lamp shade, a plant, the washer drum
             Part(fr, PrimitiveType.Cylinder, new Vector3(.25f, 1.52f, 4.25f), new Vector3(.30f, .11f, .30f), new Color(.95f, .90f, .80f));
             Part(fr, PrimitiveType.Cylinder, new Vector3(.40f, .17f, 1.62f), new Vector3(.28f, .17f, .28f), new Color(.80f, .78f, .74f)); furnitureOut.Add(Rect.MinMaxRect(.26f, 1.48f, .54f, 1.76f));
@@ -544,21 +640,10 @@ namespace Oddity.RoomTest
             Part(fr, PrimitiveType.Cylinder, new Vector3(3.05f, 1.96f, 1.0f), new Vector3(.005f, .12f, .005f), Alu); Pot(3.05f, 1.62f, 1.0f, .09f, .12f, .30f, false);
             var drum = Part(fr, PrimitiveType.Cylinder, new Vector3(3.76f, .42f, .60f), new Vector3(.34f, .01f, .34f), new Color(.45f, .48f, .52f)); drum.transform.localRotation = Quaternion.Euler(0, 0, 90);
             Finishing(fr);
-            var view = new View(rooms, doors, pieces);
-            foreach (var (rn, lt) in lampList) view.AddLamp(rn, lt);
-            var wallRenderers = new HashSet<Renderer>(pieces.Select(q => q.r));
-            var frameSet = new HashSet<Renderer>(frames.Select(q => q.Item2));
-            var ceilSet = new HashSet<Renderer>(ceilParts);
-            foreach (var r in root.GetComponentsInChildren<Renderer>(true)) if (!wallRenderers.Contains(r) && !frameSet.Contains(r) && !ceilSet.Contains(r) && r != ceil.GetComponent<Renderer>()) view.AddStatic(r);
-            view.SetCeiling(ceil.GetComponent<Renderer>(), ceilParts);
-            foreach (var (wn, r) in frames) view.AddFrame(wn, r);
-            return view;
         }
-        static GameObject Part(Transform p, PrimitiveType t, Vector3 pos, Vector3 size, Color c) => RoomPlayRunner.Part(t, p, pos, size, c);
-
 
         // ---- finishing helpers
-        static Material GlassMat(Color c)
+        public static Material GlassMat(Color c)
         {
             var m = new Material(Shader.Find("Universal Render Pipeline/Lit"));
             m.SetFloat("_Surface", 1); m.SetFloat("_Blend", 0); m.SetOverrideTag("RenderType", "Transparent");
@@ -566,17 +651,17 @@ namespace Oddity.RoomTest
             m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT"); m.renderQueue = 3000; m.SetColor("_BaseColor", c); m.color = c; m.SetFloat("_Smoothness", .85f);
             return m;
         }
-        static GameObject Glass(GameObject g, Color c)
+        public static GameObject Glass(GameObject g, Color c)
         {
             var r = g.GetComponent<Renderer>(); r.sharedMaterial = GlassMat(c); r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; return g;
         }
-        static void NoShadow(GameObject g) { g.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; }
+        public static void NoShadow(GameObject g) { g.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; }
         // a rotated box (yaw about y) at a centre inside a holder
-        static GameObject Rot(Transform p, string name, Vector3 centre, float yaw, Vector3 size, Color c)
+        public static GameObject Rot(Transform p, string name, Vector3 centre, float yaw, Vector3 size, Color c)
         {
             var g = RoomPlayRunner.Part(PrimitiveType.Cube, p, centre, size, c); g.name = name; g.transform.localRotation = Quaternion.Euler(0, yaw, 0); return g;
         }
-        static void HingedLeaf(Transform holder, LeafDef l)
+        public static void HingedLeaf(Transform holder, LeafDef l)
         {
             float yaw = Mathf.Atan2(l.dir.x, l.dir.y) * Mathf.Rad2Deg;
             var mid = l.hinge + l.dir * (l.w / 2);
@@ -627,7 +712,7 @@ namespace Oddity.RoomTest
                 }
         }
         // an LED fixture: a white frame 0.04 thick on the ceiling with an emissive face under it, and a soft point light (off until the lamp is on)
-        static void MakeFixture(Transform root, Fixture f, List<Renderer> ceilParts, List<(string, Light)> lamps)
+        public static void MakeFixture(Transform root, Fixture f, List<Renderer> ceilParts, List<(string, Light)> lamps)
         {
             var grp = new GameObject(f.name).transform; grp.SetParent(root, false);
             var emit = new Color(1f, .97f, .90f);
@@ -644,7 +729,7 @@ namespace Oddity.RoomTest
             }
             var m = face.GetComponent<Renderer>().material; m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", emit * 2.2f);
             NoShadow(frame); NoShadow(face); ceilParts.Add(frame.GetComponent<Renderer>()); ceilParts.Add(face.GetComponent<Renderer>());
-            var lg = new GameObject(f.name + "_light"); lg.transform.SetParent(grp, false); lg.transform.position = new Vector3(f.x, H - (f.room == "living" ? .45f : .2f), f.z);
+            var lg = new GameObject(f.name + "_light"); lg.transform.SetParent(grp, false); lg.transform.position = new Vector3(f.x, H - (f.room == "living" || f.room == "main" ? .45f : .2f), f.z);
             var l = lg.AddComponent<Light>(); l.type = LightType.Point; l.color = new Color(1f, .96f, .90f); l.intensity = f.power; l.range = f.range; l.shadows = LightShadows.None; l.enabled = false;
             lamps.Add((f.room, l));
         }
@@ -672,7 +757,7 @@ namespace Oddity.RoomTest
                 => ax ? Box(holder, n, a, b, y0, y1, mid + c0, mid + c1, col) : Box(holder, n, mid + c0, mid + c1, y0, y1, a, b, col);
             foreach (var o in w.openings)
             {
-                var col = o.slider ? Alu : Trim; float j = o.slider ? .035f : .04f;
+                var col = o.slider || o.alu ? Alu : Trim; float j = o.slider ? .035f : .04f;
                 Bx(o.name + "_jamb_a", o.a, o.a + j, o.y0, o.y1, -t / 2, t / 2, col);
                 Bx(o.name + "_jamb_b", o.b - j, o.b, o.y0, o.y1, -t / 2, t / 2, col);
                 Bx(o.name + "_lintel", o.a, o.b, o.y1 - .04f, o.y1, -t / 2, t / 2, col);
@@ -681,7 +766,7 @@ namespace Oddity.RoomTest
                     Bx(o.name + "_sill", o.a, o.b, o.y0, o.y0 + .04f, -t / 2 - .03f, t / 2 + .03f, col);
                     int n = Mathf.Max(1, Mathf.RoundToInt((o.b - o.a) / 1.1f));
                     for (int i = 1; i < n; i++) { float c = Mathf.Lerp(o.a, o.b, i / (float)n); Bx(o.name + "_bar" + i, c - .015f, c + .015f, o.y0, o.y1, -.02f, .02f, col); }
-                    float yc = (o.y0 + o.y1) / 2; Bx(o.name + "_rail", o.a, o.b, yc - .015f, yc + .015f, -.02f, .02f, col);
+                    float yc = (o.y0 + o.y1) / 2; if (!o.alu) Bx(o.name + "_rail", o.a, o.b, yc - .015f, yc + .015f, -.02f, .02f, col);
                     Glass(Bx(o.name + "_glass", o.a + .04f, o.b - .04f, o.y0 + .04f, o.y1 - .04f, -.004f, .004f, Color.white), new Color(.70f, .85f, .95f, .14f));
                 }
                 if (o.door)
