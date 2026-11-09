@@ -94,6 +94,17 @@ namespace Oddity.RoomTest.Tests
         }
 
         [Test]
+        public void OneRoom_CoffeeSpotIsFreeFloorInFrontOfTheWindowEastOfThePlantAndClearOfTheTower()
+        {
+            var fp = Flat(); var c = OneRoom.CoffeeSpot;
+            Assert.IsTrue(fp.Free(c), "coffee spot " + c + " is blocked");
+            Assert.That(c.x, Is.InRange(OneRoom.WinA + .5f, OneRoom.WinB - .5f));
+            Assert.That(c.y, Is.InRange(.45f, .8f), "about half a metre from the glass");
+            Assert.Greater(c.x - 1.5f, .25f, "clear of the sill plant at x 1.50");
+            Assert.Greater(OneRoom.TowerX0 - c.x, .25f, "clear of the cat tower");
+        }
+
+        [Test]
         public void OneRoom_ThePeepCameraSeesTheRoomCentreThroughTheWindowOpening()
         {
             var eye = OneRoom.PeepEye;

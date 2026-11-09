@@ -20,6 +20,8 @@ namespace Oddity.RoomTest
         public static readonly float[] TowerTops = { .45f, .90f, 1.35f };
         public static readonly Vector2[] TowerLand = { new Vector2(2.54f, .58f), new Vector2(2.66f, .52f), new Vector2(2.60f, .55f) };
         public static readonly Vector2 TowerStand = new Vector2(2.08f, .55f);
+        // where Q (coffee) stands: 0.62 m from the glass, to the east of the sill plant (x 1.50) and 0.3 m clear of the cat tower, facing south through the window
+        public static readonly Vector2 CoffeeSpot = new Vector2(1.85f, .62f);
         static Apartment.Layout layout;
         public static Apartment.Layout Layout => layout ?? (layout = MakeLayout());
 
