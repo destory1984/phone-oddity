@@ -15,6 +15,11 @@ namespace Oddity.RoomTest
         // the peeping camera across the street: x, eye height, z, aim, default lens (fov 30 -> 6 by zoom)
         public static readonly Vector3 PeepEye = new Vector3(1.5f, 2.4f, -9f), PeepAim = new Vector3(1.5f, .9f, 2.75f);
         public const float PeepFov = 16f;
+        // the TV cabinet's west face and the cat tower's footprint (south-east corner); platform tops 0.45, 0.90, 1.35 m, each 0.40 square, cats land on TowerLand
+        public const float TvCabX0 = 2.65f, TowerX0 = 2.35f, TowerX1 = 2.85f, TowerZ0 = .30f, TowerZ1 = .80f;
+        public static readonly float[] TowerTops = { .45f, .90f, 1.35f };
+        public static readonly Vector2[] TowerLand = { new Vector2(2.54f, .58f), new Vector2(2.66f, .52f), new Vector2(2.60f, .55f) };
+        public static readonly Vector2 TowerStand = new Vector2(2.08f, .55f);
         static Apartment.Layout layout;
         public static Apartment.Layout Layout => layout ?? (layout = MakeLayout());
 
@@ -42,12 +47,13 @@ namespace Oddity.RoomTest
         static List<Apartment.LeafDef> Leaves() => new List<Apartment.LeafDef> {
             Apartment.Leaf("bath_door", "bath_E", 1.5f, BathDoorA + .04f, new Vector2(0, 1), new Vector2(-1, 0), BathDoorB - BathDoorA, new Color(.94f, .93f, .90f)),
         };
-        static List<Rect> Props() => new List<Rect> { Rect.MinMaxRect(2.23f, .70f, 2.97f, 2.20f) }; // the sofa (the glb scaled to 1.5 m long)
+        static List<Rect> Props() => new List<Rect>(); // no glb props: the sofa is gone (the bed is her seat), the cat tower and the TV cabinet are plain boxes in Furniture
 
         static Apartment.FurnBox f(string name, float x0, float x1, float y0, float y1, float z0, float z1, Color c, bool block = false, string perch = null) => Apartment.Fb(name, x0, x1, y0, y1, z0, z1, c, block, perch);
         static List<Apartment.FurnBox> Furniture()
         {
             Color white = new Color(.93f, .93f, .91f), top = new Color(.30f, .30f, .32f), steel = new Color(.80f, .81f, .82f), dark = new Color(.12f, .12f, .13f), oak = new Color(.74f, .57f, .40f);
+            Color sisal = new Color(.78f, .66f, .45f), fabric = new Color(.55f, .53f, .60f);
             Color wood = new Color(.68f, .52f, .38f), linen = new Color(.93f, .92f, .90f), duvet = new Color(.62f, .70f, .78f), door = new Color(.84f, .80f, .74f), alu = new Color(.74f, .75f, .77f);
             return new List<Apartment.FurnBox> {
                 // bed: west wall, head at the north end
@@ -75,6 +81,18 @@ namespace Oddity.RoomTest
                 // entrance: shoe cabinet on the east wall, the front door closed in its opening
                 f("shoe_cabinet", 2.7f, X1, 0, 1.0f, 4.8f, 5.45f, oak, true),
                 f("front_door_closed", FrontA + .04f, FrontB - .04f, .012f, 2.06f, 5.58f, 5.62f, door), f("front_door_handle", 2.12f, 2.16f, .95f, 1.0f, 5.52f, 5.58f, alu),
+                // TV cabinet on the east wall where the sofa was (1.0 x 0.35 x 0.45 m, centred on z 1.5) with the 32 inch TV on a short neck; the TV itself is SofaTv (tvAt below)
+                f("tv_cabinet", TvCabX0, X1, 0, .45f, 1.0f, 2.0f, oak, true), f("tv_cabinet_top", TvCabX0 - .01f, X1, .45f, .47f, .99f, 2.01f, wood),
+                f("tv_foot", 2.78f, 2.92f, .47f, .60f, 1.40f, 1.60f, dark),
+                // cat tower (캣타워) in the south-east corner by the window: a 0.50 square base, sisal posts, three 0.40 platforms (tops at 0.45, 0.90, 1.35 m), a low rim round the top one
+                f("tower_base", TowerX0, TowerX1, 0, .06f, TowerZ0, TowerZ1, new Color(.70f, .62f, .50f), true),
+                f("tower_post1", 2.42f, 2.47f, .06f, 1.35f, .37f, .42f, sisal), f("tower_post2", 2.73f, 2.78f, .06f, 1.35f, .37f, .42f, sisal),
+                f("tower_post3", 2.42f, 2.47f, .06f, 1.35f, .68f, .73f, sisal), f("tower_post4", 2.73f, 2.78f, .06f, 1.35f, .68f, .73f, sisal),
+                f("tower_1", 2.40f, 2.80f, .40f, .45f, .35f, .75f, fabric, false, "tower1"), f("tower_2", 2.40f, 2.80f, .85f, .90f, .35f, .75f, fabric, false, "tower2"),
+                f("tower_3", 2.40f, 2.80f, 1.30f, 1.35f, .35f, .75f, fabric, false, "tower3"),
+                f("tower_rim_s", 2.40f, 2.80f, 1.35f, 1.43f, .35f, .38f, fabric), f("tower_rim_n", 2.40f, 2.80f, 1.35f, 1.43f, .72f, .75f, fabric),
+                f("tower_rim_w", 2.40f, 2.43f, 1.35f, 1.43f, .38f, .72f, fabric), f("tower_rim_e", 2.77f, 2.80f, 1.35f, 1.43f, .38f, .72f, fabric),
+                f("tower_post_cover", 2.42f, 2.78f, .06f, .09f, .37f, .73f, sisal, false, "tower"), // the lowest clickable part: a click on the tower's foot or posts sends a cat to the highest free level
                 // the window sill inside (a thin board, a cat perch) and a little plant on it
                 f("sill", WinA, WinB, .30f, .40f, 0, .28f, new Color(.92f, .91f, .89f), true, "sill"),
             };
@@ -117,22 +135,25 @@ namespace Oddity.RoomTest
             fr.GetChild(fr.childCount - 1).localRotation = Quaternion.Euler(0, 0, 90);
             for (int i = 0; i < 3; i++)
             {
-                float cx = 2.56f + i * .055f; var c = Apartment.Part(fr, PrimitiveType.Cylinder, new Vector3(cx, 1.30f, .12f + (i % 2) * .03f), new Vector3(.06f, .9f, .06f), sheer * (i % 2 == 0 ? 1f : .94f)); Apartment.NoShadow(c);
+                float cx = .36f + i * .055f; var c = Apartment.Part(fr, PrimitiveType.Cylinder, new Vector3(cx, 1.30f, .12f + (i % 2) * .03f), new Vector3(.06f, .9f, .06f), sheer * (i % 2 == 0 ? 1f : .94f)); Apartment.NoShadow(c);
             }
             // the pillow: an ellipsoid whose lower half is inside the mattress, so the visible part is a soft dome (pillowSize.y high at the centre)
             var pl = Layout; var pg = Apartment.Part(fr, PrimitiveType.Sphere, pl.pillowAt, new Vector3(pl.pillowSize.x, pl.pillowSize.y * 2, pl.pillowSize.z), new Color(.95f, .94f, .92f)); pg.name = "bed_pillow";
-            Apartment.Part(fr, PrimitiveType.Cylinder, new Vector3(.55f, .45f, .14f), new Vector3(.14f, .05f, .14f), pot);
-            foreach (var (dx, dy, k) in new[] { (0f, .62f, .26f), (.05f, .74f, .2f), (-.04f, .70f, .18f) }) Apartment.Part(fr, PrimitiveType.Sphere, new Vector3(.55f + dx, dy, .14f), Vector3.one * k, new Color(.30f, .48f, .28f));
+            Apartment.Part(fr, PrimitiveType.Cylinder, new Vector3(1.50f, .45f, .14f), new Vector3(.14f, .05f, .14f), pot);
+            foreach (var (dx, dy, k) in new[] { (0f, .62f, .26f), (.05f, .74f, .2f), (-.04f, .70f, .18f) }) Apartment.Part(fr, PrimitiveType.Sphere, new Vector3(1.50f + dx, dy, .14f), Vector3.one * k, new Color(.30f, .48f, .28f));
         }
 
         static Apartment.Layout MakeLayout() => new Apartment.Layout {
             name = "oneroom", H = H, X1 = X1, ZN = ZN, limX0 = .2f, limX1 = X1 - .2f, limZ0 = .2f, limZ1 = ZN - .2f,
             walls = Walls, rooms = Rooms, doors = Doors, furniture = Furniture, leaves = Leaves, fixtures = Fixtures, props = Props,
-            // the sofa: the props glb scaled to 1.5 m long on the east wall facing west; the bed seat mark for K (and C when it is the nearest), lying along the bed with the head to the north
-            sofaAt = new Vector3(2.60f, 0, 1.45f), sofaFace = Vector3.left, sofaScale = .94f, hasTable = false, hasTea = false, hasFridge = false, hasLedge = false, hasBed = true,
+            // no sofa: her seats are the bed edge (C, P, T) and the bed (K, B, Shift+T); noSofa makes RoomPlay build a bare host for the bed seats instead of loading the prop
+            sofaAt = new Vector3(2.60f, 0, 1.45f), sofaFace = Vector3.left, noSofa = true, hasTable = false, hasTea = false, hasFridge = false, hasLedge = false, hasBed = true, hasTower = true,
             bedSeat = new Vector3(.5f, .43f, 1.5f), bedFront = Vector3.right, bedSize = new Vector3(1.0f, .43f, 2.0f), bedStand = new Vector3(1.25f, 0, 1.5f), bedLieTop = .46f, pillowAt = new Vector3(.5f, .42f, 2.30f), pillowSize = new Vector3(.50f, .14f, .32f),
-            // a 32 inch TV on the west wall over the foot of the bed, facing the sofa, centred on the sofa's z
-            hasTv = true, tvAt = new Vector3(.02f, 1.25f, 1.45f), tvFace = Vector3.right, tvSize = new Vector3(.72f, .42f, .04f),
+            // the bed's east edge seat (x .98 is the mattress edge): hips 0.17 m in from the edge, facing east to the TV
+            bedEdgeSeat = new Vector3(.81f, .52f, 1.5f),
+            // a 32 inch TV on the cabinet on the east wall facing west over the bed: screen centre 0.80 m high, centred on z 1.5
+            hasTv = true, tvAt = new Vector3(2.83f, .80f, 1.5f), tvFace = Vector3.left, tvSize = new Vector3(.72f, .42f, .04f),
+            towerLand = TowerLand, towerTops = TowerTops, towerStand = TowerStand,
             harinStart = new Vector2(1.6f, 2.0f), somaliStart = new Vector2(1.2f, 3.2f), whiteStart = new Vector2(1.9f, 1.1f), tabbyStart = new Vector2(2.0f, 3.3f),
             startYaw = 180, somaliYaw = 150, whiteYaw = 200, tabbyYaw = 170,
             windowSpot = new Vector2(1.5f, .62f), windowLook = new Vector2(1.5f, 0), windowRangeX = new Vector2(.8f, 2.2f), windowYaw = 180,

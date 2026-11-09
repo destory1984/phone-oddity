@@ -17,7 +17,8 @@ namespace Oddity.RoomTest
             public Func<List<WallDef>> walls; public Func<List<RoomDef>> rooms; public Func<List<DoorDef>> doors; public Func<List<FurnBox>> furniture; public Func<List<LeafDef>> leaves; public Func<List<Fixture>> fixtures; public Func<List<Rect>> props;
             public Vector2 harinStart, somaliStart, whiteStart, tabbyStart, windowSpot, windowLook, windowRangeX; public float windowYaw, startYaw, somaliYaw, whiteYaw, tabbyYaw;
             public Vector3 sunThrough, sunOnto, lampAt, sofaAt, sofaFace, tableAt, tableFace, bedSeat, bedFront, bedSize, pillowAt, pillowSize; public float sofaScale = 1;
-            public bool hasTable, hasTea, hasFridge, hasLedge, hasBed, hasTv, sky = true, peep;
+            public bool hasTable, hasTea, hasFridge, hasLedge, hasBed, hasTv, noSofa, hasTower, sky = true, peep;
+            public Vector3 bedEdgeSeat; public Vector2[] towerLand = new Vector2[0]; public float[] towerTops = new float[0]; public Vector2 towerStand; // the bed edge seat (C, P, T); the cat tower: where cats land on each level, the platform tops, the floor spot they hop from
             public Vector3 tvAt, tvFace, tvSize; // the wall TV: centre of its body, the way its screen faces, width x height x depth
             public Vector3 bedStand; public float bedLieTop; // bedLieTop: the surface a body lying on the bed rests on (the quilt) // the free floor beside the bed she walks to before she lies down
             public Vector2 counterStand, fridgeLand; public Vector2[] counterLand = new Vector2[0], sillLand = new Vector2[0], ledgeLand = new Vector2[0];
@@ -137,6 +138,12 @@ namespace Oddity.RoomTest
         public static bool HasLedge => Cur.hasLedge;
         public static bool HasBed => Cur.hasBed;
         public static bool HasTv => Cur.hasTv;
+        public static bool NoSofa => Cur.noSofa;
+        public static bool HasTower => Cur.hasTower;
+        public static Vector3 BedEdgeSeat => Cur.bedEdgeSeat;
+        public static Vector2[] TowerLand => Cur.towerLand;
+        public static float[] TowerTops => Cur.towerTops;
+        public static Vector2 TowerStand => Cur.towerStand;
         public static Vector3 TvAt => Cur.tvAt;
         public static Vector3 TvFace => Cur.tvFace;
         public static Vector3 TvSize => Cur.tvSize;

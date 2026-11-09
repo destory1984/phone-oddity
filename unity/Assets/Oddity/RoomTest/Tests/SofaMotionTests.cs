@@ -89,18 +89,24 @@ namespace Oddity.RoomTest.Tests
         }
 
         [Test]
-        public void SofaMotions_TvIsOnTheWallFacingTheSofaAndClearOfTheWardrobe()
+        public void SofaMotions_TvStandsOnTheEastWallCabinetFacingTheBed()
         {
             var l = OneRoom.Layout;
             Assert.IsTrue(l.hasTv);
             Assert.That(l.tvSize.x, Is.EqualTo(.72f).Within(.001f)); Assert.That(l.tvSize.y, Is.EqualTo(.42f).Within(.001f)); Assert.That(l.tvSize.z, Is.EqualTo(.04f).Within(.001f));
-            Assert.That(l.tvAt.x - l.tvSize.z / 2, Is.GreaterThanOrEqualTo(-1e-4f), "on the west wall");
-            Assert.That(Vector3.Dot(l.tvFace, l.sofaFace), Is.LessThan(-.99f), "the screen faces the sofa, the sofa faces the screen");
-            Assert.That(l.tvAt.z, Is.EqualTo(l.sofaAt.z).Within(.01f), "centred on the sofa");
-            Assert.That(l.tvAt.y, Is.EqualTo(1.25f).Within(.01f));
-            float z0 = l.tvAt.z - l.tvSize.x / 2, z1 = l.tvAt.z + l.tvSize.x / 2;
+            Assert.That(l.tvAt.x + l.tvSize.z / 2, Is.LessThanOrEqualTo(l.X1 + 1e-4f), "on the east wall");
+            Assert.That(Vector3.Dot(l.tvFace, Vector3.left), Is.GreaterThan(.99f), "the screen faces west, over the bed");
+            Assert.That(l.tvAt.z, Is.EqualTo(1.5f).Within(.01f), "centred on the cabinet");
+            Assert.That(l.tvAt.y, Is.EqualTo(.80f).Within(.01f), "screen centre 0.80 m high");
             Apartment.Use(l);
-            try { foreach (var f in Apartment.Furniture().Where(q => q.name.StartsWith("wardrobe") && !q.name.Contains("handle"))) Assert.IsTrue(z1 < f.z0 || z0 > f.z1 || l.tvAt.y - l.tvSize.y / 2 > f.y1, "the TV is not in front of " + f.name); }
+            try
+            {
+                var cab = Apartment.Furniture().First(q => q.name == "tv_cabinet");
+                Assert.That(l.tvAt.y - l.tvSize.y / 2, Is.GreaterThanOrEqualTo(cab.y1), "the TV stands on the cabinet");
+                Assert.That(l.tvAt.z - l.tvSize.x / 2, Is.GreaterThanOrEqualTo(cab.z0 - .1f)); Assert.That(l.tvAt.z + l.tvSize.x / 2, Is.LessThanOrEqualTo(cab.z1 + .1f));
+                Assert.That(l.tvAt.x, Is.InRange(cab.x0, cab.x1));
+                var bed = Apartment.Furniture().First(q => q.name == "bed_frame"); Assert.That(l.tvAt.z, Is.InRange(bed.z0, bed.z1), "straight across from the bed");
+            }
             finally { Apartment.Use(null); }
         }
 
@@ -129,7 +135,7 @@ namespace Oddity.RoomTest.Tests
             m.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity); clip.SampleAnimation(m, 0);
             var axis = a.GetBoneTransform(HumanBodyBones.Head).position - a.GetBoneTransform(HumanBodyBones.Hips).position; axis.y = 0;
             float ay = Mathf.Atan2(axis.x, axis.z) * Mathf.Rad2Deg; var lay = OneRoom.Layout;
-            rig = new LieRig(m, a);
+            rig = new LieRig(m, a); rig.LegsOnQuilt = clipName.Contains("CurlUp");
             for (int i = 0; i < 12; i++)
             {
                 m.transform.SetPositionAndRotation(new Vector3(lay.bedSeat.x, 0, lay.bedSeat.z), Quaternion.Euler(0, -ay, 0)); clip.SampleAnimation(m, 0);
@@ -162,6 +168,53 @@ namespace Oddity.RoomTest.Tests
                     Assert.That(Vector3.Dot(a.GetBoneTransform(r).position - a.GetBoneTransform(l).position, s), Is.GreaterThan(.05f), name + " are not crossed");
             }
             finally { Apartment.Use(null); if (model != null) Object.DestroyImmediate(model); }
+        }
+
+        // K (curl on the side): the leg underneath lies on the quilt along its length, knee, shin and ankle each within 0.03 m of it (their own radius taken off the bone's height)
+        [Test]
+        public void SofaMotions_KCurlLowerLegLiesOnTheQuiltAlongItsLength()
+        {
+            Apartment.Use(OneRoom.Layout);
+            GameObject model = null;
+            try
+            {
+                Lie("KaSleepCurlUpSidewaysLoop", out model, out var rig, true);
+                var a = model.GetComponent<Animator>(); float top = OneRoom.Layout.bedLieTop;
+                Transform T(HumanBodyBones b) => a.GetBoneTransform(b);
+                int lo = T(HumanBodyBones.LeftUpperLeg).position.y <= T(HumanBodyBones.RightUpperLeg).position.y ? 0 : 1;
+                var knee = T(lo == 0 ? HumanBodyBones.LeftLowerLeg : HumanBodyBones.RightLowerLeg).position; var ank = T(lo == 0 ? HumanBodyBones.LeftFoot : HumanBodyBones.RightFoot).position;
+                float gKnee = knee.y - BedLie.KneeRadius - top, gShin = (knee.y + ank.y) / 2 - (BedLie.KneeRadius + BedLie.AnkleRadius) / 2 - top, gAnkle = ank.y - BedLie.AnkleRadius - top;
+                Assert.That(gKnee, Is.InRange(-.03f, .03f), "knee " + gKnee); Assert.That(gShin, Is.InRange(-.03f, .03f), "mid shin " + gShin); Assert.That(gAnkle, Is.InRange(-.03f, .03f), "ankle " + gAnkle);
+                var up = T(lo == 0 ? HumanBodyBones.RightFoot : HumanBodyBones.LeftFoot).position; Assert.That(up.y, Is.GreaterThan(ank.y - .01f), "the other leg rests on top of it, not through it");
+            }
+            finally { Apartment.Use(null); if (model != null) Object.DestroyImmediate(model); }
+        }
+
+        // B (on the stomach with the phone): the phone is low in front of her face, below her eyes, tilted toward her
+        [Test]
+        public void SofaMotions_BPhoneIsBelowTheEyesLowInFrontOfTheFace()
+        {
+            Apartment.Use(OneRoom.Layout);
+            var (m, r) = Make();
+            try
+            {
+                var clip = AssetDatabase.LoadAllAssetsAtPath("Assets/Oddity/DevMotion/Resources/Motion/MxLayStomachElbows.fbx").OfType<AnimationClip>().FirstOrDefault(c => !c.name.StartsWith("__preview__"));
+                if (clip == null) Assert.Ignore("no clip MxLayStomachElbows");
+                var a = m.GetComponent<Animator>(); var lay = OneRoom.Layout;
+                m.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity); clip.SampleAnimation(m, 0);
+                var hips = a.GetBoneTransform(HumanBodyBones.Hips); var head = a.GetBoneTransform(HumanBodyBones.Head);
+                var axis = head.position - hips.position; axis.y = 0; float ay = Mathf.Atan2(axis.x, axis.z) * Mathf.Rad2Deg;
+                m.transform.SetPositionAndRotation(new Vector3(lay.bedSeat.x, 0, lay.bedSeat.z), Quaternion.Euler(0, 180 - ay, 0)); clip.SampleAnimation(m, 0);
+                var hp = hips.position; m.transform.position += new Vector3(lay.bedSeat.x - hp.x, lay.bedLieTop - 0.1f - hp.y + .1f, lay.bedSeat.z - hp.z); clip.SampleAnimation(m, 0);
+                var f = head.position - hips.position; f.y = 0; r.BedForward = f.normalized; r.MattressTop = lay.bedLieTop;
+                r.SetImmediate(SofaMode.Bed); for (int i = 0; i < 5; i++) { r.Tick(.02f); clip.SampleAnimation(m, 0); r.Apply(.02f); }
+                float top = lay.bedLieTop; var eye = r.EyePoint; var ph = r.PhoneCentre;
+                Assert.That(ph.y, Is.LessThan(eye.y), "phone " + ph.y + " is below the eyes " + eye.y);
+                Assert.That(r.Phone.position.y - top, Is.InRange(.05f, .20f), "phone centre is low over the quilt: " + (r.Phone.position.y - top));
+                var d = ph - eye; d.y = 0; Assert.That(d.magnitude, Is.InRange(.15f, .40f), "the phone is about 0.25 - 0.30 m ahead of the eyes: " + d.magnitude);
+                Assert.That(r.LastHeadPitch, Is.GreaterThan(20f), "head bowed toward it");
+            }
+            finally { r.Dispose(); Object.DestroyImmediate(m); Apartment.Use(null); }
         }
     }
 }

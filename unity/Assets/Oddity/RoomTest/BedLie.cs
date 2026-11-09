@@ -66,6 +66,35 @@ namespace Oddity.RoomTest
             c1 = p1 + d1 * s; c2 = p2 + d2 * t; return (c1 - c2).magnitude;
         }
 
+        public const float KneeRadius = .06f, AnkleRadius = .045f;
+        // Side-lying (K curl): the leg underneath lies on the quilt along its length. The thigh is turned about the hip so the knee centre is a knee radius over the quilt (the thigh keeps its horizontal
+        // direction), then the shin so the ankle is an ankle radius over it; the clip hovers, so without this the shins hang in the air. The upper leg is stacked on it by Uncross afterwards.
+        // Returns the index (0 left, 1 right) of the leg put down, or -1 when she does not lie on her side.
+        public static int LegDown(Animator a, float w, float quiltTop)
+        {
+            var ul = new Transform[2]; var ll = new Transform[2]; var ft = new Transform[2];
+            for (int i = 0; i < 2; i++)
+            {
+                ul[i] = a.GetBoneTransform(i == 0 ? HumanBodyBones.LeftUpperLeg : HumanBodyBones.RightUpperLeg);
+                ll[i] = a.GetBoneTransform(i == 0 ? HumanBodyBones.LeftLowerLeg : HumanBodyBones.RightLowerLeg);
+                ft[i] = a.GetBoneTransform(i == 0 ? HumanBodyBones.LeftFoot : HumanBodyBones.RightFoot);
+                if (ul[i] == null || ll[i] == null || ft[i] == null) return -1;
+            }
+            var s = ul[1].position - ul[0].position; if (s.magnitude < .02f || Mathf.Abs(s.normalized.y) < .6f) return -1; // the hip axis is vertical when she lies on her side
+            int lo = ul[0].position.y <= ul[1].position.y ? 0 : 1;
+            var hip = ul[lo].position; var knee = ll[lo].position; float l1 = (knee - hip).magnitude;
+            var h = knee - hip; h.y = 0; h = h.sqrMagnitude < 1e-6f ? a.transform.forward : h.normalized;
+            float dy = Mathf.Clamp(quiltTop + KneeRadius - hip.y, -l1 * .98f, l1 * .98f);
+            var want = hip + h * Mathf.Sqrt(l1 * l1 - dy * dy) + Vector3.up * dy;
+            ul[lo].rotation = Quaternion.Slerp(Quaternion.identity, Quaternion.FromToRotation(knee - hip, want - hip), w) * ul[lo].rotation;
+            knee = ll[lo].position; var ank = ft[lo].position; float l2 = (ank - knee).magnitude;
+            var h2 = ank - knee; h2.y = 0; h2 = h2.sqrMagnitude < 1e-6f ? h : h2.normalized;
+            float dy2 = Mathf.Clamp(quiltTop + AnkleRadius - knee.y, -l2 * .98f, l2 * .98f);
+            var want2 = knee + h2 * Mathf.Sqrt(l2 * l2 - dy2 * dy2) + Vector3.up * dy2;
+            ll[lo].rotation = Quaternion.Slerp(Quaternion.identity, Quaternion.FromToRotation(ank - knee, want2 - knee), w) * ll[lo].rotation;
+            return lo;
+        }
+
         public const float ShinClear = .11f, AnkleClear = .10f, KneeClear = .09f;
         // The clips are posed on a body whose legs may pass through each other. Left on its own side of the right leg: the hip axis (left hip -> right hip) is the lateral axis (it is
         // vertical when she lies on her side), the knees and the ankles must be ordered along it like the hips, the shins at least ShinClear apart and the ankles AnkleClear apart.
@@ -118,6 +147,8 @@ namespace Oddity.RoomTest
     public sealed class LieRig
     {
         readonly BedProbe probe; readonly Animator anim; readonly Transform root;
+        public bool LegsOnQuilt; // the K curl clip: its lower leg is laid on the quilt (other lying clips keep their own legs)
+        float lastLift = float.NaN; // how far the last Place lifted the root from where the pose left it
         public float Neck, LowRel = float.NaN, HeadRel, TrueRel, LegsApart = float.NaN; int frame;
         public LieRig(GameObject model, Animator anim) { probe = new BedProbe(model); this.anim = anim; root = model.transform; }
         public int Meshes => probe.Count; public string Describe() => probe.Describe();
@@ -126,6 +157,7 @@ namespace Oddity.RoomTest
         {
             var head = anim.GetBoneTransform(HumanBodyBones.Head); var neck = anim.GetBoneTransform(HumanBodyBones.Neck); var hips = anim.GetBoneTransform(HumanBodyBones.Hips);
             if (head == null || hips == null) return false;
+            if (legs && LegsOnQuilt && quiltTop > 0 && pillow && !float.IsNaN(lastLift)) BedLie.LegDown(anim, w, quiltTop - lastLift); // the pose is made with the root on the floor, the root is lifted to the quilt afterwards: the leg is aimed at the quilt as the last frame lifted it
             LegsApart = legs ? BedLie.Uncross(anim, w) : float.NaN;
             pillow &= Apartment.HasPillow;
             if (pillow && neck != null && Mathf.Abs(Neck) > .01f)
@@ -137,7 +169,7 @@ namespace Oddity.RoomTest
                     neck.rotation = Quaternion.AngleAxis((rise >= 0 ? 1 : -1) * Neck * w, u) * keep;
                 }
             }
-            var mp = root.position;
+            var mp = root.position; float rootY0 = mp.y;
             if (pillow) { var hc = BedProbe.HeadCentre(head, neck); var pc = Apartment.PillowAt; mp += new Vector3(pc.x - hc.x, 0, pc.z - hc.z) * w; }
             bool bake = forceBake || float.IsNaN(LowRel) || frame++ % 3 == 0 || w < .999f;
             if (bake)
@@ -146,7 +178,7 @@ namespace Oddity.RoomTest
                 probe.Measure(BedProbe.HeadCentre(head, neck), out var low, out var headLow, out var trueLow);
                 LowRel = low - mp.y; HeadRel = headLow - mp.y; TrueRel = trueLow - mp.y;
             }
-            mp.y = Mathf.Lerp(mp.y, quiltTop - LowRel + .003f, w); root.position = mp;
+            mp.y = Mathf.Lerp(mp.y, quiltTop - LowRel + .003f, w); root.position = mp; lastLift = mp.y - rootY0;
             if (pillow && bake && w > .99f && !float.IsInfinity(HeadRel))
             {
                 var hc = BedProbe.HeadCentre(head, neck); float need = Apartment.PillowTopAt(hc.x, hc.z) - .02f - (HeadRel + mp.y);

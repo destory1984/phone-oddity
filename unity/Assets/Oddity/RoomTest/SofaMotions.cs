@@ -66,7 +66,11 @@ namespace Oddity.RoomTest
         public Vector3 BedForward = Vector3.back; public float MattressTop; // lying: the way her head points along the bed, the mattress surface under her (y)
         public float PhoneTilt = 36f;                         // current phone tilt, degrees from vertical, for the seated hold
         public float Smile, Blink;                            // wanted face blend 0..1 and the blink pulse
+        // B on the stomach: the phone rests low in front of her face, below the eyes: centre 0.13 m over the quilt, 0.32 m ahead of the head bone (about 0.27 in front of the eyes) (the eyes are about 0.07 m in front of the head bone), screen tilted 55 degrees toward her
+        public const float BedPhoneHeight = .13f, BedPhoneAhead = .32f, BedPhoneTilt = 55f;
+        public Vector3 EyePoint { get; private set; } // about where the eyes are: the head bone, a little forward and up
         public bool HasThumb => thumbP != null;
+        public bool LyingTv;                                  // the TV from the bed (Shift+T): she lies on her side, only the head turns to the screen; no lap hands, no seated lean
         public float LastHeadPitch, LastHandLeft, LastHandRight;
         public Vector3 LookPoint { get; private set; }
         public Vector3 PhoneCentre { get; private set; }
@@ -201,6 +205,7 @@ namespace Oddity.RoomTest
         public void Apply(float dt)
         {
             float wp = Smooth(WPhone), wt = Smooth(WTv), wb = Smooth(WBed), wa = Mathf.Max(wp, Mathf.Max(wt, wb));
+            float wts = LyingTv ? 0 : wt; // the seated TV parts (torso lean, hands on the thighs)
             bool showPhone = wp + wb > .02f;
             if (Phone != null && Phone.gameObject.activeSelf != showPhone) Phone.gameObject.SetActive(showPhone);
             if (wa <= 0) return;
@@ -211,24 +216,24 @@ namespace Oddity.RoomTest
             float breath = breathe;
 
             // ---- torso: the seated ones lean back a little, the TV more; she breathes
-            float spineBow = wp * -2f + wt * (-5f + 1.2f * shiftNow * 0) + wb * 0f;
-            float chestBow = wp * 1f + wt * -3f + (wp + wt) * breath * .6f + wb * breath * .5f + laughNow * wt * (Mathf.Sin(activeT * 40f) * 2.2f);
+            float spineBow = wp * -2f + wts * (-5f + 1.2f * shiftNow * 0) + wb * 0f;
+            float chestBow = wp * 1f + wts * -3f + (wp + wts) * breath * .6f + wb * breath * .5f + laughNow * wts * (Mathf.Sin(activeT * 40f) * 2.2f);
             Rot(spine, right, spineBow);
             if (chest != spine) Rot(chest, right, chestBow); else Rot(spine, right, chestBow);
-            if (wt > 0 && Mathf.Abs(shiftNow) > .001f) Rot(spine, fwd, 3.5f * shiftNow * wt); // weight onto one hip
-            if (wt > 0 && laughNow > 0) { Rot(chest, fwd, Mathf.Sin(activeT * 31f) * 1.4f * laughNow * wt); }
+            if (wts > 0 && Mathf.Abs(shiftNow) > .001f) Rot(spine, fwd, 3.5f * shiftNow * wts); // weight onto one hip
+            if (wts > 0 && laughNow > 0) { Rot(chest, fwd, Mathf.Sin(activeT * 31f) * 1.4f * laughNow * wts); }
 
             // ---- phone frame
             Vector3 U = Vector3.up, S = Vector3.forward, Rr = Vector3.right, C = Vector3.zero;
             if (wp + wb > .01f)
             {
                 var anchor = (chest ?? spine).position;
-                float tilt = wb > .5f ? 72f + tiltPitch : PhoneTilt + tiltPitch;
+                float tilt = wb > .5f ? BedPhoneTilt + tiltPitch : PhoneTilt + tiltPitch;
                 SofaGeometry.PhoneAxes(right, up, fwd, tilt, tiltRoll, out U, out S, out Rr);
                 if (wb > .5f)
                 {
                     var hp = head.position;
-                    C = new Vector3(hp.x, MattressTop + .27f, hp.z) + fwd * .26f;
+                    C = new Vector3(hp.x, MattressTop + BedPhoneHeight, hp.z) + fwd * BedPhoneAhead;
                 }
                 else C = anchor + fwd * .34f - up * .02f;
                 // a tap presses the phone in, a scroll slides it up
@@ -246,7 +251,14 @@ namespace Oddity.RoomTest
                 var d = (fwd * Mathf.Cos(pitch * Mathf.Deg2Rad) - up * Mathf.Sin(pitch * Mathf.Deg2Rad)).normalized;
                 want = d; gaze = C;
             }
-            if (wt > 0)
+            if (wt > 0 && LyingTv)
+            {   // lying: the head follows the TV by up to 60 degrees from where the pose has it
+                var dd = (TvCentre - head.position).normalized;
+                var lim = Vector3.RotateTowards(headNow, dd, 60f * Mathf.Deg2Rad, 0);
+                want = Vector3.Slerp(want, lim, wt / Mathf.Max(.001f, wp + wt + wb));
+                gaze = Vector3.Lerp(gaze, TvCentre, wt / Mathf.Max(.001f, wp + wt + wb));
+            }
+            else if (wt > 0)
             {
                 var toTv = TvCentre - head.position;
                 var flat = Vector3.ProjectOnPlane(toTv, up);
@@ -263,6 +275,7 @@ namespace Oddity.RoomTest
             else head.rotation = turnK * head.rotation;
             if (tiltHead > 0) head.rotation = Quaternion.AngleAxis(8f * tiltHead * wt, head.rotation * headFrontLocal) * head.rotation; // the slow head tilt
             LastHeadPitch = Pitch(head.rotation * headFrontLocal);
+            EyePoint = head.position + (head.rotation * headFrontLocal).normalized * .07f + up * .06f;
             LookPoint = gaze; LookTarget.position = gaze;
 
             // ---- arms
@@ -296,7 +309,7 @@ namespace Oddity.RoomTest
                     ThumbTap(S, Rr, tapNow, wp + wb);
                 }
             }
-            if (wt > .01f)
+            if (wts > .01f)
             {
                 for (int s = 0; s < 2; s++)
                 {

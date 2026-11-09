@@ -50,7 +50,7 @@ namespace Oddity.RoomTest.Tests
         }
 
         [Test]
-        public void OneRoom_BedSofaWardrobeAndCounterStandWhereTheBriefSays()
+        public void OneRoom_BedTvCabinetWardrobeAndCounterStandWhereTheBriefSays()
         {
             var f = Apartment.Furniture().ToDictionary(q => q.name);
             Assert.AreEqual(0f, f["bed_frame"].x0, 1e-3f); Assert.AreEqual(1.0f, f["bed_frame"].x1, 1e-3f); Assert.AreEqual(.5f, f["bed_frame"].z0, 1e-3f); Assert.AreEqual(2.5f, f["bed_frame"].z1, 1e-3f);
@@ -58,9 +58,9 @@ namespace Oddity.RoomTest.Tests
             Assert.AreEqual(0f, f["wardrobe"].x0, 1e-3f); Assert.AreEqual(.6f, f["wardrobe"].x1, 1e-3f); Assert.AreEqual(2.7f, f["wardrobe"].z0, 1e-3f); Assert.Greater(f["wardrobe_door1"].x0, f["wardrobe"].x1 - .02f, "doors face east");
             Assert.AreEqual(OneRoom.X1, f["counter"].x1, 1e-3f); Assert.GreaterOrEqual(f["counter"].x0, 2.4f); Assert.AreEqual(3.0f, f["counter"].z0, 1e-3f); Assert.AreEqual(4.5f, f["counter"].z1, 1e-3f); Assert.AreEqual("counter", f["counter"].perch);
             Assert.AreEqual("sill", f["sill"].perch);
-            var sofa = Apartment.PropFootprints().Single();
-            Assert.GreaterOrEqual(sofa.xMin, 2.15f); Assert.LessOrEqual(sofa.xMax, OneRoom.X1); Assert.GreaterOrEqual(sofa.yMin, .65f); Assert.LessOrEqual(sofa.yMax, 2.25f);
-            Assert.AreEqual(Vector3.left, Apartment.SofaFace); // facing west
+            // no sofa: the TV cabinet stands on the east wall where it was
+            Assert.IsTrue(Apartment.NoSofa); Assert.AreEqual(0, Apartment.PropFootprints().Count);
+            var cab = f["tv_cabinet"]; Assert.AreEqual(OneRoom.X1, cab.x1, 1e-3f); Assert.AreEqual(.35f, cab.x1 - cab.x0, .01f); Assert.AreEqual(1.0f, cab.z1 - cab.z0, .01f); Assert.AreEqual(.45f, cab.y1, 1e-3f); Assert.AreEqual(1.5f, (cab.z0 + cab.z1) / 2, .01f); Assert.IsTrue(cab.block);
             Assert.IsFalse(Apartment.HasFridge); Assert.IsFalse(Apartment.HasLedge); Assert.IsFalse(Apartment.HasTea);
         }
 
@@ -71,7 +71,7 @@ namespace Oddity.RoomTest.Tests
             Assert.IsTrue(fp.Free(start), "Harin starts on free floor");
             var goals = new[] {
                 (new Vector2(1.9f, 1.5f), "main"), (new Vector2(1.0f, 4.45f), "bath"), (new Vector2(2.0f, 5.0f), "entrance"),
-                (new Vector2(1.35f, 1.5f), "bed front"), (new Vector2(1.95f, 1.4f), "sofa front"), (new Vector2(2.1f, 3.4f), "counter front"), (new Vector2(1.5f, .62f), "window spot"),
+                (new Vector2(1.35f, 1.5f), "bed front"), (new Vector2(2.0f, 1.5f), "TV cabinet front"), (new Vector2(2.08f, .55f), "tower foot"), (new Vector2(2.1f, 3.4f), "counter front"), (new Vector2(1.5f, .62f), "window spot"),
             };
             foreach (var (g, name) in goals)
             {
@@ -138,6 +138,46 @@ namespace Oddity.RoomTest.Tests
                     }
             }
             Assert.Greater(checkedSpots, 150);
+        }
+
+        [Test]
+        public void OneRoom_CatTowerIsInTheSouthEastCornerWithThreeLevelsAHopApartAndTheWalkGapsStayOpen()
+        {
+            var f = Apartment.Furniture().ToDictionary(q => q.name);
+            Assert.IsTrue(Apartment.HasTower); var b = f["tower_base"];
+            Assert.AreEqual(.5f, b.x1 - b.x0, 1e-3f); Assert.AreEqual(.5f, b.z1 - b.z0, 1e-3f); Assert.IsTrue(b.block, "Harin cannot walk through it");
+            Assert.Greater(b.x0, 2.2f, "the east side"); Assert.Less(b.z1, 1.0f, "the south side, clear of the TV cabinet (z 1.0 -> 2.0)");
+            Assert.GreaterOrEqual(b.z0, f["sill"].z1 - 1e-3f, "behind the window sill, not on it");
+            for (int i = 1; i <= 3; i++)
+            {
+                var p = f["tower_" + i]; Assert.AreEqual("tower" + i, p.perch); Assert.AreEqual(Apartment.TowerTops[i - 1], p.y1, 1e-3f); Assert.AreEqual(.4f, p.x1 - p.x0, 1e-3f); Assert.AreEqual(.4f, p.z1 - p.z0, 1e-3f);
+                Assert.IsTrue(Rect.MinMaxRect(b.x0, b.z0, b.x1, b.z1).Contains(new Vector2(p.x0, p.z0)) && Rect.MinMaxRect(b.x0, b.z0, b.x1, b.z1).Contains(new Vector2(p.x1, p.z1)), "platform " + i + " is over the base");
+                Assert.IsTrue(Rect.MinMaxRect(p.x0, p.z0, p.x1, p.z1).Contains(Apartment.TowerLand[i - 1]), "the landing spot is on platform " + i);
+            }
+            CollectionAssert.AreEqual(new[] { .45f, .90f, 1.35f }, Apartment.TowerTops);
+            // the jump rule: floor -> 0.45 and each level -> the next is 0.45 m up, a short hop sideways (one arc of 0.4 - 0.5 s)
+            Assert.LessOrEqual(Apartment.TowerTops[0], .5f);
+            for (int i = 1; i < 3; i++) { Assert.LessOrEqual(Apartment.TowerTops[i] - Apartment.TowerTops[i - 1], .5f); Assert.LessOrEqual(Vector2.Distance(Apartment.TowerLand[i], Apartment.TowerLand[i - 1]), .3f); }
+            Assert.IsTrue(f.ContainsKey("tower_rim_s") && f["tower_rim_s"].y0 >= 1.35f - 1e-3f, "a low rim on the top level");
+            var fp = Flat();
+            Assert.IsTrue(fp.Free(Apartment.TowerStand), "the foot spot is open floor"); Assert.NotNull(fp.Find(Apartment.HarinStart, Apartment.TowerStand, out var snapped)); Assert.IsFalse(snapped);
+            float gap = Mathf.Min(f["tv_cabinet"].x0, b.x0) - f["bed_frame"].x1; Assert.GreaterOrEqual(gap, 1.2f, "bed to cabinet / tower: " + gap);
+            Assert.Greater(f["tv_cabinet"].z0 - b.z1, .15f, "the cabinet and the tower do not touch");
+            // the window sill is still reachable and the tower is not in front of its centre
+            Assert.Greater(b.x0, Apartment.SillLand[1].x + .3f);
+        }
+
+        [Test]
+        public void OneRoom_NoSofaPropAndTheBedHasAnEdgeSeatFacingTheTv()
+        {
+            var l = OneRoom.Layout; var f = Apartment.Furniture().ToDictionary(q => q.name);
+            Assert.IsTrue(l.noSofa); Assert.IsTrue(l.hasBed);
+            Assert.That(l.bedEdgeSeat.x, Is.InRange(f["bed_mattress"].x1 - .25f, f["bed_mattress"].x1 - .1f), "hips just inside the mattress edge");
+            Assert.That(l.bedEdgeSeat.z, Is.InRange(f["bed_frame"].z0 + .4f, f["bed_frame"].z1 - .4f));
+            Assert.AreEqual(Vector3.right, l.bedFront, "facing east, to the TV");
+            Assert.Greater(l.tvAt.x, l.bedEdgeSeat.x + 1f);
+            Assert.That(l.tvAt.z, Is.EqualTo(l.bedEdgeSeat.z).Within(.3f), "the TV is straight ahead of the edge seat");
+            Assert.That(Vector3.Dot(l.tvFace, l.bedFront), Is.LessThan(-.99f), "screen faces the bed");
         }
 
         [Test]
