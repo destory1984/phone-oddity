@@ -411,7 +411,7 @@ namespace Oddity.RoomTest
                 var f = rd.floor; const float inset = .12f;
                 for (int i = 0; i < 6; i++) for (int j = 0; j < 6; j++) pts.Add(new Vector3(Mathf.Lerp(f.xMin + inset, f.xMax - inset, i / 5f), rd.floorY + .15f, Mathf.Lerp(f.yMin + inset, f.yMax - inset, j / 5f)));
                 foreach (var (u, v) in new[] { (0f, 0f), (1f, 0f), (0f, 1f), (1f, 1f), (.5f, .5f) }) pts.Add(new Vector3(Mathf.Lerp(f.xMin + inset, f.xMax - inset, u), rd.floorY + 1.2f, Mathf.Lerp(f.yMin + inset, f.yMax - inset, v)));
-                h = new bool[pieces.Count];
+                sightPts[rd.name] = pts; h = new bool[pieces.Count];
                 for (int k = 0; k < pieces.Count; k++) foreach (var q in pts) if (SegHitsBox(rd.eye, q, pieces[k].min, pieces[k].max)) { h[k] = true; break; }
                 // a wall is cut away whole: a piece left standing over a window or beside a door would float in the picture and hide the floor behind it
                 var cut = new HashSet<string>(); for (int k = 0; k < pieces.Count; k++) if (h[k]) cut.Add(pieces[k].wall);
@@ -426,15 +426,18 @@ namespace Oddity.RoomTest
             public void AddFrame(string wall, Renderer r) { frames.Add((wall, r)); }
             public void Register(Transform t) { foreach (var r in t.GetComponentsInChildren<Renderer>(true)) if (!statics.Contains(r) && !ceilParts.Contains(r)) statics.Add(r); if (showAll) ShowAll(showCeil); else if (current != null) Apply(); }
             // the shown zones: the current room's floor grown by 0.35 m; the inside camera adds the rooms joined to it by a door, so they look finished through the openings
+            // the outside camera shows the joined rooms too (through glass and open doors); ODDITY_NEIGHBOURS=0 brings back the old single-room picture
+            static readonly bool Neighbours = Environment.GetEnvironmentVariable("ODDITY_NEIGHBOURS") != "0";
+            readonly Dictionary<string, List<Vector3>> sightPts = new Dictionary<string, List<Vector3>>();
             List<Rect> Zones()
             {
                 var l = new List<Rect>(); var names = new List<string> { current };
-                if (Inside) foreach (var d in doors) { if (d.a == current) names.Add(d.b); else if (d.b == current) names.Add(d.a); }
-                foreach (var n in names) { var f = Room(n).floor; l.Add(Rect.MinMaxRect(f.xMin - .35f, f.yMin - .35f, f.xMax + .35f, f.yMax + .35f)); }
+                if (Inside || Neighbours) foreach (var d in doors) { if (d.a == current) names.Add(d.b); else if (d.b == current) names.Add(d.a); }
+                foreach (var n in names.Distinct()) { var f = Room(n).floor; l.Add(Rect.MinMaxRect(f.xMin - .35f, f.yMin - .35f, f.xMax + .35f, f.yMax + .35f)); }
                 return l;
             }
             public bool Near(Vector2 p) { foreach (var g in Zones()) if (p.x > g.xMin && p.x < g.xMax && p.y > g.yMin && p.y < g.yMax) return true; return false; }
-            bool SkyShown() { if (current == "living" || current == "balcony") return true; if (!Inside) return false; foreach (var d in doors) if ((d.a == current && (d.b == "living" || d.b == "balcony")) || (d.b == current && (d.a == "living" || d.a == "balcony"))) return true; return false; }
+            bool SkyShown() { if (current == "living" || current == "balcony") return true; if (!Inside && !Neighbours) return false; foreach (var d in doors) if ((d.a == current && (d.b == "living" || d.b == "balcony")) || (d.b == current && (d.a == "living" || d.a == "balcony"))) return true; return false; }
             // the inside camera (key I): no wall of the room is cut away and its ceiling is shown; the rooms beyond the doors stay switched off as in the outside view
             public bool Inside { get; private set; }
             public void SetInside(bool on) { Inside = on; if (current != null) Apply(); }
@@ -455,6 +458,11 @@ namespace Oddity.RoomTest
                     if (r == null || r.name == "ceiling") continue;
                     if (r.name == "Sky") { r.enabled = SkyShown(); continue; }
                     var c = r.bounds.center; r.enabled = r.name != "slab" && zones.Any(g => g.Contains(new Vector2(c.x, c.z)));
+                    // a piece of a neighbouring room that stands between the fixed camera and the current room is hidden, so a neighbour never blocks the picture
+                    if (r.enabled && !Inside && Neighbours && !zones[0].Contains(new Vector2(c.x, c.z)) && !r.name.StartsWith("floor_"))
+                    {
+                        var bb = r.bounds; foreach (var q in sightPts[rd.name]) if (SegHitsBox(rd.eye, q, bb.min, bb.max)) { r.enabled = false; break; }
+                    }
                 }
             }
             public void Show(string room)
