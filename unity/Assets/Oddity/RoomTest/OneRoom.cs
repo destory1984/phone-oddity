@@ -26,6 +26,18 @@ namespace Oddity.RoomTest
         // the free floor patch between the bed (east edge x 1.0) and the TV cabinet (west face x 2.65): the home-workout mat (0.6 x 1.7 m, long side north-south) is centred on WorkoutSpot, WorkoutArea is what the cats keep out of while she exercises
         public static readonly Vector2 WorkoutSpot = new Vector2(1.7f, 1.8f);
         public static readonly Rect WorkoutArea = Rect.MinMaxRect(1.15f, .9f, 2.25f, 2.7f);
+        // ; (ramen) at the kitchenette: she stands 0.23 m from the counter front (x 2.45) between the sink and the cooktop facing east; the rig's world contacts: pot-bottom centres at the sink and the cooktop, a fingertip contact on the burner knob and one on the tap lever
+        public static readonly Vector2 RamenSpot = new Vector2(2.22f, 4.10f);
+        public const float RamenYaw = 90f;
+        public static readonly Vector3 RamenSink = new Vector3(2.64f, .90f, 3.98f), RamenBurner = new Vector3(2.66f, .90f, 4.23f), RamenKnob = new Vector3(2.48f, .92f, 4.14f), RamenTap = new Vector3(2.55f, 1.02f, 3.88f);
+        public static readonly Rect RamenArea = Rect.MinMaxRect(1.95f, 3.6f, 2.45f, 4.6f);
+        // the low folding table meal (' key): cushion centre on the free patch between the bed and the TV cabinet, she faces south, the table is 0.52 m ahead of her hips; MealArea is what the cats keep out of (cushion 0.72 x 0.60 and table 0.60 x 0.40)
+        public static readonly Vector2 MealSpot = new Vector2(1.65f, 2.30f);
+        public const float MealYaw = 180f;
+        public static readonly Rect MealArea = Rect.MinMaxRect(1.2f, 1.45f, 2.1f, 2.7f);
+        // the laundry heap and the folded stack sit on the duvet beside the bed-edge seat (Laundry.cs Props frame: world position, yaw 90 = she faces east)
+        public static readonly Vector3 LaundryAt = new Vector3(.81f, .46f, 1.50f);
+        public const float LaundryYaw = 90f;
         static Apartment.Layout layout;
         public static Apartment.Layout Layout => layout ?? (layout = MakeLayout());
 
@@ -77,8 +89,11 @@ namespace Oddity.RoomTest
                 f("counter", 2.45f, X1, 0, .85f, 3.0f, 4.5f, white, true, "counter"),
                 f("worktop", 2.44f, X1, .85f, .89f, 2.99f, 4.5f, top),
                 f("fridge_door", 2.43f, 2.45f, .05f, .80f, 3.02f, 3.58f, steel), f("fridge_handle", 2.41f, 2.43f, .55f, .75f, 3.52f, 3.55f, dark),
-                f("sink", 2.58f, 2.92f, .87f, .895f, 3.7f, 4.1f, steel), f("tap", 2.93f, 2.96f, .89f, 1.05f, 3.88f, 3.92f, steel),
-                f("cooktop", 2.62f, 2.92f, .89f, .9f, 4.15f, 4.40f, dark),
+                f("sink", 2.52f, 2.86f, .87f, .895f, 3.7f, 4.1f, steel), f("tap", 2.93f, 2.96f, .89f, 1.05f, 3.88f, 3.92f, steel),
+                f("cooktop", 2.54f, 2.84f, .89f, .9f, 4.12f, 4.34f, dark),
+                // the burner knob (a fingertip contact for R) and a tap with a bent nozzle over the sink and a side lever (the tap lever contact for R)
+                f("burner_knob", 2.47f, 2.51f, .89f, .93f, 4.12f, 4.16f, dark),
+                f("tap_nozzle", 2.58f, 2.66f, 1.03f, 1.05f, 3.88f, 3.96f, steel), f("tap_arm", 2.66f, 2.93f, 1.03f, 1.05f, 3.88f, 3.92f, steel), f("tap_lever", 2.50f, 2.58f, 1.00f, 1.04f, 3.87f, 3.89f, steel),
                 f("upper", 2.7f, X1, 1.45f, 2.1f, 3.0f, 4.5f, white),
                 // bath: toilet on the north wall, small washbasin on the west wall, a shower curtain in the south-west corner (cloth, Harin can brush through it)
                 f("toilet", .95f, 1.35f, 0, .40f, 4.9f, 5.5f, white, true), f("toilet_tank", .95f, 1.35f, .40f, .80f, 5.25f, 5.5f, white),
