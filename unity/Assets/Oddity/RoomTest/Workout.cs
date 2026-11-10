@@ -328,7 +328,14 @@ namespace Oddity.RoomTest
         public void Dispose()
         {
             if (disposed) return;
-            if (written) ReadBase();
+            try { DisposeCore(); }
+            catch (System.Exception) { disposed = true; }
+        }
+
+        void DisposeCore()
+        {
+            if (disposed) return;
+            if (written) { try { ReadBase(); } catch (System.Exception) { } }
             disposed = true; Smile = EyesClosed = MouthOpen = 0f;
             SofaRig.Kill(Mat != null ? Mat.gameObject : null); Release(matMaterial);
         }

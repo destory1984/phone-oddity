@@ -304,7 +304,14 @@ namespace Oddity.RoomTest
         public void Dispose()
         {
             if (disposed) return;
-            if (hasWritten) ReadPose();
+            try { DisposeCore(); }
+            catch (System.Exception) { disposed = true; }
+        }
+
+        void DisposeCore()
+        {
+            if (disposed) return;
+            if (hasWritten) { try { ReadPose(); } catch (System.Exception) { } }
             disposed = true; clock.Clear();
             SofaRig.Kill(Mug != null ? Mug.gameObject : null);
             Release(ceramic); Release(coffee);

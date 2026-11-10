@@ -1852,7 +1852,7 @@ namespace Oddity.RoomTest
                 var b=rs[0].bounds;foreach(var r in rs)b.Encapsulate(r.bounds);
                 blockers.Add(Rect.MinMaxRect(b.min.x-BodyRadius,b.min.z-BodyRadius,b.max.x+BodyRadius,b.max.z+BodyRadius));
             }
-            foreach(var f in furniture)blockers.Add(Rect.MinMaxRect(f.xMin-BodyRadius,f.yMin-BodyRadius,f.xMax+BodyRadius,f.yMax+BodyRadius));
+            foreach(var f in furniture){float rx=one && Mathf.Approximately(f.xMin,2.45f) && Mathf.Approximately(f.xMax,3f)?OneRoom.CounterBodyRadius:BodyRadius;blockers.Add(Rect.MinMaxRect(f.xMin-rx,f.yMin-BodyRadius,f.xMax+BodyRadius,f.yMax+BodyRadius));} // the kitchen counter lets her stand 0.12 m off its front so her hand reaches the pots
             if(apt)foreach(var w in Apartment.WallBlockers())blockers.Add(Rect.MinMaxRect(w.xMin-BodyRadius,w.yMin-BodyRadius,w.xMax+BodyRadius,w.yMax+BodyRadius)); // walls with their door gaps
             if(apt)foreach(var w in Apartment.LeafBlockers())blockers.Add(Rect.MinMaxRect(w.xMin-BodyRadius,w.yMin-BodyRadius,w.xMax+BodyRadius,w.yMax+BodyRadius)); // open door leaves and the stacked sliding panels
             Debug.Log("ROOMPLAY_BLOCKERS "+string.Join(" ",blockers.Select(r=>"("+F(r.xMin)+".."+F(r.xMax)+","+F(r.yMin)+".."+F(r.yMax)+")")));
@@ -3582,7 +3582,7 @@ namespace Oddity.RoomTest
             if(chairSat!=null){StartChairStand(-1);}
             workoutOn=true;workoutWalk=true;workoutTries=0;workoutWait=0;workoutLastPhase="";
             if(current!=9 && current!=10 && current!=11){onFloor=false;Select(9);}
-            WorkoutShowMat(true);
+            WorkoutShowMat(false); // the mat is laid when she arrives
             clickSeat=null;clickWindow=true;clickGoal=OneRoom.WorkoutSpot;hPathGoal=null;hReplanned=false;clickStuck=0;
             Debug.Log("ROOMPLAY_WORKOUT walk to=("+F(OneRoom.WorkoutSpot.x)+","+F(OneRoom.WorkoutSpot.y)+") model="+modelName);Notice("홈트");
         }
@@ -3600,7 +3600,7 @@ namespace Oddity.RoomTest
                 workoutTries++;clickSeat=null;clickWindow=true;clickGoal=OneRoom.WorkoutSpot;hPathGoal=null;hReplanned=false;clickStuck=0;Debug.Log("ROOMPLAY_WORKOUT retry "+workoutTries+" at=("+F(x)+","+F(z)+")");return;}
             if(workoutWalk && !clickGoal.HasValue){ // arrived: wait (at most 2 s) until she has turned to face the window, then the circuit starts
                 workoutWait+=dt;
-                if(Mathf.Abs(Mathf.DeltaAngle(yaw,Apartment.WindowYaw))<3f || workoutWait>2f){workoutWalk=false;WorkoutBlockOn();workoutRig.Start();Debug.Log("ROOMPLAY_WORKOUT start at=("+F(x)+","+F(z)+") yaw="+F(yaw));}}
+                if(Mathf.Abs(Mathf.DeltaAngle(yaw,Apartment.WindowYaw))<3f || workoutWait>2f){workoutWalk=false;WorkoutBlockOn();WorkoutShowMat(true);workoutRig.Start();Debug.Log("ROOMPLAY_WORKOUT start at=("+F(x)+","+F(z)+") yaw="+F(yaw));}}
         }
         void WorkoutApply(float dt)
         {
@@ -4120,6 +4120,7 @@ namespace Oddity.RoomTest
             if(!catSfxOn){var small=new GUIStyle(GUI.skin.label){fontSize=13,alignment=TextAnchor.MiddleRight};var r2=new Rect(Screen.width-230,46,220,22);
                 small.normal.textColor=new Color(0,0,0,.9f);GUI.Label(new Rect(r2.x+1,r2.y+1,r2.width,r2.height),"고양이 소리 끔",small);small.normal.textColor=new Color(1f,.85f,.6f);GUI.Label(r2,"고양이 소리 끔",small);}
         }
-        void OnDestroy(){foreach(var pet in pets)if(pet.graph.IsValid())pet.graph.Destroy();zeroTwoAudio?.Dispose();zeroTwoDance?.Dispose();sofaRig?.Dispose();callRig?.Dispose();coffeeRig?.Dispose();curtainRig?.Dispose();wakeRig?.Dispose();workoutRig?.Dispose();ramenRig?.Dispose();mealRig?.Dispose();laundryRig?.Dispose();mirrorRig?.Dispose();catRig?.Dispose();curtain?.Dispose();tv?.Dispose();if(clips!=null && clips[ZeroTwoIndex]!=null)Destroy(clips[ZeroTwoIndex]);DestroyGestureClips(clips);if(graph.IsValid())graph.Destroy();if(boundsMesh!=null)Destroy(boundsMesh);if(soleBake!=null)Destroy(soleBake);EditorSettings.enterPlayModeOptionsEnabled=oldEnabled;EditorSettings.enterPlayModeOptions=oldOptions;}
+        static void SafeDispose(System.IDisposable d){try{d?.Dispose();}catch(System.Exception e){Debug.LogWarning("ROOMPLAY_DISPOSE "+e.GetType().Name);}}
+        void OnDestroy(){foreach(var pet in pets)if(pet.graph.IsValid())pet.graph.Destroy();SafeDispose(zeroTwoAudio);SafeDispose(zeroTwoDance);SafeDispose(sofaRig);SafeDispose(callRig);SafeDispose(coffeeRig);SafeDispose(curtainRig);SafeDispose(wakeRig);SafeDispose(workoutRig);SafeDispose(ramenRig);SafeDispose(mealRig);SafeDispose(laundryRig);SafeDispose(mirrorRig);SafeDispose(catRig);SafeDispose(curtain);SafeDispose(tv);if(clips!=null && clips[ZeroTwoIndex]!=null)Destroy(clips[ZeroTwoIndex]);DestroyGestureClips(clips);if(graph.IsValid())graph.Destroy();if(boundsMesh!=null)Destroy(boundsMesh);if(soleBake!=null)Destroy(soleBake);EditorSettings.enterPlayModeOptionsEnabled=oldEnabled;EditorSettings.enterPlayModeOptions=oldOptions;}
     }
 }

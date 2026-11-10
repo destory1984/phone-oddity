@@ -57,10 +57,10 @@ namespace Oddity.RoomTest
     public sealed class LaundryRig : IDisposable
     {
         public const float BlendSeconds = .4f; // Linear weight ramp, smoothstep applied to the pose.
-        public const float ClothWidth = .38f, ClothLength = .46f, ClothThickness = .006f; // Metres, unfolded thin box.
+        public const float ClothWidth = .38f, ClothLength = .46f, ClothThickness = .01f; // Metres, unfolded thin cloth.
         public const float SideDistance = .37f, BedBack = -.14f, HeapLayer = .014f; // Heap/stack placement in Props local metres.
         public const float HeapYaw = 12f, HeapJitter = .018f; // Seeded untidy heap angle and lateral scatter.
-        public const float LapAhead = .18f, LapUp = .10f, LiftAhead = .26f, LiftUp = .43f; // Cloth centre / top edge relative to hips.
+        public const float LapAhead = .18f, LapUp = .10f, LiftAhead = .30f, LiftUp = .34f; // Cloth centre / top edge relative to hips.
         public const float SnapRise = .065f, SnapDrop = .055f, SnapPeak = .35f, SnapBottom = .65f; // One raised beat and downward snap.
         public const float TravelArc = .08f, FoldArc = .06f; // Metres above the pickup/deposit and folding paths.
         public const float WristGap = .045f, WristLift = .018f; // Wrist behind contact and above fabric, metres.
@@ -74,6 +74,8 @@ namespace Oddity.RoomTest
         public const float BlinkPeriod = 3.7f, BlinkSeconds = .16f; // Quiet periodic blink.
         public const float RotationTolerance = .001f, AxisEpsilon = .000001f; // Idempotence and degenerate-frame tolerances.
         public const float Half = .5f, Quarter = .25f, FlatToHanging = 90f; // Fold ratios and cloth rotation in degrees.
+        public const int ClothSegments = 6; // Length segments of the bendable cloth mesh.
+        public const float ClothSag = .035f; // Metres the held garment bows away from her while hanging.
         static readonly Color[] Colours = { new Color(.73f, .80f, .89f), new Color(.90f, .76f, .73f), new Color(.86f, .86f, .79f), new Color(.69f, .78f, .71f), new Color(.78f, .72f, .84f) }; // Five muted fabrics.
 
         readonly Animator anim;
@@ -87,6 +89,8 @@ namespace Oddity.RoomTest
         readonly Vector3[] heapPositions = new Vector3[LaundryTimeline.PieceCount];
         readonly Quaternion[] heapRotations = new Quaternion[LaundryTimeline.PieceCount];
         readonly Material[] materials = new Material[LaundryTimeline.PieceCount];
+        readonly Mesh[] meshes = new Mesh[LaundryTimeline.PieceCount];
+        readonly float[] bent = new float[LaundryTimeline.PieceCount];
         readonly Quaternion[] before, written;
         readonly LaundryTimeline clock;
         bool wanted, disposed, hasWritten;
@@ -139,18 +143,52 @@ namespace Oddity.RoomTest
             var rng = new System.Random(seed);
             for (int i = 0; i < pieces.Length; i++)
             {
-                var g = GameObject.CreatePrimitive(PrimitiveType.Cube); g.name = "LaundryPiece" + i;
+                var g = new GameObject("LaundryPiece" + i);
                 g.transform.SetParent(Props, false); pieces[i] = g.transform;
-                var collider = g.GetComponent<Collider>(); collider.enabled = false;
-                // Destroy just the component: the owned garment itself must remain alive.
-                if (Application.isPlaying) UnityEngine.Object.Destroy(collider); else UnityEngine.Object.DestroyImmediate(collider);
+                meshes[i] = new Mesh { name = "LaundryCloth" + i }; meshes[i].MarkDynamic(); BuildCloth(meshes[i], 0, 1);
+                g.AddComponent<MeshFilter>().sharedMesh = meshes[i];
                 materials[i] = new Material(shader); materials[i].color = Colours[i];
-                g.GetComponent<Renderer>().sharedMaterial = materials[i];
+                g.AddComponent<MeshRenderer>().sharedMaterial = materials[i];
                 heapPositions[i] = new Vector3(-SideDistance + ((float)rng.NextDouble() * 2 - 1) * HeapJitter,
                     ClothThickness * Half + (pieces.Length - 1 - i) * HeapLayer, BedBack);
                 heapRotations[i] = Quaternion.Euler(0, ((float)rng.NextDouble() * 2 - 1) * HeapYaw, 0);
             }
             Props.gameObject.SetActive(false);
+        }
+
+        // A thin box of unit width/length/thickness cut into ClothSegments along z; bend bows the middle along local +y by ClothSag metres
+        // (ySize is the piece's local y scale, so the bow stays in metres). Local +y becomes "away from her" when the garment hangs.
+        static void BuildCloth(Mesh m, float bend, float ySize)
+        {
+            int rings = ClothSegments + 1;
+            var v = new Vector3[rings * 4];
+            float dy = bend * ClothSag / Mathf.Max(ySize, .0001f);
+            for (int k = 0; k < rings; k++)
+            {
+                float u = (float)k / ClothSegments, z = u - .5f, y = dy * Mathf.Sin(Mathf.PI * u);
+                v[k * 4] = new Vector3(-.5f, .5f + y, z); v[k * 4 + 1] = new Vector3(.5f, .5f + y, z);
+                v[k * 4 + 2] = new Vector3(.5f, -.5f + y, z); v[k * 4 + 3] = new Vector3(-.5f, -.5f + y, z);
+            }
+            m.vertices = v;
+            if (m.triangles.Length == 0)
+            {
+                var t = new List<int>();
+                for (int k = 0; k < ClothSegments; k++) for (int e = 0; e < 4; e++)
+                {
+                    int a = k * 4 + e, b = k * 4 + (e + 1) % 4, c = (k + 1) * 4 + e, d = (k + 1) * 4 + (e + 1) % 4;
+                    t.Add(a); t.Add(c); t.Add(b); t.Add(b); t.Add(c); t.Add(d);
+                }
+                t.Add(0); t.Add(1); t.Add(2); t.Add(0); t.Add(2); t.Add(3);
+                int o = ClothSegments * 4;
+                t.Add(o); t.Add(o + 2); t.Add(o + 1); t.Add(o); t.Add(o + 3); t.Add(o + 2);
+                m.triangles = t.ToArray();
+            }
+            m.RecalculateNormals(); m.RecalculateBounds();
+        }
+        void SetBend(int i, float amount, float ySize)
+        {
+            if (Mathf.Abs(bent[i] - amount) < .01f) return;
+            bent[i] = amount; BuildCloth(meshes[i], amount, ySize);
         }
 
         Transform Bone(HumanBodyBones id)
@@ -246,6 +284,8 @@ namespace Oddity.RoomTest
             }
             if (Phase != "Return" && Phase != "Pat" && !Done)
             { pieces[index].SetPositionAndRotation(centre, rotation); pieces[index].localScale = size; }
+            for (int i = 0; i < pieces.Length; i++)
+                SetBend(i, i == index && (Phase == "Lift" || Phase == "Shake" || Phase == "Lower") ? (Phase == "Lift" ? e : Phase == "Shake" ? 1 : 1 - e) : 0, i == index ? size.y : pieces[i].localScale.y);
 
             // The held edge is local -z: it becomes the upper edge when the garment hangs down.
             float edgeSide = Phase == "Place" ? 1 : -1;
@@ -313,10 +353,18 @@ namespace Oddity.RoomTest
         public void Dispose()
         {
             if (disposed) return;
+            try { DisposeCore(); }
+            catch (System.Exception) { disposed = true; }
+        }
+
+        void DisposeCore()
+        {
+            if (disposed) return;
             if (hasWritten) for (int i = 0; i < controlled.Count; i++)
                 if (controlled[i] != null && Quaternion.Angle(controlled[i].localRotation, written[i]) < RotationTolerance) controlled[i].localRotation = before[i];
             disposed = true; wanted = false; Weight = Smile = EyesClosed = 0; clock.Stop();
             SofaRig.Kill(Props != null ? Props.gameObject : null);
+            foreach (var mesh in meshes) if (mesh != null) { if (Application.isPlaying) UnityEngine.Object.Destroy(mesh); else UnityEngine.Object.DestroyImmediate(mesh); }
             foreach (var material in materials)
                 if (material != null) { if (Application.isPlaying) UnityEngine.Object.Destroy(material); else UnityEngine.Object.DestroyImmediate(material); }
         }

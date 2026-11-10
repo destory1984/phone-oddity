@@ -7,7 +7,7 @@ namespace Oddity.RoomTest
     // Pure time/state data; usable by EditMode tests without loading a VRM.
     public sealed class FloorMealTimeline
     {
-        public const float BlendSeconds = .4f; // Seconds for the complete overlay to enter or leave.
+        public const float BlendSeconds = 1.4f; // Seconds for the complete overlay to enter or leave (a slow sit-down and stand-up).
         const float GatherSeconds = 1.8f, LiftSeconds = 2f, SlurpSeconds = 2.4f; // Eating beats, seconds.
         const float ChewSeconds = 2.2f, LowerSeconds = 1.2f; // Settle and return the bowl, seconds.
         const float PhoneSeconds = 3f, LaughSeconds = 1.6f, ReturnSeconds = 1.2f; // Phone reaction beats, seconds.
@@ -406,7 +406,14 @@ namespace Oddity.RoomTest
         public void Dispose()
         {
             if (disposed) return;
-            if (hasWritten) ReadPose();
+            try { DisposeCore(); }
+            catch (System.Exception) { disposed = true; }
+        }
+
+        void DisposeCore()
+        {
+            if (disposed) return;
+            if (hasWritten) { try { ReadPose(); } catch (System.Exception) { } }
             disposed = true;
             SofaRig.Kill(Chopsticks != null ? Chopsticks.gameObject : null);
             SofaRig.Kill(Props != null ? Props.gameObject : null);

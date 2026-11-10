@@ -237,7 +237,14 @@ namespace Oddity.RoomTest
         public void Dispose()
         {
             if (disposed) return;
-            if (hasWritten) ReadPose();
+            try { DisposeCore(); }
+            catch (System.Exception) { disposed = true; }
+        }
+
+        void DisposeCore()
+        {
+            if (disposed) return;
+            if (hasWritten) { try { ReadPose(); } catch (System.Exception) { } }
             disposed = true; wanted = false; Weight = Smile = EyesClosed = MouthOpen = LipPress = 0; Phase = "Idle";
             SofaRig.Kill(Mirror != null ? Mirror.gameObject : null); SofaRig.Kill(Tint != null ? Tint.gameObject : null);
             foreach (var m in materials)

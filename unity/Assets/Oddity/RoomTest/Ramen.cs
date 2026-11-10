@@ -53,6 +53,7 @@ namespace Oddity.RoomTest
         const float StripWidth = .018f, NoodleSize = .095f, NoodleThickness = .025f; // Torn edge and noodle block metres.
         const float ChopLength = .24f, ChopRadius = .003f, ChopGap = .014f; // Chopstick geometry metres.
         const float ChopGrip = .075f, StirRadius = .035f, StirHz = .7f; // Grip offset metres, stirring radius metres and Hz.
+        const float StirPullIn = .05f; // Stir centre pulled toward her so the hand reaches the whole circle.
         const float StirHandHeight = .24f, StirTilt = 16f; // Wrist height above burner in metres, utensil tilt degrees.
         const float PourFall = .14f, WaterY = .065f, LiquidInset = .022f; // Noodle fall and water level metres.
         const float PhoneOffset = .24f, PhoneRaise = .015f, PhoneTilt = 72f; // Phone placement metres and tilt degrees.
@@ -237,7 +238,7 @@ namespace Oddity.RoomTest
             else if (beat == 5) { l = Vector3.Lerp(PacketRest, Burner + Vector3.up * PacketLift - Right * PacketSide, Ease((t - RamenClock.PhoneEnd) / (RamenClock.PacketEnd - RamenClock.PhoneEnd))); r = l + Right * PacketW; }
             else if (beat == 6) { float tear = Ease((t - RamenClock.PacketEnd) / (RamenClock.TearEnd - RamenClock.PacketEnd)); l = Burner + Vector3.up * PacketLift - Right * (PacketSide + TearSpread * tear); r = l + Right * (PacketW + TearSpread * tear); }
             else if (beat == 7) { l = Burner + Vector3.up * PacketLift - Right * PacketSide; r = Rest(1); }
-            else if (beat == 8) { l = Handle(Burner); r = Burner + Vector3.up * StirHandHeight + (Right * Mathf.Cos(t * Tau * StirHz) + Forward * Mathf.Sin(t * Tau * StirHz)) * StirRadius; }
+            else if (beat == 8) { l = Handle(Burner); r = Burner - Forward * StirPullIn + Vector3.up * StirHandHeight + (Right * Mathf.Cos(t * Tau * StirHz) + Forward * Mathf.Sin(t * Tau * StirHz)) * StirRadius; }
         }
         void RestoreLast()
         {
@@ -323,7 +324,14 @@ namespace Oddity.RoomTest
         public void Dispose()
         {
             if (disposed) return;
-            RestoreLast(); disposed = true; Smile = EyesClosed = MouthOpen = 0;
+            try { DisposeCore(); }
+            catch (System.Exception) { disposed = true; }
+        }
+
+        void DisposeCore()
+        {
+            if (disposed) return;
+            try { RestoreLast(); } catch (System.Exception) { } disposed = true; Smile = EyesClosed = MouthOpen = 0;
             DestroyOwned(Chopsticks != null ? Chopsticks.gameObject : null);
             // Packet may currently be parented to a hand rather than Props.
             DestroyOwned(Packet != null ? Packet.gameObject : null);

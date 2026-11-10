@@ -71,11 +71,11 @@ namespace Oddity.RoomTest
     public sealed class CatPlayRig : IDisposable
     {
         public const float BlendSeconds = CatPlayTiming.BlendSeconds; // Entry and exit seconds.
-        public const float SquatHeight = .36f, AnkleHeight = .08f; // Hip and ankle pivots above FloorY, metres.
+        public const float SquatHeight = .32f, AnkleHeight = .08f; // Hip and ankle pivots above FloorY, metres.
         public const float StickLength = .6f, StringLength = .38f; // World-space metres, independent of model scale.
-        const float FootHalfWidth = .17f, FootAhead = .08f, HipBack = .10f; // Squat support geometry, metres.
+        const float FootHalfWidth = .17f, FootAhead = .08f, HipBack = -.10f; // Squat support geometry, metres.
         const float KneeAhead = .55f, KneeOut = .18f; // Knee pole relative to each hip, metres.
-        const float SpineLean = 55f, ChestLean = 20f, GazeLimit = 65f, NeckShare = .3f; // Degrees and head/neck split.
+        const float SpineLean = 62f, ChestLean = 24f, GazeLimit = 65f, NeckShare = .3f; // Degrees and head/neck split.
         const float ContactGap = .014f, PalmLength = .055f; // Back-to-palm gap and wrist-to-palm centre, metres.
         const float LeftRestOut = .13f, LeftRestAhead = .25f, LeftRestDown = .04f; // Left wrist from hips, metres.
         const float HandAhead = .38f, HandSide = .10f, HandHeight = .53f; // Wand wrist relative to root/floor, metres.
@@ -322,7 +322,14 @@ namespace Oddity.RoomTest
         public void Dispose()
         {
             if (disposed) return;
-            RestoreUnchanged(); HideProps(); disposed = true;
+            try { DisposeCore(); }
+            catch (System.Exception) { disposed = true; }
+        }
+
+        void DisposeCore()
+        {
+            if (disposed) return;
+            try { RestoreUnchanged(); HideProps(); } catch (System.Exception) { } disposed = true;
             SofaRig.Kill(Wand != null ? Wand.gameObject : null);
             SofaRig.Kill(stringProp != null ? stringProp.gameObject : null);
             SofaRig.Kill(feather != null ? feather.gameObject : null);

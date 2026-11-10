@@ -357,7 +357,14 @@ namespace Oddity.RoomTest
         public void Dispose()
         {
             if (disposed) return;
-            if (hasWritten) ReadPose();
+            try { DisposeCore(); }
+            catch (System.Exception) { disposed = true; }
+        }
+
+        void DisposeCore()
+        {
+            if (disposed) return;
+            if (hasWritten) { try { ReadPose(); } catch (System.Exception) { } }
             disposed = true; wanted = Talking = false; Weight = MouthOpen = Smile = 0;
             SofaRig.Kill(Phone != null ? Phone.gameObject : null);
             Release(bodyMaterial); Release(frameMaterial); Release(screenMaterial);

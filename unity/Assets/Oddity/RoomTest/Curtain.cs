@@ -311,7 +311,14 @@ namespace Oddity.RoomTest
         public void Dispose()
         {
             if (disposed) return;
-            if (hasWritten) ReadPose();
+            try { DisposeCore(); }
+            catch (System.Exception) { disposed = true; }
+        }
+
+        void DisposeCore()
+        {
+            if (disposed) return;
+            if (hasWritten) { try { ReadPose(); } catch (System.Exception) { } }
             disposed = true; wanted = false; Weight = Smile = EyesClosed = 0; Phase = "Idle";
             // The curtain deliberately remains where the last pull left it.
         }

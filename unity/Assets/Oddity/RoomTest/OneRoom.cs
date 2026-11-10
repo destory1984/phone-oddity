@@ -27,14 +27,15 @@ namespace Oddity.RoomTest
         public static readonly Vector2 WorkoutSpot = new Vector2(1.7f, 1.8f);
         public static readonly Rect WorkoutArea = Rect.MinMaxRect(1.15f, .9f, 2.25f, 2.7f);
         // ; (ramen) at the kitchenette: she stands 0.23 m from the counter front (x 2.45) between the sink and the cooktop facing east; the rig's world contacts: pot-bottom centres at the sink and the cooktop, a fingertip contact on the burner knob and one on the tap lever
-        public static readonly Vector2 RamenSpot = new Vector2(2.22f, 4.10f);
+        public static readonly Vector2 RamenSpot = new Vector2(2.28f, 4.10f);
+        public const float CounterBodyRadius = .12f; // her walk blocker margin at the kitchen counter front (the other furniture uses 0.2)
         public const float RamenYaw = 90f;
         public static readonly Vector3 RamenSink = new Vector3(2.64f, .90f, 3.98f), RamenBurner = new Vector3(2.66f, .90f, 4.23f), RamenKnob = new Vector3(2.48f, .92f, 4.14f), RamenTap = new Vector3(2.55f, 1.02f, 3.88f);
         public static readonly Rect RamenArea = Rect.MinMaxRect(1.95f, 3.6f, 2.45f, 4.6f);
         // the low folding table meal (' key): cushion centre on the free patch between the bed and the TV cabinet, she faces south, the table is 0.52 m ahead of her hips; MealArea is what the cats keep out of (cushion 0.72 x 0.60 and table 0.60 x 0.40)
-        public static readonly Vector2 MealSpot = new Vector2(1.65f, 2.30f);
+        public static readonly Vector2 MealSpot = new Vector2(2.0f, 2.30f); // x 2.0: east of the sill plant and the window mullion (x 1.5) so the default peeping camera sees her
         public const float MealYaw = 180f;
-        public static readonly Rect MealArea = Rect.MinMaxRect(1.2f, 1.45f, 2.1f, 2.7f);
+        public static readonly Rect MealArea = Rect.MinMaxRect(1.55f, 1.45f, 2.45f, 2.7f);
         // the laundry heap and the folded stack sit on the duvet beside the bed-edge seat (Laundry.cs Props frame: world position, yaw 90 = she faces east)
         public static readonly Vector3 LaundryAt = new Vector3(.81f, .46f, 1.50f);
         public const float LaundryYaw = 90f;
@@ -77,7 +78,7 @@ namespace Oddity.RoomTest
                 // bed: west wall, head at the north end
                 f("bed_frame", 0, 1.0f, 0, .28f, .5f, 2.5f, wood, true),
                 f("bed_mattress", .02f, .98f, .28f, .42f, .52f, 2.48f, linen, false, "bed"),
-                f("bed_duvet", 0, 1.0f, .42f, .46f, .5f, 1.95f, duvet),
+                f("bed_duvet", 0, 1.0f, .42f, .46f, .5f, 2.10f, duvet),
                 f("bed_head", 0, 1.0f, 0, .85f, 2.5f, 2.56f, wood),
                 f("rug", 1.25f, 2.15f, 0, .006f, 1.0f, 2.6f, new Color(.82f, .76f, .66f)),
                 // built-in wardrobe: west wall, two doors facing east
