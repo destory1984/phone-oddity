@@ -154,15 +154,44 @@ namespace Oddity.RoomTest
         public static Vector3 BedSeat => Cur.bedSeat;
         public static Vector3 BedFront => Cur.bedFront;
         public static Vector3 BedSize => Cur.bedSize;
-        // the pillow: a flattened ellipsoid, pillowAt = centre of its flat base (x, mattress top, z), pillowSize = full width, height at the centre, depth; zero size = none
+        // the pillow: a rectangular stuffed cushion (PillowMesh), pillowAt = centre of its flat base (x, mattress top, z), pillowSize = full width, height at the centre, depth; zero size = none
         public static bool HasPillow => Cur.pillowSize.y > 0;
         public static Vector3 PillowAt => Cur.pillowAt;
         public static Vector3 PillowSize => Cur.pillowSize;
         public static float PillowTopAt(float x, float z)
         {
             if (!HasPillow) return 0;
-            float a = Cur.pillowSize.x / 2, b = Cur.pillowSize.z / 2, dx = (x - Cur.pillowAt.x) / a, dz = (z - Cur.pillowAt.z) / b, d2 = dx * dx + dz * dz;
-            return Cur.pillowAt.y + (d2 >= 1 ? 0 : Cur.pillowSize.y * Mathf.Sqrt(1 - d2));
+            float b = PillowBulge((x - Cur.pillowAt.x) / (Cur.pillowSize.x / 2), (z - Cur.pillowAt.z) / (Cur.pillowSize.z / 2));
+            return Cur.pillowAt.y + (b <= 0 ? 0 : PillowSeam + (Cur.pillowSize.y - PillowSeam) * b);
+        }
+        public const float PillowSeam = .015f; // metres the pinched edge seam floats above the mattress
+        const int PillowGrid = 24; // quads per side of the pillow mesh
+        // 1 at the centre, 0 on the rectangular outline (u, v = -1..1 across the width and the depth): a stuffed cushion, plump in the middle and pinched thin along the seam
+        public static float PillowBulge(float u, float v)
+        {
+            u = Mathf.Abs(u); v = Mathf.Abs(v);
+            return u >= 1 || v >= 1 ? 0 : Mathf.Pow((1 - u * u * u) * (1 - v * v * v), .6f);
+        }
+        // The pillow as one closed mesh around the origin (= pillowAt): the top follows PillowTopAt, the underside sags from the seam down to the mattress.
+        public static Mesh PillowMesh(Vector3 size)
+        {
+            int n = PillowGrid, row = n + 1, half = row * row;
+            var v = new Vector3[half * 2]; var t = new List<int>();
+            for (int j = 0; j < row; j++) for (int i = 0; i < row; i++)
+            {
+                float u = i * 2f / n - 1, w = j * 2f / n - 1, b = PillowBulge(u, w);
+                var p = new Vector3(u * size.x / 2, 0, w * size.z / 2);
+                v[j * row + i] = p + Vector3.up * (PillowSeam + (size.y - PillowSeam) * b);
+                v[half + j * row + i] = p + Vector3.up * (PillowSeam * (1 - b));
+            }
+            for (int j = 0; j < n; j++) for (int i = 0; i < n; i++)
+            {
+                int a = j * row + i, c = a + 1, d = a + row, e = d + 1;
+                t.Add(a); t.Add(d); t.Add(c); t.Add(c); t.Add(d); t.Add(e);
+                t.Add(half + a); t.Add(half + c); t.Add(half + d); t.Add(half + c); t.Add(half + e); t.Add(half + d);
+            }
+            var m = new Mesh { name = "Pillow" }; m.vertices = v; m.triangles = t.ToArray(); m.RecalculateNormals(); m.RecalculateBounds();
+            return m;
         }
         public static float WinPlaneZ => Cur.winPlaneZ;
         public static float WinX0 => Cur.winX0;

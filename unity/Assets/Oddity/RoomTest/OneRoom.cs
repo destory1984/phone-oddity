@@ -154,8 +154,9 @@ namespace Oddity.RoomTest
         {
             Color sheer = new Color(.90f, .90f, .92f), pot = new Color(.80f, .78f, .74f);
             // the curtain and its rod are CurtainPanel (Curtain.cs), built by RoomPlay
-            // the pillow: an ellipsoid whose lower half is inside the mattress, so the visible part is a soft dome (pillowSize.y high at the centre)
-            var pl = Layout; var pg = Apartment.Part(fr, PrimitiveType.Sphere, pl.pillowAt, new Vector3(pl.pillowSize.x, pl.pillowSize.y * 2, pl.pillowSize.z), new Color(.95f, .94f, .92f)); pg.name = "bed_pillow";
+            // the pillow: a rectangular stuffed cushion lying on the mattress, plump in the middle (pillowSize.y) and pinched along the seam (Apartment.PillowMesh; the old one was half a buried ellipsoid and read as an egg)
+            var pl = Layout; var pg = Apartment.Part(fr, PrimitiveType.Cube, pl.pillowAt, Vector3.one, new Color(.95f, .94f, .92f)); pg.name = "bed_pillow";
+            pg.GetComponent<MeshFilter>().sharedMesh = Apartment.PillowMesh(pl.pillowSize);
             Apartment.Part(fr, PrimitiveType.Cylinder, new Vector3(1.50f, .45f, .14f), new Vector3(.14f, .05f, .14f), pot);
             foreach (var (dx, dy, k) in new[] { (0f, .62f, .26f), (.05f, .74f, .2f), (-.04f, .70f, .18f) }) Apartment.Part(fr, PrimitiveType.Sphere, new Vector3(1.50f + dx, dy, .14f), Vector3.one * k, new Color(.30f, .48f, .28f));
         }
@@ -165,7 +166,7 @@ namespace Oddity.RoomTest
             walls = Walls, rooms = Rooms, doors = Doors, furniture = Furniture, leaves = Leaves, fixtures = Fixtures, props = Props,
             // no sofa: her seats are the bed edge (C, P, T) and the bed (K, B, Shift+T); noSofa makes RoomPlay build a bare host for the bed seats instead of loading the prop
             sofaAt = new Vector3(2.60f, 0, 1.45f), sofaFace = Vector3.left, noSofa = true, hasTable = false, hasTea = false, hasFridge = false, hasLedge = false, hasBed = true, hasTower = true,
-            bedSeat = new Vector3(.5f, .43f, 1.5f), bedFront = Vector3.right, bedSize = new Vector3(1.0f, .43f, 2.0f), bedStand = new Vector3(1.25f, 0, 1.5f), bedLieTop = .46f, pillowAt = new Vector3(.5f, .42f, 2.30f), pillowSize = new Vector3(.50f, .14f, .32f),
+            bedSeat = new Vector3(.5f, .43f, 1.5f), bedFront = Vector3.right, bedSize = new Vector3(1.0f, .43f, 2.0f), bedStand = new Vector3(1.25f, 0, 1.5f), bedLieTop = .46f, pillowAt = new Vector3(.5f, .42f, 2.30f), pillowSize = new Vector3(.54f, .13f, .34f),
             // the bed's east edge seat (x .98 is the mattress edge): hips 0.17 m in from the edge, facing east to the TV
             bedEdgeSeat = new Vector3(.81f, .52f, 1.5f),
             // a 32 inch TV on the cabinet on the east wall facing west over the bed: screen centre 0.80 m high, centred on z 1.5

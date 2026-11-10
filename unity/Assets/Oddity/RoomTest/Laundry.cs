@@ -54,19 +54,27 @@ namespace Oddity.RoomTest
 
     // Construct in the imported neutral/T pose, then play a seated clip.
     // Tick once in Update; Apply once in LateUpdate, after the Animator and any seat correction.
+    // The cloth is placed from the real bones every frame (hips, knees, spine, shoulders), not from fixed guesses.
     public sealed class LaundryRig : IDisposable
     {
         public const float BlendSeconds = .4f; // Linear weight ramp, smoothstep applied to the pose.
-        public const float ClothWidth = .38f, ClothLength = .46f, ClothThickness = .01f; // Metres, unfolded thin cloth.
-        public const float SideDistance = .37f, BedBack = -.14f, HeapLayer = .014f; // Heap/stack placement in Props local metres.
+        public const float ClothWidth = .38f, ClothLength = .46f, ClothThickness = .01f; // Metres, unfolded thin cloth (scaled by ClothScale when she cannot reach it all).
+        public const float SideDistance = .37f, BedBack = .08f, HeapLayer = .014f; // Heap placement in Props local metres (her left).
+        public const float StackSide = .24f, StackBack = .08f; // Folded stack on her right, close enough to the right shoulder that the arm reaches it.
         public const float HeapYaw = 12f, HeapJitter = .018f; // Seeded untidy heap angle and lateral scatter.
-        public const float LapAhead = .18f, LapUp = .10f, LiftAhead = .30f, LiftUp = .34f; // Cloth centre / top edge relative to hips.
+        public const float ThighRadius = .07f, ThighGap = .01f; // The thigh top is the hips -> knee line plus this; the cloth keeps ThighGap above it.
+        public const float LapNearMin = .12f, BellyRadius = .09f, BellyMargin = .03f, KneeHang = .10f; // Lap cloth: near edge in front of hips and belly, at most KneeHang past the knees.
+        public const float CsMin = .65f, ReachFraction = .95f; // Smallest cloth scale; share of the arm length a wrist target may use.
+        public const float ShakeUp = -.15f, HangPast = .16f; // Held top edge relative to the shoulders; hanging cloth this far beyond the knees (clear of the shins).
+        public const float TorsoHalf = .14f, GatingSoft = .06f; // Torso half width for the clearance push; soft edge of every clearance gate.
         public const float SnapRise = .065f, SnapDrop = .055f, SnapPeak = .35f, SnapBottom = .65f; // One raised beat and downward snap.
-        public const float TravelArc = .08f, FoldArc = .06f; // Metres above the pickup/deposit and folding paths.
+        public const float TravelArc = .08f, PlaceArc = .12f, ReturnArc = .05f; // Metres above the pickup/deposit, the stack run and the hand return paths.
+        public const float FoldPeak = .5f, LeftHoldAlong = .7f, LeftHoldSeconds = .3f; // Flap lift height as a share of its radius; where the left hand holds the left edge; its slide time share.
         public const float WristGap = .045f, WristLift = .018f; // Wrist behind contact and above fabric, metres.
-        public const float ElbowSide = .24f, ElbowAhead = .15f, ElbowDown = .22f; // Pole relative to shoulder, metres.
+        public const float ElbowSide = .16f, ElbowAhead = .20f, ElbowDown = .20f; // Pole relative to shoulder, metres (working).
+        public const float RestElbowSide = .12f, RestElbowAhead = .10f, RestElbowDown = .28f, RestAhead = .05f; // Relaxed hands on the thighs, elbows near the ribs.
         public const float SpineBow = 12f, ChestBow = 5f, HeadBow = 10f, NeckBow = 4f, SideLean = 12f; // Degrees, additive upper-body offsets (head 22 -> 10, neck 8 -> 4, chest 8 -> 5: the old 50 deg buried the chin in the chest).
-        public const float EdgeSwitchSeconds = .3f; // The hands slide to the folded cloth's new corner over this long when FoldWidth turns into Place.
+        public const float EdgeSwitchSeconds = .4f; // The hands slide to the folded cloth's far corners over this long when FoldWidth turns into Place.
         public const float BreathDegrees = .6f, BreathSeconds = 4.2f; // Small chest breathing.
         public const float CurlProximal = 22f, CurlMiddle = 28f, CurlDistal = 14f, ThumbCurl = 14f; // Pinch curl degrees.
         public const float OpenCurl = .15f, GripCurl = .75f; // Finger curl fractions for release and grasp.
@@ -75,13 +83,40 @@ namespace Oddity.RoomTest
         public const float BlinkPeriod = 3.7f, BlinkSeconds = .16f; // Quiet periodic blink.
         public const float RotationTolerance = .001f, AxisEpsilon = .000001f; // Idempotence and degenerate-frame tolerances.
         public const float Half = .5f, Quarter = .25f, FlatToHanging = 90f; // Fold ratios and cloth rotation in degrees.
-        public const int ClothSegments = 6; // Length segments of the bendable cloth mesh.
+        public const int ClothSegments = 6; // Length segments of the bendable cloth mesh (ring 3 is the fold line).
         public const float ClothSag = .035f; // Metres the held garment bows away from her while hanging.
         static readonly Color[] Colours = { new Color(.73f, .80f, .89f), new Color(.90f, .76f, .73f), new Color(.86f, .86f, .79f), new Color(.69f, .78f, .71f), new Color(.78f, .72f, .84f) }; // Five muted fabrics.
+
+        // Body measurements of one frame, in world space.
+        struct Geo
+        {
+            public Vector3 hp, forward, right;
+            public float dk, dv, latMax, belly;
+            public float ThighTopY(float d) => hp.y + dv * Mathf.Clamp01(d / dk) + ThighRadius + ThighGap;
+            static float Soft(float x) => Mathf.SmoothStep(0, 1, Mathf.Clamp01(x));
+            // How far a point must move forward to clear the belly (0 = clear). Gated softly by width and height so there is no jump.
+            public float TorsoPush(Vector3 p)
+            {
+                var o = p - hp;
+                float d = Vector3.Dot(o, forward), lat = Mathf.Abs(Vector3.Dot(o, right)), h = Vector3.Dot(o, Vector3.up);
+                float deficit = belly + BellyMargin - d;
+                return deficit <= 0 ? 0 : deficit * (1 - Soft((lat - TorsoHalf) / GatingSoft)) * Soft((h - .02f) / GatingSoft);
+            }
+            // How far a point must move up to clear the thigh top (0 = clear); only over the thighs (hips to just past the knees).
+            public float ThighPush(Vector3 p)
+            {
+                var o = p - hp;
+                float d = Vector3.Dot(o, forward), lat = Mathf.Abs(Vector3.Dot(o, right));
+                float gate = Soft((d - .02f) / GatingSoft) * (1 - Soft((d - (dk + .08f)) / GatingSoft)) * (1 - Soft((lat - latMax) / GatingSoft));
+                float deficit = ThighTopY(d) - p.y;
+                return deficit <= 0 ? 0 : deficit * gate;
+            }
+        }
 
         readonly Animator anim;
         readonly Transform hips, spine, chest, neck, head;
         readonly Transform[] upper = new Transform[2], lower = new Transform[2], hands = new Transform[2];
+        readonly Transform[] legUpper = new Transform[2], legLower = new Transform[2];
         readonly Transform[,,] fingers = new Transform[2, 4, 3];
         readonly Transform[,] thumbs = new Transform[2, 3];
         readonly Quaternion[] handFrame = new Quaternion[2];
@@ -91,13 +126,15 @@ namespace Oddity.RoomTest
         readonly Quaternion[] heapRotations = new Quaternion[LaundryTimeline.PieceCount];
         readonly Material[] materials = new Material[LaundryTimeline.PieceCount];
         readonly Mesh[] meshes = new Mesh[LaundryTimeline.PieceCount];
-        readonly float[] bent = new float[LaundryTimeline.PieceCount];
+        readonly float[] bent = new float[LaundryTimeline.PieceCount], folds = new float[LaundryTimeline.PieceCount], pieceScale = new float[LaundryTimeline.PieceCount];
+        readonly Vector3[] shapeSize = new Vector3[LaundryTimeline.PieceCount];
         readonly Quaternion[] before, written;
         readonly LaundryTimeline clock;
-        bool wanted, disposed, hasWritten;
-        float time, switchTime = 1;
+        bool wanted, disposed, hasWritten, scaleKnown;
+        float time, switchTime = 1, clothScale = 1;
         string lastPhase = "";
         Vector3 switchFromL, switchFromR;
+        static readonly Vector3[] Samples = BuildSamples();
 
         // Caller places this WORLD prop frame on the mattress: local +x her right, +z her forward, +y up.
         // Leave scale at one. It is deliberately not parented to the moving character.
@@ -106,7 +143,10 @@ namespace Oddity.RoomTest
         public float Weight { get; private set; }
         public bool Done => clock.Done;
         public string Phase => clock.Phase;
+        public float PhaseProgress => clock.Progress;
         public int Completed => clock.Completed;
+        public float ClothScale => clothScale; // Current garment scale (1 = full size), shrunk when the lap is short or the far edge out of reach.
+        public float PieceScale(int index) => pieceScale[index];
         public float Smile { get; private set; }
         public float EyesClosed { get; private set; }
         public float MouthOpen => 0;
@@ -115,6 +155,13 @@ namespace Oddity.RoomTest
         public Vector3 LeftWristTarget { get; private set; }
         public Vector3 RightWristTarget { get; private set; }
         public Transform Piece(int index) => pieces[index];
+
+        static Vector3[] BuildSamples()
+        {
+            var s = new Vector3[9]; int n = 0;
+            for (int x = -1; x <= 1; x++) for (int z = -1; z <= 1; z++) s[n++] = new Vector3(x * .5f, 0, z * .5f);
+            return s;
+        }
 
         public LaundryRig(Animator anim, int seed)
         {
@@ -125,6 +172,8 @@ namespace Oddity.RoomTest
             spine = Bone(HumanBodyBones.Spine); chest = Bone(HumanBodyBones.Chest) ?? spine;
             neck = Bone(HumanBodyBones.Neck); head = Bone(HumanBodyBones.Head);
             if (hips == null || spine == null || head == null) throw new InvalidOperationException("LaundryRig needs hips, spine and head.");
+            legUpper[0] = anim.GetBoneTransform(HumanBodyBones.LeftUpperLeg); legUpper[1] = anim.GetBoneTransform(HumanBodyBones.RightUpperLeg);
+            legLower[0] = anim.GetBoneTransform(HumanBodyBones.LeftLowerLeg); legLower[1] = anim.GetBoneTransform(HumanBodyBones.RightLowerLeg);
             for (int s = 0; s < 2; s++)
             {
                 upper[s] = Bone(s == 0 ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);
@@ -148,7 +197,8 @@ namespace Oddity.RoomTest
             {
                 var g = new GameObject("LaundryPiece" + i);
                 g.transform.SetParent(Props, false); pieces[i] = g.transform;
-                meshes[i] = new Mesh { name = "LaundryCloth" + i }; meshes[i].MarkDynamic(); BuildCloth(meshes[i], 0, 1);
+                pieceScale[i] = 1; shapeSize[i] = Vector3.one;
+                meshes[i] = new Mesh { name = "LaundryCloth" + i }; meshes[i].MarkDynamic(); BuildCloth(meshes[i], 0, 1, 0, Vector3.one);
                 g.AddComponent<MeshFilter>().sharedMesh = meshes[i];
                 materials[i] = new Material(shader); materials[i].color = Colours[i];
                 g.AddComponent<MeshRenderer>().sharedMaterial = materials[i];
@@ -159,18 +209,31 @@ namespace Oddity.RoomTest
             Props.gameObject.SetActive(false);
         }
 
-        // A thin box of unit width/length/thickness cut into ClothSegments along z; bend bows the middle along local +y by ClothSag metres
-        // (ySize is the piece's local y scale, so the bow stays in metres). Local +y becomes "away from her" when the garment hangs.
-        static void BuildCloth(Mesh m, float bend, float ySize)
+        // Where a unit-box point goes when the part beyond the fold line (ring 3, z = 0) is turned over about the top surface; fold 0..1 = 0..180 degrees.
+        // The turn is done in metres (size is the piece's non-uniform scale). FoldPeak < 1 flattens the arc so the corners rise about half the flap length.
+        static Vector3 FoldUnit(Vector3 unit, Vector3 size, float fold)
+        {
+            if (fold <= 0 || unit.z < -.0001f) return unit;
+            float ang = fold * Mathf.PI * (unit.z < .0001f ? .5f : 1f);
+            float s = Mathf.Sin(ang), c = Mathf.Cos(ang);
+            float qy = (unit.y - .5f) * size.y, qz = unit.z * size.z;
+            float ny = qz * s * FoldPeak + qy * c, nz = qz * c - qy * s;
+            return new Vector3(unit.x, .5f + ny / size.y, nz / size.z);
+        }
+
+        // A thin box of unit width/length/thickness cut into ClothSegments along z. bend bows the middle along local -y by ClothSag metres
+        // (ySize is the piece's local y scale, so the bow stays in metres; the hanging garment's local -y is "away from her").
+        // fold turns the far half over onto the near half (see FoldUnit); size is the piece scale.
+        static void BuildCloth(Mesh m, float bend, float ySize, float fold, Vector3 size)
         {
             int rings = ClothSegments + 1;
             var v = new Vector3[rings * 4];
-            float dy = bend * ClothSag / Mathf.Max(ySize, .0001f);
+            float dy = -bend * ClothSag / Mathf.Max(ySize, .0001f);
             for (int k = 0; k < rings; k++)
             {
                 float u = (float)k / ClothSegments, z = u - .5f, y = dy * Mathf.Sin(Mathf.PI * u);
-                v[k * 4] = new Vector3(-.5f, .5f + y, z); v[k * 4 + 1] = new Vector3(.5f, .5f + y, z);
-                v[k * 4 + 2] = new Vector3(.5f, -.5f + y, z); v[k * 4 + 3] = new Vector3(-.5f, -.5f + y, z);
+                v[k * 4] = FoldUnit(new Vector3(-.5f, .5f + y, z), size, fold); v[k * 4 + 1] = FoldUnit(new Vector3(.5f, .5f + y, z), size, fold);
+                v[k * 4 + 2] = FoldUnit(new Vector3(.5f, -.5f + y, z), size, fold); v[k * 4 + 3] = FoldUnit(new Vector3(-.5f, -.5f + y, z), size, fold);
             }
             m.vertices = v;
             if (m.triangles.Length == 0)
@@ -188,10 +251,12 @@ namespace Oddity.RoomTest
             }
             m.RecalculateNormals(); m.RecalculateBounds();
         }
-        void SetBend(int i, float amount, float ySize)
+        void SetShape(int i, float bend, float fold, Vector3 size)
         {
-            if (Mathf.Abs(bent[i] - amount) < .01f) return;
-            bent[i] = amount; BuildCloth(meshes[i], amount, ySize);
+            bool changed = Mathf.Abs(bent[i] - bend) >= .01f || Mathf.Abs(folds[i] - fold) >= .002f
+                || (fold > 0 && shapeSize[i] != size) || (bend > 0 && Mathf.Abs(shapeSize[i].y - size.y) > .0001f);
+            if (!changed) return;
+            bent[i] = bend; folds[i] = fold; shapeSize[i] = size; BuildCloth(meshes[i], bend, size.y, fold, size);
         }
 
         Transform Bone(HumanBodyBones id)
@@ -206,11 +271,35 @@ namespace Oddity.RoomTest
         static void Turn(Transform bone, Vector3 axis, float degrees)
         { if (bone != null) bone.rotation = Quaternion.AngleAxis(degrees, axis) * bone.rotation; }
 
+        // Path from a to b measured from the hips: forward and height lead, the sideways move comes later, so a cloth leaving the heap
+        // on her left does not swing through her arm and belly.
+        static Vector3 PathPoint(in Geo g, Vector3 a, Vector3 b, float t, float arc)
+        {
+            var da = a - g.hp; var db = b - g.hp;
+            float u = Ease(t), v = Ease(Mathf.Clamp01((t - .25f) / .75f));
+            float lat = Mathf.Lerp(Vector3.Dot(da, g.right), Vector3.Dot(db, g.right), v);
+            float fw = Mathf.Lerp(Vector3.Dot(da, g.forward), Vector3.Dot(db, g.forward), u);
+            float h = Mathf.Lerp(Vector3.Dot(da, Vector3.up), Vector3.Dot(db, Vector3.up), u) + Mathf.Sin(Mathf.PI * t) * arc;
+            return g.hp + g.right * lat + g.forward * fw + Vector3.up * h;
+        }
+
+        // Pushes the piece forward out of her belly and up out of her thighs (soft gates, so no pops); strength 0..1.
+        static void Clear(in Geo g, ref Vector3 centre, Quaternion rot, Vector3 size, float strength)
+        {
+            float push = 0;
+            for (int i = 0; i < Samples.Length; i++) push = Mathf.Max(push, g.TorsoPush(centre + rot * Vector3.Scale(size, Samples[i])));
+            centre += g.forward * (push * strength);
+            push = 0;
+            for (int i = 0; i < Samples.Length; i++) push = Mathf.Max(push, g.ThighPush(centre + rot * Vector3.Scale(size, Samples[i])));
+            centre += Vector3.up * (push * strength);
+        }
+
         public void Start()
         {
             if (disposed) throw new ObjectDisposedException(nameof(LaundryRig));
             if (wanted) return;
-            wanted = true; clock.Start(); time = 0; Smile = EyesClosed = 0;
+            wanted = true; clock.Start(); time = 0; Smile = EyesClosed = 0; scaleKnown = false; clothScale = 1;
+            for (int i = 0; i < pieceScale.Length; i++) pieceScale[i] = 1;
         }
         public void Stop() { wanted = false; clock.Stop(); Smile = EyesClosed = 0; }
         public void Tick(float dt)
@@ -225,8 +314,8 @@ namespace Oddity.RoomTest
                 Phase == "Pat" ? PatEyes * Mathf.Sin(Mathf.PI * clock.Progress) : 0) * Weight;
         }
 
-        Vector3 Stack(int index) => Props.TransformPoint(new Vector3(SideDistance,
-            ClothThickness * 4 * (index + Half), BedBack));
+        Vector3 Stack(int index) => Props.TransformPoint(new Vector3(StackSide,
+            ClothThickness * 4 * (index + Half), StackBack));
 
         // All pose and prop writes live here; time never advances in Apply.
         public void Apply(float dt)
@@ -240,118 +329,175 @@ namespace Oddity.RoomTest
             if (Weight <= 0) return;
             for (int i = 0; i < controlled.Count; i++) before[i] = controlled[i].localRotation;
             float w = Ease(Weight), t = clock.Progress, e = Ease(t);
+            string phase = Phase;
             var up = Vector3.up;
             var forward = Vector3.ProjectOnPlane(anim.transform.forward, up).normalized;
             var right = Vector3.Cross(up, forward).normalized;
             var flat = Quaternion.LookRotation(forward, up);
-            var hanging = Quaternion.AngleAxis(FlatToHanging, right) * flat;
-            var lap = hips.position + forward * LapAhead + up * LapUp;
-            var raised = hips.position + forward * LiftAhead + up * LiftUp - up * ClothLength * Half;
+            // The held edge is local +z. Hanging, it is the top edge (local -z, the body of the cloth, points down); on the lap it is the far edge.
+            var hanging = Quaternion.AngleAxis(-FlatToHanging, right) * flat;
+
+            // Upper body first, so every measurement below sees her real bowed pose.
+            float lean = phase == "Reach" || phase == "Lift" ? SideLean * (phase == "Reach" ? e : 1 - e)
+                : phase == "Place" || phase == "Return" ? -SideLean * (phase == "Place" ? e : 1 - e) : 0;
+            Turn(spine, right, SpineBow * w); Turn(spine, forward, lean * w);
+            if (chest != spine) Turn(chest, right, (ChestBow + BreathDegrees * Mathf.Sin(time * 2 * Mathf.PI / BreathSeconds)) * w);
+            Turn(neck, right, NeckBow * w); Turn(head, right, HeadBow * w);
+
+            // Measurements: thighs (hips -> knees), belly, shoulders and arm length.
+            var hp = hips.position;
+            var kneeL = legLower[0] != null ? legLower[0].position : hp + forward * .4f - up * .05f;
+            var kneeR = legLower[1] != null ? legLower[1].position : hp + forward * .4f - up * .05f;
+            var kneeMid = (kneeL + kneeR) * Half;
+            var g = new Geo
+            {
+                hp = hp, forward = forward, right = right,
+                dk = Mathf.Max(.25f, Vector3.Dot(kneeMid - hp, forward)), dv = Vector3.Dot(kneeMid - hp, up),
+                latMax = Mathf.Max(Mathf.Abs(Vector3.Dot(kneeL - hp, right)), Mathf.Abs(Vector3.Dot(kneeR - hp, right))) + ThighRadius,
+                belly = Vector3.Dot(spine.position - hp, forward) + BellyRadius
+            };
+            float near = Mathf.Clamp(Mathf.Max(LapNearMin, g.belly + BellyMargin), LapNearMin, g.dk * .6f);
+            float slope = Mathf.Clamp(Mathf.Atan2(g.dv, g.dk) * Mathf.Rad2Deg, -25f, 25f);
+            var lapRot = Quaternion.AngleAxis(-slope, right) * flat; // thigh slope: positive = knees higher
+            var lf = lapRot * Vector3.forward; var lu = lapRot * Vector3.up;
+            var surface = hp + forward * near; surface.y = g.ThighTopY(near);
+            float shF = 0, shUp = 0, shLat = 0, armLen = 0;
+            for (int s = 0; s < 2; s++)
+            {
+                var o = upper[s].position - hp;
+                shF += Vector3.Dot(o, forward) * Half; shUp += Vector3.Dot(o, up) * Half; shLat += Mathf.Abs(Vector3.Dot(o, right)) * Half;
+                armLen += ((lower[s].position - upper[s].position).magnitude + (hands[s].position - lower[s].position).magnitude) * Half;
+            }
+            float arm = ReachFraction * armLen;
+            float dyFar = surface.y + ClothThickness * Half - (hp.y + shUp), dzFar = Mathf.Abs(ClothWidth * Half - shLat);
+            float farReach = shF + Mathf.Sqrt(Mathf.Max(0, arm * arm - dyFar * dyFar - dzFar * dzFar)) + WristGap;
+            float scaleTarget = Mathf.Clamp((Mathf.Min(g.dk + KneeHang, farReach) - near) / ClothLength, CsMin, 1);
+            if (!scaleKnown) { clothScale = scaleTarget; scaleKnown = true; }
+            else if (phase == "Reach") clothScale = Mathf.MoveTowards(clothScale, scaleTarget, Mathf.Max(0, dt) * .5f);
+            float cw = ClothWidth * clothScale, cl = ClothLength * clothScale, th = ClothThickness;
+
             int index = clock.PieceIndex;
+            if (!(phase == "Return" || phase == "Pat" || Done)) pieceScale[index] = clothScale;
             var heap = Props.TransformPoint(heapPositions[index]);
             var heapRotation = Props.rotation * heapRotations[index];
             var centre = heap; var rotation = heapRotation;
-            var size = new Vector3(ClothWidth, ClothThickness, ClothLength);
-            var onceCentre = lap - forward * ClothLength * Quarter;
-            var twiceCentre = onceCentre - right * ClothWidth * Quarter;
-            var folded = new Vector3(ClothWidth * Half, ClothThickness * 4, ClothLength * Half);
+            var size = new Vector3(cw, th, cl);
+            // Lap: near edge on the thigh top, cloth following the thigh slope. Folded pieces sit on it as thicker boxes.
+            var lapCentre = surface + lf * (cl * Half) + lu * (th * Half);
+            var onceCentre = surface + lf * (cl * Quarter) + lu * th;
+            var twiceCentre = surface + lf * (cl * Quarter) - right * (cw * Quarter) + lu * (th * 2);
+            var folded = new Vector3(cw * Half, th * 4, cl * Half);
+            // Hanging: top edge a little below the shoulders, beyond the knees where the shins and thighs are out of the way, within reach.
+            float dyHang = ShakeUp - WristGap, dzHang = Mathf.Abs(cw * Half - shLat);
+            float hangMax = shF + Mathf.Sqrt(Mathf.Max(0, arm * arm - dyHang * dyHang - dzHang * dzHang)) - .07f;
+            float hangX = Mathf.Clamp(Mathf.Min(g.dk + HangPast, hangMax), near + .15f, g.dk + HangPast);
+            var raisedEdge = hp + forward * hangX + up * (shUp + ShakeUp);
+            var raised = raisedEdge - up * (cl * Half);
             float grip = GripCurl;
-            var restL = lap - right * ClothWidth * Half;
-            var restR = lap + right * ClothWidth * Half;
+            var restL = Rest(0, hp, forward, right, up); var restR = Rest(1, hp, forward, right, up);
             Vector3 contactL, contactR;
+            float fold = 0, bend = 0;
             // Render all settled pieces from the clock, even when several beats were skipped by Tick.
             for (int i = 0; i < pieces.Length; i++)
             {
                 pieces[i].position = i < Completed ? Stack(i) : Props.TransformPoint(heapPositions[i]);
                 pieces[i].rotation = i < Completed ? Props.rotation : Props.rotation * heapRotations[i];
-                pieces[i].localScale = i < Completed ? folded : size;
+                pieces[i].localScale = i < Completed ? new Vector3(ClothWidth * pieceScale[i] * Half, th * 4, ClothLength * pieceScale[i] * Half) : size;
             }
-            switch (Phase)
+            switch (phase)
             {
                 case "Reach": break;
-                case "Lift": centre = Arc(heap, raised, t, up, TravelArc); rotation = Quaternion.Slerp(heapRotation, hanging, e); break;
+                case "Lift": centre = PathPoint(g, heap, raised, t, TravelArc); rotation = Quaternion.Slerp(heapRotation, hanging, e); bend = e; break;
                 case "Shake":
                     float snap = t < SnapPeak ? Mathf.Lerp(0, SnapRise, Ease(t / SnapPeak)) : t < SnapBottom
                         ? Mathf.Lerp(SnapRise, -SnapDrop, Ease((t - SnapPeak) / (SnapBottom - SnapPeak)))
                         : Mathf.Lerp(-SnapDrop, 0, Ease((t - SnapBottom) / (1 - SnapBottom)));
-                    centre = raised + up * snap; rotation = hanging; break;
-                case "Lower": centre = Vector3.Lerp(raised, lap, e); rotation = Quaternion.Slerp(hanging, flat, e); break;
-                case "FoldLength":
-                    centre = Vector3.Lerp(lap, onceCentre, e); rotation = flat;
-                    size.z *= Mathf.Lerp(1, Half, e); size.y *= Mathf.Lerp(1, 2, e); break;
+                    centre = raised + up * snap; rotation = hanging; bend = 1; break;
+                case "Lower":
+                    {
+                        // The hands carry the far edge down and forward; the cloth swings in toward her and lies on the thighs.
+                        rotation = Quaternion.Slerp(hanging, lapRot, Ease(Mathf.Clamp01(t / .75f)));
+                        var edge = PathPoint(g, raisedEdge, surface + lf * cl + lu * (th * Half), t, 0);
+                        centre = edge - rotation * Vector3.forward * (cl * Half); bend = 1 - e; break;
+                    }
+                case "FoldLength": centre = lapCentre; rotation = lapRot; fold = e; break;
                 case "FoldWidth":
-                    centre = Vector3.Lerp(onceCentre, twiceCentre, e); rotation = flat;
-                    size = new Vector3(ClothWidth * Mathf.Lerp(1, Half, e), ClothThickness * Mathf.Lerp(2, 4, e), ClothLength * Half); break;
-                case "Place": centre = Arc(twiceCentre, Stack(index), t, up, TravelArc); rotation = Quaternion.Slerp(flat, Props.rotation, e); size = folded; break;
+                    centre = onceCentre; rotation = Quaternion.AngleAxis(90, lu) * lapRot; size = new Vector3(cl * Half, th * 2, cw); fold = e; break;
+                case "Place": centre = PathPoint(g, twiceCentre, Stack(index), t, PlaceArc); rotation = Quaternion.Slerp(lapRot, Props.rotation, e); size = folded; break;
                 default: centre = Stack(Mathf.Max(0, Completed - 1)); rotation = Props.rotation; size = folded; break;
             }
-            if (Phase != "Return" && Phase != "Pat" && !Done)
+            if (phase == "Lift" || phase == "Shake" || phase == "Lower" || phase == "Place")
+                Clear(g, ref centre, rotation, size, phase == "Lift" ? Mathf.Clamp01(t * 3) : phase == "Place" ? 1 - Ease(Mathf.Clamp01((t - .6f) / .4f)) : 1); // the stack lies beside the thigh: no push once the piece is down
+            if (phase != "Return" && phase != "Pat" && !Done)
             { pieces[index].SetPositionAndRotation(centre, rotation); pieces[index].localScale = size; }
             for (int i = 0; i < pieces.Length; i++)
-                SetBend(i, i == index && (Phase == "Lift" || Phase == "Shake" || Phase == "Lower") ? (Phase == "Lift" ? e : Phase == "Shake" ? 1 : 1 - e) : 0, i == index ? size.y : pieces[i].localScale.y);
+                SetShape(i, i == index ? bend : 0, i == index ? fold : 0, i == index ? size : pieces[i].localScale);
 
-            // The held edge is local -z: it becomes the upper edge when the garment hangs down.
-            float edgeSide = Phase == "Place" ? 1 : -1;
-            var edge = centre + rotation * Vector3.forward * size.z * Half * edgeSide;
-            contactL = edge - rotation * Vector3.right * size.x * Half;
-            contactR = edge + rotation * Vector3.right * size.x * Half;
-            if (Phase == "Reach")
+            // The held edge is local +z; its corners are the contacts.
+            var edgeMid = centre + rotation * Vector3.forward * (size.z * Half);
+            contactL = edgeMid - rotation * Vector3.right * (size.x * Half);
+            contactR = edgeMid + rotation * Vector3.right * (size.x * Half);
+            Vector3 FlapPoint(float ux, float uz) => centre + rotation * Vector3.Scale(size, FoldUnit(new Vector3(ux, .5f, uz), size, fold));
+            if (phase == "Reach")
             { contactL = Vector3.Lerp(restL, heap, e); contactR = restR; grip = Mathf.Lerp(OpenCurl, GripCurl, e); }
-            if (Phase == "Lift")
+            if (phase == "Lift")
             { contactL = Vector3.Lerp(heap, contactL, e); contactR = Vector3.Lerp(restR, contactR, e); }
-            if (Phase == "FoldLength")
+            if (phase == "FoldLength")
             {
-                // Both hands turn the near half inward; the box shortens to half length.
-                var movingEdge = Arc(lap - forward * ClothLength * Half, lap, t, up, FoldArc);
-                contactL = movingEdge - right * ClothWidth * Half; contactR = movingEdge + right * ClothWidth * Half;
+                // Both hands hold the far corners of the flap and turn it over onto the near half.
+                contactL = FlapPoint(-.5f, .5f); contactR = FlapPoint(.5f, .5f);
             }
-            if (Phase == "FoldWidth")
+            if (phase == "FoldWidth")
             {
-                var farEdge = onceCentre + forward * ClothLength * Quarter;
-                contactL = farEdge - right * ClothWidth * Half;
-                contactR = Arc(farEdge + right * ClothWidth * Half, farEdge, t, up, FoldArc);
+                // The right hand carries the near-right corner of the flap to the near-left corner; the left hand slides up the
+                // left edge of the once-folded cloth and holds it there.
+                float q = Ease(Mathf.Clamp01(t / LeftHoldSeconds)) * LeftHoldAlong;
+                contactR = FlapPoint(.5f, .5f);
+                contactL = Vector3.Lerp(FlapPoint(.5f, -.5f), FlapPoint(-.5f, -.5f), q);
             }
-            if (Phase == "Return" || Phase == "Pat" || Done)
+            if (phase == "Return" || phase == "Pat" || Done)
             {
-                var top = Stack(Completed - 1) + Props.up * folded.y * Half;
-                if (Phase == "Return")
+                int k = Mathf.Max(0, Completed - 1);
+                var stackSize = new Vector3(ClothWidth * pieceScale[k] * Half, th * 4, ClothLength * pieceScale[k] * Half);
+                var top = Stack(k) + Props.up * stackSize.y * Half;
+                if (phase == "Return")
                 {
-                    var stackEdge = top + Props.forward * folded.z * Half;
-                    contactL = Vector3.Lerp(stackEdge - Props.right * folded.x * Half, restL, e);
-                    contactR = Vector3.Lerp(stackEdge + Props.right * folded.x * Half, restR, e);
+                    var stackEdge = Stack(k) + Props.forward * (stackSize.z * Half);
+                    contactL = Arc(stackEdge - Props.right * (stackSize.x * Half), restL, t, up, ReturnArc);
+                    contactR = Arc(stackEdge + Props.right * (stackSize.x * Half), restR, t, up, ReturnArc);
                 }
                 else
                 {
                     contactL = restL; contactR = restR;
-                    if (Phase == "Pat") contactR = Vector3.Lerp(restR, top + up * (PatHeight - (PatHeight + PatDepth) * Mathf.Sin(Mathf.PI * t)), Mathf.Sin(Mathf.PI * t));
+                    if (phase == "Pat") contactR = Vector3.Lerp(restR, top + up * (PatHeight - (PatHeight + PatDepth) * Mathf.Sin(Mathf.PI * t)), Mathf.Sin(Mathf.PI * t));
                 }
                 grip = OpenCurl;
             }
-            if (Phase == "Place" && lastPhase == "FoldWidth") { switchFromL = LeftContact; switchFromR = RightContact; switchTime = 0; }
-            if (Phase != "Place") switchTime = 1;
+            if (phase == "Place" && lastPhase == "FoldWidth") { switchFromL = LeftContact; switchFromR = RightContact; switchTime = 0; }
+            if (phase != "Place") switchTime = 1;
             if (switchTime < 1)
             {
-                // the fold-corner switch: not a snap, the hands travel from where FoldWidth left them
+                // the hands end FoldWidth at the near-left corner and the left edge; they slide to the folded cloth's far corners, not snap
                 switchTime = Mathf.Min(1, switchTime + dt / EdgeSwitchSeconds);
                 float k = Ease(switchTime);
                 contactL = Vector3.Lerp(switchFromL, contactL, k); contactR = Vector3.Lerp(switchFromR, contactR, k);
             }
-            lastPhase = Phase;
+            lastPhase = phase;
             LeftContact = contactL; RightContact = contactR;
-            float lean = Phase == "Reach" || Phase == "Lift" ? SideLean * (Phase == "Reach" ? e : 1 - e)
-                : Phase == "Place" || Phase == "Return" ? -SideLean * (Phase == "Place" ? e : 1 - e) : 0;
-            Turn(spine, right, SpineBow * w); Turn(spine, forward, lean * w);
-            if (chest != spine) Turn(chest, right, (ChestBow + BreathDegrees * Mathf.Sin(time * 2 * Mathf.PI / BreathSeconds)) * w);
-            Turn(neck, right, NeckBow * w); Turn(head, right, HeadBow * w);
-            float heldVertical = Phase == "Lift" ? e : Phase == "Shake" ? 1 : Phase == "Lower" ? 1 - e : 0;
+            float heldVertical = phase == "Lift" ? e : phase == "Shake" ? 1 : phase == "Lower" ? 1 - e : 0;
+            // Fingers point forward, palms down, on the lap and on the thighs; up and toward her while the cloth hangs.
             var palm = Vector3.Slerp(-up, -forward, heldVertical);
-            var fingersDirection = Vector3.Slerp(-forward, up, heldVertical);
+            var fingersDirection = Vector3.Slerp(forward, up, heldVertical);
+            bool resting = phase == "Return" || phase == "Pat" || Done;
             for (int s = 0; s < 2; s++)
             {
                 var contact = s == 0 ? contactL : contactR;
                 var target = contact - fingersDirection * WristGap - palm * WristLift;
                 if (s == 0) LeftWristTarget = target; else RightWristTarget = target;
-                var pole = upper[s].position + right * ((s == 0 ? -1 : 1) * ElbowSide) + forward * ElbowAhead - up * ElbowDown;
+                float side = s == 0 ? -1 : 1;
+                var pole = resting
+                    ? upper[s].position + right * (side * RestElbowSide) + forward * RestElbowAhead - up * RestElbowDown
+                    : upper[s].position + right * (side * ElbowSide) + forward * ElbowAhead - up * ElbowDown;
                 SofaRig.TwoBone(upper[s], lower[s], hands[s], target, pole, w);
                 hands[s].rotation = Quaternion.Slerp(hands[s].rotation, Quaternion.LookRotation(fingersDirection, palm) * Quaternion.Inverse(handFrame[s]), w);
                 var curlAxis = Vector3.Cross(fingersDirection, palm).normalized;
@@ -361,6 +507,14 @@ namespace Oddity.RoomTest
             }
             for (int i = 0; i < controlled.Count; i++) written[i] = controlled[i].localRotation;
             hasWritten = true;
+        }
+
+        // Relaxed hand: on the thigh (hips -> knee line, 55 % down), fingers forward.
+        Vector3 Rest(int s, Vector3 hp, Vector3 forward, Vector3 right, Vector3 up)
+        {
+            var u = legUpper[s]; var l = legLower[s];
+            var thigh = u != null && l != null ? Vector3.Lerp(u.position, l.position, .55f) : hp + right * ((s == 0 ? -1 : 1) * .1f) + forward * .2f;
+            return thigh + up * (ThighRadius - .005f) + forward * RestAhead;
         }
 
         public void Dispose()
