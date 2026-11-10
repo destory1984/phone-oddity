@@ -29,7 +29,7 @@ namespace Oddity.RoomTest
             ("5", "KaIdle24Dance04"), ("6", "KaIdle89CheekPointPose"),
             ("7", "KaIdle41CuteShyPose"), ("8", "KaIdle44GreetingBow"),
             ("9", "BlowKissSkin"), ("space", "CatwalkIdleSkin"),
-            ("a", "CatwalkSkin"), ("shift", "KaRun01"), ("f", "UAL1Standard#Sword_Attack"), ("z", "ZeroTwoDance"), ("0", "KaIdle73IdolPose"), ("c", "KaSitPutHandBetweensLoop"), ("v", "KaSitWithBothLegsUpLoop"), ("y", "MxYawn"), ("k", "KaSleepTurnToTheSideLoop"), ("j", "HairSweep"), ("u", "HairToss"), ("b", "MxLayStomachElbows"), ("d", "CatwalkSkin"), ("w", "CatwalkSkin"), ("s", "CatwalkSkin"), ("left", "누르는 동안 시계 방향 회전"), ("right", "누르는 동안 반시계 회전"), ("n", "다음 모델, Shift+N 이전 모델"),("r", "현재 모델 다시 불러오기"), ("l", "주인공(카메라) 바라보기 켜고 끄기"), ("h", "식탁 의자에서 턱 괴기 켜고 끄기"), ("g", "다음 걷기"), ("escape", "재생 끝내기"), ("up", "줌 인"), ("down", "줌 아웃"), ("m", "고양이(소말리) 동작 바꾸기"), ("tab", "Tab 하린, 고양이, 소말리, 흰 고양이 번갈아 조종"), ("o", "O 고양이 소리 켜고 끄기"), ("i", "방 안 카메라 (다시 누르면 밖)"), ("p", "소파에서 핸드폰 보기"), ("t", "소파에서 TV 보기"), ("e", "전화 통화 (걸어 다니며)"), ("q", "창가에서 커피"), ("x", "X 커튼 치기 (Shift+X 열기)"), ("comma", "아침 기지개 (침대에 앉아)"), ("period", "홈트 (요가 매트에서)"), ("semicolon", "라면 끓이기 (주방에서)"), ("quote", "바닥에 앉아 먹기 (낮은 상)"), ("slash", "빨래 개기 (침대에 앉아)")
+            ("a", "CatwalkSkin"), ("shift", "KaRun01"), ("f", "UAL1Standard#Sword_Attack"), ("z", "ZeroTwoDance"), ("0", "KaIdle73IdolPose"), ("c", "KaSitPutHandBetweensLoop"), ("v", "KaSitWithBothLegsUpLoop"), ("y", "MxYawn"), ("k", "KaSleepTurnToTheSideLoop"), ("j", "HairSweep"), ("u", "HairToss"), ("b", "MxLayStomachElbows"), ("d", "CatwalkSkin"), ("w", "CatwalkSkin"), ("s", "CatwalkSkin"), ("left", "누르는 동안 시계 방향 회전"), ("right", "누르는 동안 반시계 회전"), ("n", "다음 모델, Shift+N 이전 모델"),("r", "현재 모델 다시 불러오기"), ("l", "주인공(카메라) 바라보기 켜고 끄기"), ("h", "식탁 의자에서 턱 괴기 켜고 끄기"), ("g", "다음 걷기"), ("escape", "재생 끝내기"), ("up", "줌 인"), ("down", "줌 아웃"), ("m", "고양이(소말리) 동작 바꾸기"), ("tab", "Tab 하린, 고양이, 소말리, 흰 고양이 번갈아 조종"), ("o", "O 고양이 소리 켜고 끄기"), ("i", "방 안 카메라 (다시 누르면 밖)"), ("p", "소파에서 핸드폰 보기"), ("t", "소파에서 TV 보기"), ("e", "전화 통화 (걸어 다니며)"), ("q", "창가에서 커피"), ("x", "X 커튼 치기 (Shift+X 열기)"), ("comma", "아침 기지개 (침대에 앉아)"), ("period", "홈트 (요가 매트에서)"), ("semicolon", "라면 끓이기 (주방에서)"), ("quote", "바닥에 앉아 먹기 (낮은 상)"), ("slash", "빨래 개기 (침대에 앉아)"), ("lbracket", "거울 보기 (침대에 앉아)"), ("rbracket", "고양이와 놀기 (] 쓰다듬기, Shift+] 낚싯대)")
         };
         // G cycles the walk; ODDITY_PLAYWALK picks the first one
         static readonly string[] Walks={"CatwalkSkin","KaWalk01","KaWalk02","KaWalk03","KaWalk04","KaWalk05","KaWalk06","KaWalk07","WalkFemale","WalkFeminine","WalkStandardSkin"};
@@ -142,7 +142,7 @@ namespace Oddity.RoomTest
                 var text=Environment.GetEnvironmentVariable("ODDITY_PLAYKEYS");scripted=!string.IsNullOrWhiteSpace(text);
                 if(scripted)foreach(var part in text.Split(',')){
                     var pair=part.Split(':');
-                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0]=="lietv" || pair[0].StartsWith("cam") || pair[0]=="realtab" || pair[0]=="wait" || pair[0].StartsWith("click") || pair[0].StartsWith("view") || pair[0]=="wheelup" || pair[0]=="liftup" || pair[0].StartsWith("orbit") || pair[0].StartsWith("insideswing") || pair[0]=="l" || pair[0].StartsWith("catsleep") || pair[0]=="liftdown" || pair[0]=="swingleft" || pair[0]=="shiftx" || pair[0]=="shiftleft" || pair[0]=="shiftright" || pair[0]=="shiftup" || pair[0]=="shiftdown" ||pair[0]=="swingright" || pair[0]=="tiltup" || pair[0]=="tiltdown" || pair[0]=="freeze" || pair[0]=="unfreeze" || (pair[0].StartsWith("gi") && int.TryParse(pair[0].Substring(2),out _)) || (pair[0].StartsWith("shade") && int.TryParse(pair[0].Substring(5),out _)) || pair[0]=="wheeldown" || FaceKeys.ScriptDigit(pair[0])>=0 || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
+                    if(pair.Length!=2 || !float.TryParse(pair[1],NumberStyles.Float,CultureInfo.InvariantCulture,out var seconds) || seconds<=0 || !(pair[0]=="shifts" || pair[0]=="lietv" || pair[0].StartsWith("cam") || pair[0]=="realtab" || pair[0]=="wait" || pair[0].StartsWith("click") || pair[0].StartsWith("view") || pair[0]=="wheelup" || pair[0]=="liftup" || pair[0].StartsWith("orbit") || pair[0].StartsWith("insideswing") || pair[0]=="l" || pair[0].StartsWith("catsleep") || pair[0]=="liftdown" || pair[0]=="swingleft" || pair[0]=="shiftx" || pair[0]=="shiftrbracket" || pair[0]=="shiftleft" || pair[0]=="shiftright" || pair[0]=="shiftup" || pair[0]=="shiftdown" ||pair[0]=="swingright" || pair[0]=="tiltup" || pair[0]=="tiltdown" || pair[0]=="freeze" || pair[0]=="unfreeze" || (pair[0].StartsWith("gi") && int.TryParse(pair[0].Substring(2),out _)) || (pair[0].StartsWith("shade") && int.TryParse(pair[0].Substring(5),out _)) || pair[0]=="wheeldown" || FaceKeys.ScriptDigit(pair[0])>=0 || Keys.Any(k=>k.key==pair[0])))throw new Exception("invalid ODDITY_PLAYKEYS entry");
                     script.Add((pair[0],seconds));
                 }
                 Debug.Log("ROOMPLAY_READY model="+modelName);
@@ -213,16 +213,16 @@ namespace Oddity.RoomTest
             var a=candidate.GetComponent<Animator>();
             if(a==null || a.avatar==null || !a.avatar.isHuman){ShowStatue(candidate,path);return;} // a bare mesh (no rig yet) stands still so its shape can be seen
             var puppet=candidate.AddComponent<HarinPuppet>();puppet.SetFace("neutral");puppet.enabled=false;
-            var oldCall=callRig;callRig=null;callOn=false;var oldCoffee=coffeeRig;coffeeRig=null;coffeeOn=false;var oldCurtain=curtainRig;curtainRig=null;curtainOn=false;var oldWake=wakeRig;wakeRig=null;wakeOn=false;wakePend=false;var oldWorkout=workoutRig;workoutRig=null;workoutOn=false;workoutWalk=false;WorkoutBlockOff();var oldRamen=ramenRig;ramenRig=null;ramenOn=false;ramenWalk=false;RamenBlockOff();var oldMeal=mealRig;mealRig=null;mealOn=false;mealWalk=false;MealBlockOff();var oldLaundry=laundryRig;laundryRig=null;laundryOn=false;laundryPend=false;var oldDance=zeroTwoDance;var oldHair=hairRig;var oldSofa=sofaRig;var oldModel=model;var oldGraph=graph;var oldMixer=mixer;var oldPlays=plays;
+            var oldCall=callRig;callRig=null;callOn=false;var oldCoffee=coffeeRig;coffeeRig=null;coffeeOn=false;var oldCurtain=curtainRig;curtainRig=null;curtainOn=false;var oldWake=wakeRig;wakeRig=null;wakeOn=false;wakePend=false;var oldWorkout=workoutRig;workoutRig=null;workoutOn=false;workoutWalk=false;WorkoutBlockOff();var oldRamen=ramenRig;ramenRig=null;ramenOn=false;ramenWalk=false;RamenBlockOff();var oldMeal=mealRig;mealRig=null;mealOn=false;mealWalk=false;MealBlockOff();var oldLaundry=laundryRig;laundryRig=null;laundryOn=false;laundryPend=false;var oldMirror=mirrorRig;mirrorRig=null;mirrorOn=false;mirrorPend=false;var oldCatPlay=catRig;CatPlayReset();catRig=null;var oldDance=zeroTwoDance;var oldHair=hairRig;var oldSofa=sofaRig;var oldModel=model;var oldGraph=graph;var oldMixer=mixer;var oldPlays=plays;
             var oldClips=clips;var oldAnchors=anchors;var oldTravels=travels;var oldWeights=weights;var oldFrom=from;
             float oldSpeed=speed, oldBlend=blend;
             double phase=plays!=null && clips[current]!=null ? plays[current].GetTime()/clips[current].length : 0;
             soleMesh=null;model=candidate;anim=a;RestFeet();Arm();anim.applyRootMotion=false;
-            try{zeroTwoDance=new ZeroTwoDance(anim);try{hairRig=new HairSweepRig(anim);}catch(Exception e){hairRig=null;Debug.LogWarning("ROOMPLAY_HAIR rig failed: "+e.Message);}BuildMotion();try{sofaRig=new SofaRig(anim,handFingersLocal,handPalmLocal,headFront);}catch(Exception e){sofaRig=null;Debug.LogWarning("ROOMPLAY_SOFA rig failed: "+e.Message);}try{callRig=new PhoneCallRig(anim,Environment.GetEnvironmentVariable("ODDITY_CATSEED")!=null && int.TryParse(Environment.GetEnvironmentVariable("ODDITY_CATSEED"),out var cs)?cs+11:Environment.TickCount);}catch(Exception e){callRig=null;Debug.LogWarning("ROOMPLAY_CALL rig failed: "+e.Message);}try{coffeeRig=new CoffeeRig(anim,Environment.GetEnvironmentVariable("ODDITY_CATSEED")!=null && int.TryParse(Environment.GetEnvironmentVariable("ODDITY_CATSEED"),out var cfs)?cfs+17:Environment.TickCount);}catch(Exception e){coffeeRig=null;Debug.LogWarning("ROOMPLAY_COFFEE rig failed: "+e.Message);}try{curtainRig=new CurtainRig(anim,Environment.GetEnvironmentVariable("ODDITY_CATSEED")!=null && int.TryParse(Environment.GetEnvironmentVariable("ODDITY_CATSEED"),out var cus)?cus+23:Environment.TickCount);}catch(Exception e){curtainRig=null;Debug.LogWarning("ROOMPLAY_CURTAIN rig failed: "+e.Message);}try{wakeRig=new WakeRig(anim,Environment.GetEnvironmentVariable("ODDITY_CATSEED")!=null && int.TryParse(Environment.GetEnvironmentVariable("ODDITY_CATSEED"),out var wks)?wks+29:Environment.TickCount);}catch(Exception e){wakeRig=null;Debug.LogWarning("ROOMPLAY_WAKE rig failed: "+e.Message);}try{workoutRig=new WorkoutRig(anim,Environment.GetEnvironmentVariable("ODDITY_CATSEED")!=null && int.TryParse(Environment.GetEnvironmentVariable("ODDITY_CATSEED"),out var wos)?wos+31:Environment.TickCount);workoutRig.Mat.gameObject.SetActive(false);}catch(Exception e){workoutRig=null;Debug.LogWarning("ROOMPLAY_WORKOUT rig failed: "+e.Message);}try{ramenRig=new RamenRig(anim,Environment.GetEnvironmentVariable("ODDITY_CATSEED")!=null && int.TryParse(Environment.GetEnvironmentVariable("ODDITY_CATSEED"),out var rms)?rms+37:Environment.TickCount);ramenRig.Sink=OneRoom.RamenSink;ramenRig.Burner=OneRoom.RamenBurner;ramenRig.Knob=OneRoom.RamenKnob;ramenRig.TapControl=OneRoom.RamenTap;}catch(Exception e){ramenRig=null;Debug.LogWarning("ROOMPLAY_RAMEN rig failed: "+e.Message);}try{mealRig=new FloorMealRig(anim,Environment.GetEnvironmentVariable("ODDITY_CATSEED")!=null && int.TryParse(Environment.GetEnvironmentVariable("ODDITY_CATSEED"),out var mls)?mls+41:Environment.TickCount);mealRig.Props.gameObject.SetActive(false);}catch(Exception e){mealRig=null;Debug.LogWarning("ROOMPLAY_MEAL rig failed: "+e.Message);}try{laundryRig=new LaundryRig(anim,Environment.GetEnvironmentVariable("ODDITY_CATSEED")!=null && int.TryParse(Environment.GetEnvironmentVariable("ODDITY_CATSEED"),out var lds)?lds+43:Environment.TickCount);}catch(Exception e){laundryRig=null;Debug.LogWarning("ROOMPLAY_LAUNDRY rig failed: "+e.Message);}sofaOn=SofaMode.None;sofaWant=SofaMode.None;if(clips[current]!=null)plays[current].SetTime(phase*clips[current].length);Evaluate(0);}
-            catch{callRig?.Dispose();callRig=oldCall;coffeeRig?.Dispose();coffeeRig=oldCoffee;curtainRig?.Dispose();curtainRig=oldCurtain;wakeRig?.Dispose();wakeRig=oldWake;workoutRig?.Dispose();workoutRig=oldWorkout;ramenRig?.Dispose();ramenRig=oldRamen;mealRig?.Dispose();mealRig=oldMeal;laundryRig?.Dispose();laundryRig=oldLaundry;zeroTwoDance?.Dispose();zeroTwoDance=oldDance;hairRig=oldHair;sofaRig?.Dispose();sofaRig=oldSofa;if(graph.IsValid())graph.Destroy();graph=oldGraph;mixer=oldMixer;plays=oldPlays;clips=oldClips;anchors=oldAnchors;travels=oldTravels;weights=oldWeights;from=oldFrom;speed=oldSpeed;blend=oldBlend;model=oldModel;anim=oldModel!=null?oldModel.GetComponent<Animator>():null;Destroy(candidate);throw;}
+            try{zeroTwoDance=new ZeroTwoDance(anim);try{hairRig=new HairSweepRig(anim);}catch(Exception e){hairRig=null;Debug.LogWarning("ROOMPLAY_HAIR rig failed: "+e.Message);}BuildMotion();try{sofaRig=new SofaRig(anim,handFingersLocal,handPalmLocal,headFront);}catch(Exception e){sofaRig=null;Debug.LogWarning("ROOMPLAY_SOFA rig failed: "+e.Message);}try{callRig=new PhoneCallRig(anim,Environment.GetEnvironmentVariable("ODDITY_CATSEED")!=null && int.TryParse(Environment.GetEnvironmentVariable("ODDITY_CATSEED"),out var cs)?cs+11:Environment.TickCount);}catch(Exception e){callRig=null;Debug.LogWarning("ROOMPLAY_CALL rig failed: "+e.Message);}try{coffeeRig=new CoffeeRig(anim,Environment.GetEnvironmentVariable("ODDITY_CATSEED")!=null && int.TryParse(Environment.GetEnvironmentVariable("ODDITY_CATSEED"),out var cfs)?cfs+17:Environment.TickCount);}catch(Exception e){coffeeRig=null;Debug.LogWarning("ROOMPLAY_COFFEE rig failed: "+e.Message);}try{curtainRig=new CurtainRig(anim,Environment.GetEnvironmentVariable("ODDITY_CATSEED")!=null && int.TryParse(Environment.GetEnvironmentVariable("ODDITY_CATSEED"),out var cus)?cus+23:Environment.TickCount);}catch(Exception e){curtainRig=null;Debug.LogWarning("ROOMPLAY_CURTAIN rig failed: "+e.Message);}try{wakeRig=new WakeRig(anim,Environment.GetEnvironmentVariable("ODDITY_CATSEED")!=null && int.TryParse(Environment.GetEnvironmentVariable("ODDITY_CATSEED"),out var wks)?wks+29:Environment.TickCount);}catch(Exception e){wakeRig=null;Debug.LogWarning("ROOMPLAY_WAKE rig failed: "+e.Message);}try{workoutRig=new WorkoutRig(anim,Environment.GetEnvironmentVariable("ODDITY_CATSEED")!=null && int.TryParse(Environment.GetEnvironmentVariable("ODDITY_CATSEED"),out var wos)?wos+31:Environment.TickCount);workoutRig.Mat.gameObject.SetActive(false);}catch(Exception e){workoutRig=null;Debug.LogWarning("ROOMPLAY_WORKOUT rig failed: "+e.Message);}try{ramenRig=new RamenRig(anim,Environment.GetEnvironmentVariable("ODDITY_CATSEED")!=null && int.TryParse(Environment.GetEnvironmentVariable("ODDITY_CATSEED"),out var rms)?rms+37:Environment.TickCount);ramenRig.Sink=OneRoom.RamenSink;ramenRig.Burner=OneRoom.RamenBurner;ramenRig.Knob=OneRoom.RamenKnob;ramenRig.TapControl=OneRoom.RamenTap;}catch(Exception e){ramenRig=null;Debug.LogWarning("ROOMPLAY_RAMEN rig failed: "+e.Message);}try{mealRig=new FloorMealRig(anim,Environment.GetEnvironmentVariable("ODDITY_CATSEED")!=null && int.TryParse(Environment.GetEnvironmentVariable("ODDITY_CATSEED"),out var mls)?mls+41:Environment.TickCount);mealRig.Props.gameObject.SetActive(false);}catch(Exception e){mealRig=null;Debug.LogWarning("ROOMPLAY_MEAL rig failed: "+e.Message);}try{laundryRig=new LaundryRig(anim,Environment.GetEnvironmentVariable("ODDITY_CATSEED")!=null && int.TryParse(Environment.GetEnvironmentVariable("ODDITY_CATSEED"),out var lds)?lds+43:Environment.TickCount);}catch(Exception e){laundryRig=null;Debug.LogWarning("ROOMPLAY_LAUNDRY rig failed: "+e.Message);}try{mirrorRig=new MirrorRig(anim,Environment.GetEnvironmentVariable("ODDITY_CATSEED")!=null && int.TryParse(Environment.GetEnvironmentVariable("ODDITY_CATSEED"),out var mrs)?mrs+47:Environment.TickCount);}catch(Exception e){mirrorRig=null;Debug.LogWarning("ROOMPLAY_MIRROR rig failed: "+e.Message);}try{catRig=new CatPlayRig(anim,Environment.GetEnvironmentVariable("ODDITY_CATSEED")!=null && int.TryParse(Environment.GetEnvironmentVariable("ODDITY_CATSEED"),out var cps)?cps+53:Environment.TickCount);}catch(Exception e){catRig=null;Debug.LogWarning("ROOMPLAY_CATPLAY rig failed: "+e.Message);}sofaOn=SofaMode.None;sofaWant=SofaMode.None;if(clips[current]!=null)plays[current].SetTime(phase*clips[current].length);Evaluate(0);}
+            catch{callRig?.Dispose();callRig=oldCall;coffeeRig?.Dispose();coffeeRig=oldCoffee;curtainRig?.Dispose();curtainRig=oldCurtain;wakeRig?.Dispose();wakeRig=oldWake;workoutRig?.Dispose();workoutRig=oldWorkout;ramenRig?.Dispose();ramenRig=oldRamen;mealRig?.Dispose();mealRig=oldMeal;laundryRig?.Dispose();laundryRig=oldLaundry;mirrorRig?.Dispose();mirrorRig=oldMirror;catRig?.Dispose();catRig=oldCatPlay;zeroTwoDance?.Dispose();zeroTwoDance=oldDance;hairRig=oldHair;sofaRig?.Dispose();sofaRig=oldSofa;if(graph.IsValid())graph.Destroy();graph=oldGraph;mixer=oldMixer;plays=oldPlays;clips=oldClips;anchors=oldAnchors;travels=oldTravels;weights=oldWeights;from=oldFrom;speed=oldSpeed;blend=oldBlend;model=oldModel;anim=oldModel!=null?oldModel.GetComponent<Animator>():null;Destroy(candidate);throw;}
             modelName=Path.GetFileNameWithoutExtension(path);modelPath=path;LogSprings(candidate);
             if(statue!=null){Destroy(statue);statue=null;}
-            oldCall?.Dispose();oldCoffee?.Dispose();oldCurtain?.Dispose();oldWake?.Dispose();oldWorkout?.Dispose();oldRamen?.Dispose();oldMeal?.Dispose();oldLaundry?.Dispose();oldDance?.Dispose();oldSofa?.Dispose();HideIndoorShoes(candidate);if(oldGraph.IsValid())oldGraph.Destroy();if(oldClips!=null && oldClips[ZeroTwoIndex]!=null)Destroy(oldClips[ZeroTwoIndex]);DestroyGestureClips(oldClips);if(oldModel!=null)Destroy(oldModel);
+            oldCall?.Dispose();oldCoffee?.Dispose();oldCurtain?.Dispose();oldWake?.Dispose();oldWorkout?.Dispose();oldRamen?.Dispose();oldMeal?.Dispose();oldLaundry?.Dispose();oldMirror?.Dispose();oldCatPlay?.Dispose();oldDance?.Dispose();oldSofa?.Dispose();HideIndoorShoes(candidate);if(oldGraph.IsValid())oldGraph.Destroy();if(oldClips!=null && oldClips[ZeroTwoIndex]!=null)Destroy(oldClips[ZeroTwoIndex]);DestroyGestureClips(oldClips);if(oldModel!=null)Destroy(oldModel);
         }
         // a mesh without a Humanoid Avatar (a fresh Tripo glb): no motion, it stands on the floor at its own size (scaled to 1.6 m when it is far off),
         // left and right arrows turn it, up and down arrows zoom, N, Shift+N and R still step through the lines, Esc ends
@@ -1763,7 +1763,7 @@ namespace Oddity.RoomTest
             if(busy)return;
             if(ctl!=null){CatClickAt(ray);return;} // Harin ignores clicks while a pet is controlled
             if(chairJob!=null)return;
-            if(ramenOn || mealOn || laundryOn || laundryPend)EndNewActs("click");
+            if(ramenOn || mealOn || laundryOn || laundryPend || mirrorOn || mirrorPend || catOn)EndNewActs("click");
             float near=float.MaxValue;Collider got=null;Vector3 at=Vector3.zero;
             foreach(var c in clickHits)if(c!=null && !perchOf.ContainsKey(c) && c.Raycast(ray,out var hit,50f) && hit.distance<near){near=hit.distance;got=c;at=hit.point;} // the high perches are for the cats' clicks only
             if(got!=null){
@@ -2649,6 +2649,8 @@ namespace Oddity.RoomTest
             if(ramenOn && ctl==null && key!="semicolon" && (SofaBodyKeys.Contains(key) || key=="p" || key=="t" || key=="b" || key=="lietv" || key=="e" || key=="q" || key=="x" || key=="shiftx" || key=="comma" || key=="period" || key.StartsWith("click")))RamenEnd("key "+key);
             if(mealOn && ctl==null && key!="quote" && (SofaBodyKeys.Contains(key) || key=="p" || key=="t" || key=="b" || key=="lietv" || key=="e" || key=="q" || key=="x" || key=="shiftx" || key=="comma" || key=="period" || key.StartsWith("click")))MealEnd("key "+key);
             if((laundryOn || laundryPend) && ctl==null && key!="slash" && (SofaBodyKeys.Contains(key) || key=="p" || key=="t" || key=="b" || key=="lietv" || key=="e" || key=="q" || key=="x" || key=="shiftx" || key=="comma" || key=="period" || key.StartsWith("click")))LaundryEnd("key "+key);
+            if((mirrorOn || mirrorPend) && ctl==null && key!="lbracket" && (SofaBodyKeys.Contains(key) || key=="p" || key=="t" || key=="b" || key=="lietv" || key=="e" || key=="q" || key=="x" || key=="shiftx" || key=="comma" || key=="period" || key.StartsWith("click")))MirrorEnd("key "+key);
+            if(catOn && ctl==null && key!="rbracket" && key!="shiftrbracket" && (SofaBodyKeys.Contains(key) || key=="p" || key=="t" || key=="b" || key=="lietv" || key=="e" || key=="q" || key=="x" || key=="shiftx" || key=="comma" || key=="period" || key.StartsWith("click")))CatPlayEnd("key "+key);
             if(callOn && ctl==null && key!="e" && (SofaBodyKeys.Contains(key) || key=="p" || key=="t" || key=="b" || key=="lietv" || key.StartsWith("click")))CallEnd("key "+key);
             if(key.StartsWith("cam") && StillCamKey(key)){return;}
             if(key=="o"){ToggleCatSfx();return;}
@@ -2681,6 +2683,8 @@ namespace Oddity.RoomTest
             else if(key=="semicolon"){if(direction==0 && !busy)RamenKey();}
             else if(key=="quote"){if(direction==0 && !busy)MealKey();}
             else if(key=="slash"){if(direction==0 && !busy)LaundryKey();}
+            else if(key=="lbracket"){if(direction==0 && !busy)MirrorKey();}
+            else if(key=="rbracket" || key=="shiftrbracket"){if(direction==0 && !busy)CatPlayKey(key=="shiftrbracket" || (Keyboard.current!=null && Keyboard.current.shiftKey.isPressed));}
             else if(key=="x" || key=="shiftx"){if(direction==0 && !busy)CurtainKey(key=="shiftx" || (Keyboard.current!=null && Keyboard.current.shiftKey.isPressed));}
             else if(key=="k"){if(direction==0 && !busy){if(Keyboard.current!=null && Keyboard.current.shiftKey.isPressed)NextSit(NapIndex);else Sit(NapIndex,true);}}
             else if(key=="c"||key=="v"){if(direction==0 && !busy){int index=key=="c"?SitIndex:CurlIndex;
@@ -2866,12 +2870,16 @@ namespace Oddity.RoomTest
             if(ramenOn && input!=Vector2.zero)RamenEnd("walk key");
             if(mealOn && input!=Vector2.zero)MealEnd("walk key");
             if((laundryOn || laundryPend) && input!=Vector2.zero)LaundryEnd("walk key");
+            if((mirrorOn || mirrorPend) && input!=Vector2.zero)MirrorEnd("walk key");
+            if(catOn && input!=Vector2.zero)CatPlayEnd("walk key");
             CurtainTick(dt);
             WakeTick(dt);
             WorkoutTick(dt);
             RamenTick(dt);
             MealTick(dt);
             LaundryTick(dt);
+            MirrorTick(dt);
+            CatPlayTick(dt);
             CoffeeTick(dt);
             CallTick(dt);
             var goWish=chairJob==null?ClickStep(dt):Vector2.zero;
@@ -2975,10 +2983,10 @@ namespace Oddity.RoomTest
         void Smile(float dt)
         {
             var vrm=model.GetComponent<Vrm10Instance>();if(vrm==null || vrm.Runtime==null)return;
-            float smileWant=faceHeld!=null?0:current==9 || HairGestures.IsGesture(current)?IdleSmile:SmileWeight;if(faceHeld==null && sofaRig!=null && sofaRig.Weight>.01f)smileWant=Mathf.Lerp(smileWant,sofaRig.Smile,Mathf.Clamp01(sofaRig.Weight*2));if(faceHeld==null && callRig!=null && callRig.Weight>.01f)smileWant=Mathf.Lerp(smileWant,Mathf.Max(.3f,callRig.Smile*SmileWeight),Mathf.Clamp01(callRig.Weight*2));if(faceHeld==null && coffeeRig!=null && coffeeRig.Weight>.01f)smileWant=Mathf.Lerp(smileWant,Mathf.Max(.3f,coffeeRig.Smile*SmileWeight),Mathf.Clamp01(coffeeRig.Weight*2));if(faceHeld==null && curtainRig!=null && curtainRig.Weight>.01f)smileWant=Mathf.Lerp(smileWant,Mathf.Max(IdleSmile,curtainRig.Smile*SmileWeight),Mathf.Clamp01(curtainRig.Weight*2));if(faceHeld==null && workoutRig!=null && workoutRig.Weight>.01f)smileWant=Mathf.Lerp(smileWant,Mathf.Max(IdleSmile,workoutRig.Smile),Mathf.Clamp01(workoutRig.Weight*2));if(faceHeld==null && ramenRig!=null && ramenRig.Weight>.01f)smileWant=Mathf.Lerp(smileWant,Mathf.Max(IdleSmile,ramenRig.Smile*SmileWeight),Mathf.Clamp01(ramenRig.Weight*2));if(faceHeld==null && mealRig!=null && mealRig.Weight>.01f)smileWant=Mathf.Lerp(smileWant,Mathf.Max(IdleSmile,mealRig.Smile*SmileWeight),Mathf.Clamp01(mealRig.Weight*2));if(faceHeld==null && laundryRig!=null && laundryRig.Weight>.01f)smileWant=Mathf.Lerp(smileWant,Mathf.Max(IdleSmile,laundryRig.Smile*SmileWeight),Mathf.Clamp01(laundryRig.Weight*2));smile=Mathf.MoveTowards(smile,smileWant,dt*SmileWeight/.3f);
+            float smileWant=faceHeld!=null?0:current==9 || HairGestures.IsGesture(current)?IdleSmile:SmileWeight;if(faceHeld==null && sofaRig!=null && sofaRig.Weight>.01f)smileWant=Mathf.Lerp(smileWant,sofaRig.Smile,Mathf.Clamp01(sofaRig.Weight*2));if(faceHeld==null && callRig!=null && callRig.Weight>.01f)smileWant=Mathf.Lerp(smileWant,Mathf.Max(.3f,callRig.Smile*SmileWeight),Mathf.Clamp01(callRig.Weight*2));if(faceHeld==null && coffeeRig!=null && coffeeRig.Weight>.01f)smileWant=Mathf.Lerp(smileWant,Mathf.Max(.3f,coffeeRig.Smile*SmileWeight),Mathf.Clamp01(coffeeRig.Weight*2));if(faceHeld==null && curtainRig!=null && curtainRig.Weight>.01f)smileWant=Mathf.Lerp(smileWant,Mathf.Max(IdleSmile,curtainRig.Smile*SmileWeight),Mathf.Clamp01(curtainRig.Weight*2));if(faceHeld==null && workoutRig!=null && workoutRig.Weight>.01f)smileWant=Mathf.Lerp(smileWant,Mathf.Max(IdleSmile,workoutRig.Smile),Mathf.Clamp01(workoutRig.Weight*2));if(faceHeld==null && ramenRig!=null && ramenRig.Weight>.01f)smileWant=Mathf.Lerp(smileWant,Mathf.Max(IdleSmile,ramenRig.Smile*SmileWeight),Mathf.Clamp01(ramenRig.Weight*2));if(faceHeld==null && mealRig!=null && mealRig.Weight>.01f)smileWant=Mathf.Lerp(smileWant,Mathf.Max(IdleSmile,mealRig.Smile*SmileWeight),Mathf.Clamp01(mealRig.Weight*2));if(faceHeld==null && laundryRig!=null && laundryRig.Weight>.01f)smileWant=Mathf.Lerp(smileWant,Mathf.Max(IdleSmile,laundryRig.Smile*SmileWeight),Mathf.Clamp01(laundryRig.Weight*2));if(faceHeld==null && mirrorRig!=null && mirrorRig.Weight>.01f)smileWant=Mathf.Lerp(smileWant,Mathf.Max(IdleSmile,mirrorRig.Smile*SmileWeight),Mathf.Clamp01(mirrorRig.Weight*2));if(faceHeld==null && catRig!=null && catRig.Weight>.01f)smileWant=Mathf.Lerp(smileWant,Mathf.Max(IdleSmile,catRig.Smile*SmileWeight),Mathf.Clamp01(catRig.Weight*2));smile=Mathf.MoveTowards(smile,smileWant,dt*SmileWeight/.3f);
             FaceTick(vrm,dt);
             vrm.Runtime.Expression.SetWeight(ExpressionKey.Relaxed,smile);
-            nap=Mathf.MoveTowards(nap,current==NapIndex && !lieTv?1:0,dt/.6f); // eyes open while she watches the TV lying downvrm.Runtime.Expression.SetWeight(ExpressionKey.Blink,Mathf.Max(nap,sofaRig!=null?sofaRig.Blink*Mathf.Clamp01(sofaRig.Weight*2):0,coffeeRig!=null?coffeeRig.EyesClosed:0,curtainRig!=null?curtainRig.EyesClosed:0,wakeRig!=null?wakeRig.EyesClosed:0,workoutRig!=null?workoutRig.EyesClosed:0,ramenRig!=null?ramenRig.EyesClosed:0,mealRig!=null?mealRig.EyesClosed:0,laundryRig!=null?laundryRig.EyesClosed:0,clips[TossIndex]!=null?HairGestures.TossBlink((float)plays[TossIndex].GetTime())*weights[TossIndex]:0)); // asleep: eyes shut; the head toss blinks once
+            nap=Mathf.MoveTowards(nap,current==NapIndex && !lieTv?1:0,dt/.6f); // eyes open while she watches the TV lying downvrm.Runtime.Expression.SetWeight(ExpressionKey.Blink,Mathf.Max(nap,sofaRig!=null?sofaRig.Blink*Mathf.Clamp01(sofaRig.Weight*2):0,coffeeRig!=null?coffeeRig.EyesClosed:0,curtainRig!=null?curtainRig.EyesClosed:0,wakeRig!=null?wakeRig.EyesClosed:0,workoutRig!=null?workoutRig.EyesClosed:0,ramenRig!=null?ramenRig.EyesClosed:0,mealRig!=null?mealRig.EyesClosed:0,laundryRig!=null?laundryRig.EyesClosed:0,mirrorRig!=null?mirrorRig.EyesClosed*MirrorSquintBlink:0,catRig!=null?catRig.EyesClosed:0,clips[TossIndex]!=null?HairGestures.TossBlink((float)plays[TossIndex].GetTime())*weights[TossIndex]:0)); // asleep: eyes shut; the head toss blinks once
         }
         // J hair sweep and U head toss: one shot each, back to the idle (space) by themselves; pressing again restarts, walking or another key cancels
         void StartGesture(int index)
@@ -3073,6 +3081,8 @@ namespace Oddity.RoomTest
             RamenApply(dt);
             MealApply(dt);
             LaundryApply(dt);
+            MirrorApply(dt);
+            CatPlayApply(dt);
             LieFinish();
             if(sword!=null){sword.SetActive(current==12);shield.SetActive(current==12);if(current==12)PlaceShield();}
             if(blob!=null)blob.position=new Vector3(x,.004f,z+.02f);
@@ -3107,7 +3117,7 @@ namespace Oddity.RoomTest
         float Lean(){var hips=anim.GetBoneTransform(HumanBodyBones.Hips);var neck=anim.GetBoneTransform(HumanBodyBones.Neck);return Vector3.Angle(Vector3.up,neck.position-hips.position);}
         float WristAngle(int i)=>Quaternion.Angle(restHand[i],hands[i].localRotation);
         // like the bake: her lowest sole vertex rests on the floor every frame, the lift follows over 0.1 s
-        static Key KeyOf(string key)=>key=="semicolon"?Key.Semicolon:key=="quote"?Key.Quote:key=="slash"?Key.Slash:key=="comma"?Key.Comma:key=="period"?Key.Period:key=="tab"?Key.Tab:key=="escape"?Key.Escape:key=="space"?Key.Space:key=="left"?Key.LeftArrow:key=="right"?Key.RightArrow:key=="up"?Key.UpArrow:key=="down"?Key.DownArrow:char.IsDigit(key[0])?(Key)Enum.Parse(typeof(Key),"Digit"+key):(Key)Enum.Parse(typeof(Key),key.ToUpperInvariant());
+        static Key KeyOf(string key)=>key=="lbracket"?Key.LeftBracket:key=="rbracket"?Key.RightBracket:key=="semicolon"?Key.Semicolon:key=="quote"?Key.Quote:key=="slash"?Key.Slash:key=="comma"?Key.Comma:key=="period"?Key.Period:key=="tab"?Key.Tab:key=="escape"?Key.Escape:key=="space"?Key.Space:key=="left"?Key.LeftArrow:key=="right"?Key.RightArrow:key=="up"?Key.UpArrow:key=="down"?Key.DownArrow:char.IsDigit(key[0])?(Key)Enum.Parse(typeof(Key),"Digit"+key):(Key)Enum.Parse(typeof(Key),key.ToUpperInvariant());
         static bool Walk(string key)=>key=="shift"||key=="shifts"||key=="a"||key=="d"||key=="w"||key=="s";
         static Vector2 WalkDir(string key)=>key=="a"?Vector2.left:key=="d"||key=="shift"?Vector2.right:key=="w"?Vector2.up:key=="s"||key=="shifts"?Vector2.down:Vector2.zero;
         void RestFeet()
@@ -3613,13 +3623,13 @@ namespace Oddity.RoomTest
             else{if(!flag)return;flag=false;blockers.RemoveAll(r=>Mathf.Approximately(r.xMin,a.xMin) && Mathf.Approximately(r.yMin,a.yMin) && Mathf.Approximately(r.xMax,a.xMax) && Mathf.Approximately(r.yMax,a.yMax));floorPlan=null;}
         }
         void RamenBlockOff(){AreaBlock(ref ramenBlocked,OneRoom.RamenArea,false);}
-        void EndNewActs(string why){if(ramenOn)RamenEnd(why);if(mealOn)MealEnd(why);if(laundryOn || laundryPend)LaundryEnd(why);}
+        void EndNewActs(string why){if(ramenOn)RamenEnd(why);if(mealOn)MealEnd(why);if(laundryOn || laundryPend)LaundryEnd(why);MirrorEnd(why);CatPlayEnd(why);}
         void RamenKey()
         {
             if(ramenOn){RamenEnd("again");return;}
             if(ramenRig==null || model==null){Notice("이 모델로는 할 수 없음");return;}
             if(!one){Notice("이 집에는 주방이 없음");return;}
-            if(callOn)CallEnd("ramen");if(coffeeOn)CoffeeEnd("ramen");if(curtainOn)CurtainEnd("ramen");if(wakeOn || wakePend)WakeEnd("ramen");if(workoutOn)WorkoutEnd("ramen");if(mealOn)MealEnd("ramen");if(laundryOn || laundryPend)LaundryEnd("ramen");
+            if(callOn)CallEnd("ramen");if(coffeeOn)CoffeeEnd("ramen");if(curtainOn)CurtainEnd("ramen");if(wakeOn || wakePend)WakeEnd("ramen");if(workoutOn)WorkoutEnd("ramen");if(mealOn)MealEnd("ramen");if(laundryOn || laundryPend)LaundryEnd("ramen");MirrorEnd("ramen");CatPlayEnd("ramen");
             if(sofaOn!=SofaMode.None || sofaPend)SofaStop("ramen");
             if(chairSat!=null){StartChairStand(-1);}
             ramenOn=true;ramenWalk=true;ramenTries=0;ramenWait=0;ramenLastPhase="";
@@ -3686,7 +3696,7 @@ namespace Oddity.RoomTest
             if(mealOn){MealEnd("again");return;}
             if(mealRig==null || model==null){Notice("이 모델로는 할 수 없음");return;}
             if(!one){Notice("이 집에는 상 놓을 자리가 없음");return;}
-            if(callOn)CallEnd("meal");if(coffeeOn)CoffeeEnd("meal");if(curtainOn)CurtainEnd("meal");if(wakeOn || wakePend)WakeEnd("meal");if(workoutOn)WorkoutEnd("meal");if(ramenOn)RamenEnd("meal");if(laundryOn || laundryPend)LaundryEnd("meal");
+            if(callOn)CallEnd("meal");if(coffeeOn)CoffeeEnd("meal");if(curtainOn)CurtainEnd("meal");if(wakeOn || wakePend)WakeEnd("meal");if(workoutOn)WorkoutEnd("meal");if(ramenOn)RamenEnd("meal");if(laundryOn || laundryPend)LaundryEnd("meal");MirrorEnd("meal");CatPlayEnd("meal");
             if(sofaOn!=SofaMode.None || sofaPend)SofaStop("meal");
             if(chairSat!=null){StartChairStand(-1);}
             mealOn=true;mealWalk=true;mealTries=0;mealWait=0;mealLastPhase="";
@@ -3729,7 +3739,7 @@ namespace Oddity.RoomTest
             var edge=seats.FirstOrDefault(t=>t.mark!=null && t.mark.name=="SeatBedEdge");
             if(edge.mark==null || !(apt && Apartment.HasBed)){Notice("이 집에는 침대가 없음");return;}
             if(CatOnSeat(edge.mark)){Notice("고양이가 그 자리에 있어요");return;}
-            if(callOn)CallEnd("laundry");if(coffeeOn)CoffeeEnd("laundry");if(curtainOn)CurtainEnd("laundry");if(wakeOn || wakePend)WakeEnd("laundry");if(workoutOn)WorkoutEnd("laundry");if(ramenOn)RamenEnd("laundry");if(mealOn)MealEnd("laundry");
+            if(callOn)CallEnd("laundry");if(coffeeOn)CoffeeEnd("laundry");if(curtainOn)CurtainEnd("laundry");if(wakeOn || wakePend)WakeEnd("laundry");if(workoutOn)WorkoutEnd("laundry");if(ramenOn)RamenEnd("laundry");if(mealOn)MealEnd("laundry");MirrorEnd("laundry");CatPlayEnd("laundry");
             if(sofaOn!=SofaMode.None || sofaPend)SofaStop("laundry");
             laundryPend=true;laundryPendT=0;laundryDoneT=0;laundryLastPhase="";
             if(chairSat!=null){StartChairStand(-1);Debug.Log("ROOMPLAY_LAUNDRY pend (chair)");return;}
@@ -3766,6 +3776,210 @@ namespace Oddity.RoomTest
             if(!laundryOn && laundryRig.Weight<=0){laundryRig.Apply(dt);return;}
             laundryRig.Tick(dt);laundryRig.Apply(dt);
             if(laundryRig.Phase!=laundryLastPhase){laundryLastPhase=laundryRig.Phase;Debug.Log("LAUNDRY phase="+laundryLastPhase+" piece="+laundryRig.Completed+" w="+F(laundryRig.Weight));}
+        }
+        // ---- [ (left bracket): a hand mirror in the left hand and a lip tint stick in the right, on the bed's east edge (Mirror.cs: MirrorRig, 25 s loop, written by GPT). The wiring copies / above: from lying she sits up, from elsewhere she walks to the edge and sits; it loops until the key, Space, a walk or another action
+        MirrorRig mirrorRig;bool mirrorOn,mirrorPend;float mirrorPendT;string mirrorLastPhase="";
+        const float MirrorSquintBlink=.75f; // the rig's squint closes both eyes up to .8; the room shows it as a squint, not a shut eye
+        void MirrorKey()
+        {
+            if(mirrorOn || mirrorPend){MirrorEnd("again");return;}
+            if(mirrorRig==null || model==null){Notice("이 모델로는 할 수 없음");return;}
+            var edge=seats.FirstOrDefault(t=>t.mark!=null && t.mark.name=="SeatBedEdge");
+            if(edge.mark==null || !(apt && Apartment.HasBed)){Notice("이 집에는 침대가 없음");return;}
+            if(CatOnSeat(edge.mark)){Notice("고양이가 그 자리에 있어요");return;}
+            if(callOn)CallEnd("mirror");if(coffeeOn)CoffeeEnd("mirror");if(curtainOn)CurtainEnd("mirror");if(wakeOn || wakePend)WakeEnd("mirror");if(workoutOn)WorkoutEnd("mirror");if(ramenOn)RamenEnd("mirror");if(mealOn)MealEnd("mirror");if(laundryOn || laundryPend)LaundryEnd("mirror");CatPlayEnd("mirror");
+            if(sofaOn!=SofaMode.None || sofaPend)SofaStop("mirror");
+            mirrorPend=true;mirrorPendT=0;mirrorLastPhase="";
+            if(chairSat!=null){StartChairStand(-1);Debug.Log("ROOMPLAY_MIRROR pend (chair)");return;}
+            if(current==NapIndex || current==BedIndex){Sit(SitIndex,false,edge.mark);Debug.Log("ROOMPLAY_MIRROR sit up from lying model="+modelName);Notice("일어나 앉기");return;}
+            if(OnBedEdge())return;
+            if(current!=9 && current!=10 && current!=11 && current!=SitIndex){onFloor=false;Select(9);}
+            var stand=edge.mark.position+edge.front*edge.off;
+            clickSeat=edge.mark;clickWindow=false;clickGoal=new Vector2(Mathf.Clamp(stand.x,LimX0,LimX1),Mathf.Clamp(stand.z,ZNear,ZFar));hPathGoal=null;hReplanned=false;clickStuck=0;
+            Debug.Log("ROOMPLAY_MIRROR walk to=("+F(clickGoal.Value.x)+","+F(clickGoal.Value.y)+") model="+modelName);Notice("침대로 걸어가기");
+        }
+        void MirrorEnd(string why)
+        {
+            if(!mirrorOn && !mirrorPend)return;
+            if(mirrorPend && clickGoal.HasValue && clickSeat!=null){clickGoal=null;clickSeat=null;}
+            mirrorPend=false;mirrorOn=false;mirrorRig.Stop();
+            Debug.Log("ROOMPLAY_MIRROR end why="+why+" phase="+mirrorRig.Phase+" loops="+mirrorRig.Loops);
+        }
+        void MirrorTick(float dt)
+        {
+            if(mirrorPend){
+                mirrorPendT+=dt;
+                if(OnBedEdge()){mirrorPend=false;mirrorOn=true;mirrorRig.Start();Debug.Log("ROOMPLAY_MIRROR start at=("+F(x)+","+F(z)+") yaw="+F(yaw)+" model="+modelName);Notice("거울 보기");}
+                else if(!clickGoal.HasValue && chairSat==null && chairJob==null && mirrorPendT>.3f && current!=SitIndex)MirrorEnd("no walk");
+                else if(mirrorPendT>30)MirrorEnd("timeout");
+            }
+            else if(mirrorOn && current!=SitIndex)MirrorEnd("pose");
+        }
+        void MirrorApply(float dt)
+        {
+            if(mirrorRig==null || model==null)return;
+            if(!mirrorOn && mirrorRig.Weight<=0){mirrorRig.Apply(dt);return;}
+            mirrorRig.Tick(dt);mirrorRig.Apply(dt);
+            if(mirrorRig.Phase!=mirrorLastPhase){mirrorLastPhase=mirrorRig.Phase;Debug.Log("MIRROR phase="+mirrorLastPhase+" loop="+mirrorRig.Loops+" w="+F(mirrorRig.Weight)+" mouth="+F(mirrorRig.MouthOpen)+" smile="+F(mirrorRig.Smile)+" squint="+F(mirrorRig.EyesClosed));}
+            var vrm=model.GetComponent<Vrm10Instance>();
+            if(vrm!=null && vrm.Runtime!=null)vrm.Runtime.Expression.SetWeight(ExpressionKey.Aa,mirrorRig.MouthOpen*.7f);
+        }
+        // ---- ] (right bracket) plays with the nearest cat that is on the floor (CatPlay.cs: CatPlayRig, written by GPT, owns her legs, arms, spine, head and the wand props): ] petting (a loaf-resting cat, her right hand strokes head to tail), Shift+] a feather wand (the cat chases the feather tip and hops at it).
+        // With a cat on the floor she walks to its flank and the cat is held still (its AI is paused, PetMove still runs); with none on the floor the nearest cat is called down to a free floor spot in front of her. A cat steered with Tab is never used. While on, ] / Shift+] switch the mode and the same key again ends; the cat AI resumes 1.5 s after the end
+        CatPlayRig catRig;bool catOn,catWalk,catWantWand,catCome,catRecall;Pet catPet;int catTries,catCatTries;float catWait,catSettle,catJumpT,catBakeT,catTimeout,catLogT;string catLastPhase="";
+        Vector2 catSpot,catHarinSpot;float catYaw;Vector3 catHeadTarget,catTailTarget;bool catPoints;Mesh catBake;
+        void CatPlayReset()
+        {
+            if(catPet!=null){catPet.aiPaused=true;catPet.resumeIn=1.5f;catPet.goal=null;}
+            catPet=null;catOn=false;catWalk=false;catRecall=false;catPoints=false;
+        }
+        void CatPlayKey(bool wand)
+        {
+            if(catOn){
+                if(catWantWand==wand){CatPlayEnd("again");return;}
+                catWantWand=wand;catRecall=false;if(wand && catRig.Mode!=CatPlayMode.Wand && !catWalk)catRig.Mode=CatPlayMode.Wand;
+                Debug.Log("ROOMPLAY_CATPLAY mode="+(wand?"wand":"pet"));Notice(wand?"낚싯대 놀이":"고양이 쓰다듬기");return;
+            }
+            if(catRig==null || model==null){Notice("이 모델로는 할 수 없음");return;}
+            if(!apt){Notice("이 집에서는 할 수 없음");return;}
+            Pet pick=null;float best=float.MaxValue;bool floorPick=false;var me=new Vector2(x,z);
+            foreach(var o in pets){
+                if(o==ctl || o.root==null || !o.graph.IsValid() || !o.somali)continue;
+                bool fl=o.perch==null && !o.onSofa && o.job==0 && o.hopPlan.Count==0;float d=(PetXZ(o)-me).magnitude;
+                if(pick==null || (fl && !floorPick) || (fl==floorPick && d<best)){pick=o;best=d;floorPick=fl;}
+            }
+            if(pick==null){Notice("고양이가 없어요");return;}
+            if(callOn)CallEnd("catplay");if(coffeeOn)CoffeeEnd("catplay");if(curtainOn)CurtainEnd("catplay");if(wakeOn || wakePend)WakeEnd("catplay");if(workoutOn)WorkoutEnd("catplay");if(ramenOn)RamenEnd("catplay");if(mealOn)MealEnd("catplay");if(laundryOn || laundryPend)LaundryEnd("catplay");MirrorEnd("catplay");
+            if(sofaOn!=SofaMode.None || sofaPend)SofaStop("catplay");
+            if(chairSat!=null){StartChairStand(-1);}
+            Vector2 hSpot;float hYaw;
+            if(floorPick){
+                var c=PetXZ(pick);float h=pick.heading<-999?pick.root.eulerAngles.y:pick.heading;
+                var f=new Vector2(Mathf.Sin(h*Mathf.Deg2Rad),Mathf.Cos(h*Mathf.Deg2Rad));var sd=new Vector2(f.y,-f.x);
+                var cands=new List<Vector2>();foreach(var sgn in new[]{1f,-1f})foreach(float dist in new[]{.36f,.38f})cands.Add(c+sd*(sgn*dist));
+                for(int a=0;a<8;a++){var dd=Quaternion.Euler(0,0,a*45)*new Vector3(sd.x,sd.y,0);cands.Add(c+new Vector2(dd.x,dd.y)*.4f);}
+                hSpot=default;bool got=false;float bestD=float.MaxValue;
+                foreach(var cand in cands){var t=NearestFree(cand);float dc=(t-c).magnitude;if(dc<.34f || dc>.8f || Blocked(t))continue;float dm=(t-me).magnitude;if(dm<bestD-.001f){bestD=dm;hSpot=t;got=true;}}
+                if(!got){Notice("고양이 곁에 설 자리가 없어요");return;}
+                hYaw=Mathf.Atan2(c.x-hSpot.x,c.y-hSpot.y)*Mathf.Rad2Deg;
+            }else{
+                var rug=Apartment.RugBox;hSpot=NearestFree(new Vector2(rug.center.x,rug.center.y+.3f));hYaw=180f;
+                catSpot=NearestFree(hSpot+new Vector2(0,-.5f));
+            }
+            catPet=pick;AiPause(pick);pick.resumeIn=1e6f;
+            catCome=!floorPick;catWantWand=wand;catRecall=false;catTries=0;catCatTries=0;catWait=0;catSettle=0;catJumpT=1f;catTimeout=0;catLastPhase="";catPoints=false;
+            if(catCome)PetGoTo(pick,"floor",catSpot,null,catSpot+new Vector2(1,0),"catplay");
+            catHarinSpot=hSpot;catYaw=hYaw;catOn=true;catWalk=true;
+            if(current!=9 && current!=10 && current!=11){onFloor=false;Select(9);}
+            clickSeat=null;clickWindow=true;clickYaw=catYaw;clickGoal=catHarinSpot;hPathGoal=null;hReplanned=false;clickStuck=0;
+            Debug.Log("ROOMPLAY_CATPLAY walk to=("+F(hSpot.x)+","+F(hSpot.y)+") yaw="+F(hYaw)+" cat="+pick.tag+" floor="+floorPick+" mode="+(wand?"wand":"pet")+" model="+modelName);Notice(wand?"낚싯대 놀이":"고양이 쓰다듬기");
+        }
+        void CatPlayEnd(string why)
+        {
+            if(!catOn)return;
+            catOn=false;catWalk=false;catRecall=false;catRig.Stop();
+            if(catPet!=null){catPet.aiPaused=true;catPet.resumeIn=1.5f;catPet.goal=null;catPet.faceTo=float.NaN;}
+            if(clickGoal.HasValue){clickGoal=null;clickSeat=null;clickWindow=false;}clickYaw=null;
+            Debug.Log("ROOMPLAY_CATPLAY end why="+why+" phase="+catRig.Phase);catPet=null;
+        }
+        static bool CatRested(Pet p)=>p.sit==2 || p.sit==5 || p.sit==8;
+        void CatPlayStart()
+        {
+            catWalk=false;catRig.Mode=catWantWand?CatPlayMode.Wand:CatPlayMode.Pet;catRig.Start();
+            Debug.Log("ROOMPLAY_CATPLAY start at=("+F(x)+","+F(z)+") yaw="+F(yaw)+" cat="+catPet.tag+" at=("+F(catPet.root.position.x)+","+F(catPet.root.position.z)+") sit="+catPet.sit+" mode="+catRig.Mode+" model="+modelName);
+        }
+        void CatPlayTick(float dt)
+        {
+            if(!catOn)return;
+            if(current==SitIndex || current==CurlIndex || current==NapIndex || current==BedIndex || current==ZeroTwoIndex){CatPlayEnd("pose");return;}
+            var p=catPet;
+            if(p==null || p.root==null || !p.graph.IsValid() || ctl==p){CatPlayEnd("no cat");return;}
+            p.aiPaused=true;p.resumeIn=1e6f; // the cat AI stays off while she plays; PetMove below is the only thing that moves it
+            var hp=new Vector2(x,z);
+            if(catWalk){
+                catTimeout+=dt;
+                if(!clickGoal.HasValue && (hp-catHarinSpot).magnitude>.25f && catTries<4){
+                    catTries++;clickSeat=null;clickWindow=true;clickYaw=catYaw;clickGoal=catHarinSpot;hPathGoal=null;hReplanned=false;clickStuck=0;Debug.Log("ROOMPLAY_CATPLAY retry "+catTries+" at=("+F(x)+","+F(z)+")");
+                }
+                if(catCome && !p.goal.HasValue && p.job==0 && !p.moving && (PetXZ(p)-catSpot).magnitude>.25f && catCatTries<3){catCatTries++;PetGoTo(p,"floor",catSpot,null,catSpot+new Vector2(1,0),"catplay");}
+                PetMove(p,dt,Vector2.zero,false,0,true);
+                bool harinHere=false;
+                if(!clickGoal.HasValue){catWait+=dt;harinHere=Mathf.Abs(Mathf.DeltaAngle(yaw,catYaw))<3f || catWait>2f;}
+                bool catHere=!catCome || ((PetXZ(p)-catSpot).magnitude<.3f && !p.goal.HasValue && !p.moving && p.job==0 && p.perch==null && !p.onSofa);
+                if(harinHere && catHere){
+                    if(catWantWand)CatPlayStart();
+                    else{
+                        catSettle+=dt;
+                        if(CatRested(p) || catSettle>5f)CatPlayStart();
+                        else if(p.sit==0 && !p.moving && p.job==0 && !p.goal.HasValue)PetRest(p,p.hasLie?3:1);
+                    }
+                }
+                else if(catTimeout>25f)CatPlayEnd("timeout");
+                return;
+            }
+            if(catWantWand){
+                catRecall=false;if(catRig.Mode!=CatPlayMode.Wand)catRig.Mode=CatPlayMode.Wand;
+                var tip=catRig.FeatherTipWorld;var to=new Vector2(tip.x,tip.z)-PetXZ(p);float dist=to.magnitude;
+                Vector2 inp=Vector2.zero;
+                if(p.job==0 && dist>.2f){var dir=new Vector3(to.x,0,to.y)/dist;var fw=MoveFwd();inp=new Vector2(Vector3.Dot(dir,new Vector3(fw.z,0,-fw.x)),Vector3.Dot(dir,fw));}
+                catJumpT-=dt;
+                if(p.job==0 && dist<=.36f){
+                    p.faceTo=Mathf.Atan2(to.x,to.y)*Mathf.Rad2Deg;
+                    if(catJumpT<=0 && p.sit==0 && !p.moving){PetRest(p,6);catJumpT=Rnd(1f,1.9f);Debug.Log("ROOMPLAY_CATPLAY hop dist="+F(dist)+" feather y="+F(tip.y));}
+                }
+                PetMove(p,dt,inp,false,0,true);
+            }else{
+                float d=(PetXZ(p)-hp).magnitude;
+                if(catRig.Mode==CatPlayMode.Wand){ // coming back from the wand: the cat is called to her front and rests there, then the stroking starts
+                    var fwd=new Vector2(Mathf.Sin(yaw*Mathf.Deg2Rad),Mathf.Cos(yaw*Mathf.Deg2Rad));
+                    var spot=NearestFree(hp+fwd*.5f);
+                    if(!catRecall && (d<.3f || d>.85f)){catRecall=true;PetGoTo(p,"floor",spot,null,spot+new Vector2(fwd.y,-fwd.x),"catplay");}
+                    else if(!catRecall && !p.moving && p.job==0 && p.sit==0 && !p.goal.HasValue)catRecall=true;
+                    if(catRecall && !p.goal.HasValue && !p.moving && p.job==0){
+                        if(CatRested(p) && d>=.3f && d<=.85f){catRig.Mode=CatPlayMode.Pet;catRecall=false;Debug.Log("ROOMPLAY_CATPLAY pet settled cat="+p.tag+" sit="+p.sit);}
+                        else if(p.sit==0)PetRest(p,p.hasLie?3:1);
+                    }
+                }
+                PetMove(p,dt,Vector2.zero,false,0,true);
+            }
+        }
+        // the cat's back line for the stroke: top of the body just behind the head and just in front of the rump (vertices of the baked skin, tail left out), every 0.15 s, smoothed
+        void CatPoints(Pet p,float dt)
+        {
+            catBakeT-=dt;if(catBakeT>0)return;catBakeT=.15f;
+            var smrs=p.root.GetComponentsInChildren<SkinnedMeshRenderer>();if(smrs.Length==0)return;
+            if(catBake==null)catBake=new Mesh();
+            var pts=new List<Vector3>();var verts=new List<Vector3>();
+            for(int i=0;i<smrs.Length;i++){
+                smrs[i].BakeMesh(catBake,true);catBake.GetVertices(verts);var m=smrs[i].transform.localToWorldMatrix;
+                bool mask=p.smrs!=null && i<p.smrs.Length && p.smrs[i]==smrs[i] && p.tailMask!=null && p.tailMask[i]!=null && p.tailMask[i].Length==verts.Count;
+                for(int v=0;v<verts.Count;v++){if(mask && p.tailMask[i][v])continue;pts.Add(m.MultiplyPoint3x4(verts[v]));}
+            }
+            if(pts.Count<10)return;
+            float h=p.heading<-999?p.root.eulerAngles.y:p.heading;
+            var f=new Vector3(Mathf.Sin(h*Mathf.Deg2Rad),0,Mathf.Cos(h*Mathf.Deg2Rad));var r=new Vector3(f.z,0,-f.x);
+            var c=Vector3.zero;foreach(var q in pts)c+=q;c/=pts.Count;
+            var ts=pts.Select(q=>Vector3.Dot(q-c,f)).OrderBy(t=>t).ToArray();
+            float tMax=ts[(int)(ts.Length*.985f)],tMin=ts[(int)(ts.Length*.015f)];
+            float Top(float t0,float w){float top=float.MinValue;foreach(var q in pts){if(Mathf.Abs(Vector3.Dot(q-c,f)-t0)<w && Mathf.Abs(Vector3.Dot(q-c,r))<.07f && q.y>top)top=q.y;}return top==float.MinValue?c.y:top;}
+            float hy=Top(tMax-.07f,.035f),ty=Top(tMin+.1f,.035f),my=Top((tMax+tMin)/2,.05f);
+            var headP=c+f*(tMax-.07f);var tailP=c+f*(tMin+.1f);
+            headP.y=Mathf.Max(hy,my);tailP.y=Mathf.Max(ty,my);
+            float k=catPoints?.35f:1f;catHeadTarget=Vector3.Lerp(catHeadTarget,headP,k);catTailTarget=Vector3.Lerp(catTailTarget,tailP,k);catPoints=true;
+            catRig.CatHead=catHeadTarget;catRig.CatTail=catTailTarget;
+        }
+        void CatPlayApply(float dt)
+        {
+            if(catRig==null || model==null)return;
+            if(!catOn && catRig.Weight<=0){catRig.Apply(dt);return;}
+            catRig.FloorY=model.transform.position.y;
+            if(catOn && catPet!=null && catPet.root!=null && catRig.Mode==CatPlayMode.Pet)CatPoints(catPet,dt);
+            if(!catWalk)catRig.Tick(dt);
+            catRig.Apply(dt);
+            if(catRig.Phase!=catLastPhase){catLastPhase=catRig.Phase;Debug.Log("CATPLAY phase="+catLastPhase+" mode="+catRig.Mode+" w="+F(catRig.Weight)+" smile="+F(catRig.Smile)+" mouth="+F(catRig.MouthOpen));}
+            if(Time.unscaledTime-catLogT>2 && catRig.Weight>.99f){catLogT=Time.unscaledTime;var rh=anim.GetBoneTransform(HumanBodyBones.RightHand);Debug.Log("ROOMPLAY_CATPLAYPOSE mode="+catRig.Mode+" phase="+catRig.Phase+" errR="+F(Vector3.Distance(rh.position,catRig.RightWristTarget))+" head=("+F(catRig.CatHead.x)+","+F(catRig.CatHead.y)+","+F(catRig.CatHead.z)+") tail=("+F(catRig.CatTail.x)+","+F(catRig.CatTail.y)+","+F(catRig.CatTail.z)+") feather=("+F(catRig.FeatherTipWorld.x)+","+F(catRig.FeatherTipWorld.y)+","+F(catRig.FeatherTipWorld.z)+")");}
+            var vrm=model.GetComponent<Vrm10Instance>();
+            if(vrm!=null && vrm.Runtime!=null)vrm.Runtime.Expression.SetWeight(ExpressionKey.Aa,catRig.MouthOpen*.7f);
         }
         // indoors in Korea no shoes: a separate shoe mesh of the model is hidden (the apartment and the studio); a model with shoes baked into its body stays as it is
         static readonly string[] ShoeWords={"shoe","boot","sneaker","loafer","sandal","heel","pumps"};
@@ -3886,9 +4100,9 @@ namespace Oddity.RoomTest
                 }
                 if(i==Keys.Length){style.normal.textColor=faceHeld!=null?Color.yellow:Color.white;GUI.Label(new Rect(16,34+i*17,330,18),"  Shift+1→0  표정 "+(faceHeld??"(0 원래대로)"),style);continue;}
                 if(i==Keys.Length+1){style.normal.textColor=Color.white;GUI.Label(new Rect(16,34+i*17,330,18),"  Shift+← →  카메라 좌우 돌기, Shift+↑ ↓  카메라 높이",style);continue;}
-                bool selected=i==current || (Keys[i].key=="p" && sofaOn==SofaMode.Phone) || (Keys[i].key=="t" && sofaOn==SofaMode.Tv) || (Keys[i].key=="e" && callOn) || (Keys[i].key=="q" && coffeeOn) || (Keys[i].key=="x" && curtainOn) || (Keys[i].key=="comma" && (wakeOn || wakePend)) || (Keys[i].key=="period" && workoutOn) || (Keys[i].key=="semicolon" && ramenOn) || (Keys[i].key=="quote" && mealOn) || (Keys[i].key=="slash" && (laundryOn || laundryPend));
+                bool selected=i==current || (Keys[i].key=="p" && sofaOn==SofaMode.Phone) || (Keys[i].key=="t" && sofaOn==SofaMode.Tv) || (Keys[i].key=="e" && callOn) || (Keys[i].key=="q" && coffeeOn) || (Keys[i].key=="x" && curtainOn) || (Keys[i].key=="comma" && (wakeOn || wakePend)) || (Keys[i].key=="period" && workoutOn) || (Keys[i].key=="semicolon" && ramenOn) || (Keys[i].key=="quote" && mealOn) || (Keys[i].key=="slash" && (laundryOn || laundryPend)) || (Keys[i].key=="lbracket" && (mirrorOn || mirrorPend)) || (Keys[i].key=="rbracket" && catOn);
                 style.normal.textColor=selected?Color.yellow:clips!=null && i<MotionCount && clips[i]==null?Color.gray:Color.white;
-                GUI.Label(new Rect(16,34+i*17,330,18),(selected?"> ":"  ")+(Keys[i].key=="comma"?",":Keys[i].key=="period"?".":Keys[i].key=="semicolon"?";":Keys[i].key=="quote"?"'":Keys[i].key=="slash"?"/":Keys[i].key.Length==1?Keys[i].key.ToUpperInvariant():Keys[i].key)+"  "+KeyText(i),style);
+                GUI.Label(new Rect(16,34+i*17,330,18),(selected?"> ":"  ")+(Keys[i].key=="comma"?",":Keys[i].key=="period"?".":Keys[i].key=="semicolon"?";":Keys[i].key=="quote"?"'":Keys[i].key=="slash"?"/":Keys[i].key=="lbracket"?"[":Keys[i].key=="rbracket"?"]":Keys[i].key.Length==1?Keys[i].key.ToUpperInvariant():Keys[i].key)+"  "+KeyText(i),style);
             }
             if(Time.realtimeSinceStartup<messageUntil)GUI.Label(new Rect(16,listEnd+4,900,40),message,new GUIStyle(GUI.skin.label){fontSize=24});
             // who is controlled: top right, white with a dark outline; it pops (1.3 -> 1 in 0.2 s) and flashes when Tab hands control over
@@ -3906,6 +4120,6 @@ namespace Oddity.RoomTest
             if(!catSfxOn){var small=new GUIStyle(GUI.skin.label){fontSize=13,alignment=TextAnchor.MiddleRight};var r2=new Rect(Screen.width-230,46,220,22);
                 small.normal.textColor=new Color(0,0,0,.9f);GUI.Label(new Rect(r2.x+1,r2.y+1,r2.width,r2.height),"고양이 소리 끔",small);small.normal.textColor=new Color(1f,.85f,.6f);GUI.Label(r2,"고양이 소리 끔",small);}
         }
-        void OnDestroy(){foreach(var pet in pets)if(pet.graph.IsValid())pet.graph.Destroy();zeroTwoAudio?.Dispose();zeroTwoDance?.Dispose();sofaRig?.Dispose();callRig?.Dispose();coffeeRig?.Dispose();curtainRig?.Dispose();wakeRig?.Dispose();workoutRig?.Dispose();ramenRig?.Dispose();mealRig?.Dispose();laundryRig?.Dispose();curtain?.Dispose();tv?.Dispose();if(clips!=null && clips[ZeroTwoIndex]!=null)Destroy(clips[ZeroTwoIndex]);DestroyGestureClips(clips);if(graph.IsValid())graph.Destroy();if(boundsMesh!=null)Destroy(boundsMesh);if(soleBake!=null)Destroy(soleBake);EditorSettings.enterPlayModeOptionsEnabled=oldEnabled;EditorSettings.enterPlayModeOptions=oldOptions;}
+        void OnDestroy(){foreach(var pet in pets)if(pet.graph.IsValid())pet.graph.Destroy();zeroTwoAudio?.Dispose();zeroTwoDance?.Dispose();sofaRig?.Dispose();callRig?.Dispose();coffeeRig?.Dispose();curtainRig?.Dispose();wakeRig?.Dispose();workoutRig?.Dispose();ramenRig?.Dispose();mealRig?.Dispose();laundryRig?.Dispose();mirrorRig?.Dispose();catRig?.Dispose();curtain?.Dispose();tv?.Dispose();if(clips!=null && clips[ZeroTwoIndex]!=null)Destroy(clips[ZeroTwoIndex]);DestroyGestureClips(clips);if(graph.IsValid())graph.Destroy();if(boundsMesh!=null)Destroy(boundsMesh);if(soleBake!=null)Destroy(soleBake);EditorSettings.enterPlayModeOptionsEnabled=oldEnabled;EditorSettings.enterPlayModeOptions=oldOptions;}
     }
 }
