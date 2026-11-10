@@ -139,7 +139,7 @@ namespace Oddity.RoomTest
 
         Quaternion HeadAxes() => head.rotation * headFrame;
 
-        public PhoneCallRig(Animator anim, int seed)
+        public PhoneCallRig(Animator anim, int seed, Quaternion? restHeadFrame = null)
         {
             if (anim == null) throw new ArgumentNullException(nameof(anim));
             if (!anim.isHuman) throw new ArgumentException("PhoneCallRig needs a humanoid Animator.", nameof(anim));
@@ -147,7 +147,7 @@ namespace Oddity.RoomTest
             hips = Bone(HumanBodyBones.Hips); spine = Bone(HumanBodyBones.Spine);
             chest = Bone(HumanBodyBones.Chest) ?? spine; neck = Bone(HumanBodyBones.Neck); head = Bone(HumanBodyBones.Head);
             if (hips == null || spine == null || head == null) throw new InvalidOperationException("PhoneCallRig needs hips, spine and head.");
-            headFrame = Quaternion.Inverse(head.rotation) * anim.transform.rotation;
+            headFrame = restHeadFrame ?? Quaternion.Inverse(head.rotation) * anim.transform.rotation;
             for (int s = 0; s < 2; s++)
             {
                 upper[s] = Bone(s == 0 ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);

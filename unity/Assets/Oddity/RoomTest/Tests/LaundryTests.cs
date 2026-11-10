@@ -170,6 +170,55 @@ namespace Oddity.RoomTest.Tests
             }
             finally { rig?.Dispose(); Object.DestroyImmediate(model); }
         }
+
+        // item 4: the head bows 10 (was 22) and the hands slide to the new fold corner over 0.3 s instead of snapping when FoldWidth turns into Place
+        [Test]
+        public void Laundry_FoldCornerSwitchSlidesAndTheUpperBodyBowStaysUnder38Deg()
+        {
+            var model = LoadModel(); LaundryRig rig = null;
+            try
+            {
+                var anim = model.GetComponent<Animator>();
+                rig = new LaundryRig(anim, 17);
+                var clip = AssetDatabase.LoadAllAssetsAtPath("Assets/Oddity/DevMotion/Resources/Motion/KaSitPutHandBetweensLoop.fbx")
+                    .OfType<AnimationClip>().FirstOrDefault(c => !c.name.StartsWith("__preview__"));
+                if (clip == null) Assert.Ignore("no seated base clip installed");
+                var hips = anim.GetBoneTransform(HumanBodyBones.Hips); var head = anim.GetBoneTransform(HumanBodyBones.Head);
+                Action sample = () =>
+                {
+                    clip.SampleAnimation(model, 0);
+                    model.transform.rotation = Quaternion.Euler(0, 90f, 0);
+                    model.transform.position += new Vector3(.81f, .52f, 1.5f) - hips.position;
+                };
+                sample();
+                rig.Props.SetPositionAndRotation(new Vector3(.81f, .46f, 1.5f), Quaternion.Euler(0, 90, 0));
+                rig.Start();
+                string previous = ""; Vector3 lastL = default, lastR = default; int sinceSwitch = 99; float boundaryJump = 0, worstAfter = 0, worstBow = 0; int switches = 0;
+                for (int i = 0; i < 2600; i++)
+                {
+                    sample(); var headBefore = head.rotation;
+                    rig.Tick(.02f); rig.Apply(.02f);
+                    if (rig.Weight >= 1) worstBow = Mathf.Max(worstBow, Quaternion.Angle(headBefore, head.rotation));
+                    if (rig.Phase == "Place" && previous == "FoldWidth")
+                    {
+                        switches++; sinceSwitch = 0;
+                        boundaryJump = Mathf.Max(boundaryJump, Vector3.Distance(lastL, rig.LeftContact), Vector3.Distance(lastR, rig.RightContact));
+                    }
+                    else if (sinceSwitch < 15)
+                    {
+                        sinceSwitch++;
+                        worstAfter = Mathf.Max(worstAfter, Vector3.Distance(lastL, rig.LeftContact), Vector3.Distance(lastR, rig.RightContact));
+                    }
+                    lastL = rig.LeftContact; lastR = rig.RightContact; previous = rig.Phase;
+                }
+                Debug.Log("LAUNDRY_SWITCH switches=" + switches + " boundary jump " + boundaryJump.ToString("0.000") + " m, worst step in the next 0.3 s " + worstAfter.ToString("0.000") + " m, worst head turn from the clip " + worstBow.ToString("0.0") + " deg");
+                Assert.That(switches, Is.GreaterThan(3));
+                Assert.That(boundaryJump, Is.LessThan(.03f), "the hands do not snap to the other corner");
+                Assert.That(worstAfter, Is.LessThan(.06f));
+                Assert.That(worstBow, Is.LessThan(38f), "spine 12 + chest 5 + neck 4 + head 10 (plus the lean), not 50");
+            }
+            finally { rig?.Dispose(); Object.DestroyImmediate(model); }
+        }
     }
 }
 #endif

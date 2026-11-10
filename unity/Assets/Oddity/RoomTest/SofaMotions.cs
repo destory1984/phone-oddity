@@ -337,6 +337,47 @@ namespace Oddity.RoomTest
             }
         }
 
+        // B, the last word, called after the model has been lifted onto the quilt and the legs and neck have been fixed (LieFinish):
+        // the knees never bend past MaxKneeFlex (the clip's own bend plus the 75 - 105 degree swing could add up to more), and the head is turned so the nose points
+        // from the real eyes to the real phone, not at where the phone was before the body was placed
+        public const float MaxKneeFlex = 125f;
+        public float LastKneeFlexLeft, LastKneeFlexRight, LastBedGazeError;
+        public static float KneeFlex(Transform thigh, Transform shin, Transform foot) => Vector3.Angle(shin.position - thigh.position, foot.position - shin.position); // degrees, 0 = straight
+        public void FinishBed()
+        {
+            float wb = Smooth(WBed);
+            if (wb <= .01f || head == null) return;
+            for (int s = 0; s < 2; s++)
+            {
+                if (legUpper[s] == null || legLower[s] == null || foot[s] == null) continue;
+                float flex = KneeFlex(legUpper[s], legLower[s], foot[s]);
+                if (flex > MaxKneeFlex)
+                {
+                    var axis = Vector3.Cross(legLower[s].position - legUpper[s].position, foot[s].position - legLower[s].position);
+                    if (axis.sqrMagnitude > 1e-8f) legLower[s].rotation = Quaternion.AngleAxis(-(flex - MaxKneeFlex), axis.normalized) * legLower[s].rotation;
+                }
+                float after = KneeFlex(legUpper[s], legLower[s], foot[s]);
+                if (s == 0) LastKneeFlexLeft = after; else LastKneeFlexRight = after;
+            }
+            if (Phone == null || !Phone.gameObject.activeSelf) return;
+            var up = Vector3.up;
+            Vector3 nose = (head.rotation * headFrontLocal).normalized;
+            for (int pass = 0; pass < 4; pass++) // the neck turns about a different pivot than the head, so each pass leaves a little: a few passes close it
+            {
+                nose = (head.rotation * headFrontLocal).normalized;
+                Vector3 eye = head.position + nose * .07f + up * .06f;
+                Vector3 want = (Phone.position - eye).normalized;
+                var turn = Quaternion.Slerp(Quaternion.identity, Quaternion.FromToRotation(nose, want), wb);
+                if (neck != null) { neck.rotation = Quaternion.Slerp(Quaternion.identity, turn, .4f) * neck.rotation; head.rotation = Quaternion.Slerp(Quaternion.identity, turn, .6f) * head.rotation; }
+                else head.rotation = turn * head.rotation;
+            }
+            nose = (head.rotation * headFrontLocal).normalized;
+            EyePoint = head.position + nose * .07f + up * .06f;
+            LastBedGazeError = Vector3.Angle(nose, (Phone.position - EyePoint).normalized);
+            LastHeadPitch = Pitch(nose);
+            PhoneCentre = Phone.position; LookPoint = Phone.position; LookTarget.position = Phone.position;
+        }
+
         internal static void Kill(GameObject g) { if (g == null) return; if (Application.isPlaying) UnityEngine.Object.Destroy(g); else UnityEngine.Object.DestroyImmediate(g); }
         static float Smooth(float w) => Mathf.SmoothStep(0, 1, w);
         static void Rot(Transform b, Vector3 axis, float deg) { if (b != null && Mathf.Abs(deg) > 1e-4f) b.rotation = Quaternion.AngleAxis(deg, axis) * b.rotation; }

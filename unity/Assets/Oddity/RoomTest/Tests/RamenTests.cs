@@ -118,5 +118,78 @@ namespace Oddity.RoomTest.Tests
             }
             finally { a?.Dispose(); b?.Dispose(); Object.DestroyImmediate(model); }
         }
+
+        // item 6: the pot hangs on the real left hand's grip (under 5 mm), the packet turns with the wrist, the stir tilt eases in
+        [Test]
+        public void Ramen_CarriedPotHangsOnTheRealHandAndThePacketTurnsWithTheWrist()
+        {
+            var model = LoadModel(); RamenRig rig = null;
+            try
+            {
+                model.transform.SetPositionAndRotation(new Vector3(2.20f, 0, 4.06f), Quaternion.Euler(0, 90, 0));
+                var anim = model.GetComponent<Animator>();
+                rig = new RamenRig(anim, 17);
+                rig.Sink = OneRoom.RamenSink; rig.Burner = OneRoom.RamenBurner; rig.Knob = OneRoom.RamenKnob; rig.TapControl = OneRoom.RamenTap;
+                var bones = model.GetComponentsInChildren<Transform>(); var rest = bones.Select(t => t.localRotation).ToArray(); var pos = bones.Select(t => t.localPosition).ToArray();
+                Action reset = () => { for (int i = 0; i < bones.Length; i++) { bones[i].localRotation = rest[i]; bones[i].localPosition = pos[i]; } };
+                var lhand = anim.GetBoneTransform(HumanBodyBones.LeftHand); var rhand = anim.GetBoneTransform(HumanBodyBones.RightHand);
+                rig.Start(); reset(); rig.Tick(RamenClock.FillEnd + 1.0f); rig.Apply(0);
+                float worstPot = 0; int carry = 0;
+                for (int i = 0; i < 20; i++)
+                {
+                    reset(); rig.Tick(.05f); rig.Apply(0);
+                    if (rig.Phase != "Carry") continue;
+                    carry++;
+                    worstPot = Mathf.Max(worstPot, Vector3.Distance(lhand.position, rig.PotHandlePoint));
+                }
+                Debug.Log("RAMEN_POT carry frames=" + carry + " worst hand-to-handle " + worstPot.ToString("0.0000") + " m");
+                Assert.That(carry, Is.GreaterThan(5));
+                Assert.That(worstPot, Is.LessThan(.005f), "pot on its handle under 5 mm");
+
+                // the packet: its place in the left hand's frame does not move while the wrist turns (Packet / Tear beats, before the pour tilt)
+                reset(); rig.Tick(RamenClock.PhoneEnd + .3f - (RamenClock.FillEnd + 2.0f)); rig.Apply(0); // forward to the packet beat
+                Assert.That(rig.Phase, Is.EqualTo("Packet"));
+                var local0 = lhand.InverseTransformPoint(rig.Packet.position); var rot0 = Quaternion.Inverse(lhand.rotation) * rig.Packet.rotation;
+                float worstShift = 0, worstTurn = 0;
+                for (int i = 0; i < 60; i++)
+                {
+                    reset(); rig.Tick(.05f); rig.Apply(0);
+                    if (rig.Phase != "Packet" && rig.Phase != "Tear") break;
+                    worstShift = Mathf.Max(worstShift, Vector3.Distance(local0, lhand.InverseTransformPoint(rig.Packet.position)));
+                    worstTurn = Mathf.Max(worstTurn, Quaternion.Angle(rot0, Quaternion.Inverse(lhand.rotation) * rig.Packet.rotation));
+                }
+                Debug.Log("RAMEN_PACKET shift in the hand frame " + worstShift.ToString("0.0000") + " m, turn " + worstTurn.ToString("0.00") + " deg");
+                Assert.That(worstShift, Is.LessThan(.003f)); Assert.That(worstTurn, Is.LessThan(.5f));
+            }
+            finally { rig?.Dispose(); Object.DestroyImmediate(model); }
+        }
+
+        [Test]
+        public void Ramen_StirWristTiltEasesInInsteadOfSnapping()
+        {
+            var model = LoadModel(); RamenRig rig = null;
+            try
+            {
+                model.transform.SetPositionAndRotation(new Vector3(2.20f, 0, 4.06f), Quaternion.Euler(0, 90, 0));
+                var anim = model.GetComponent<Animator>();
+                rig = new RamenRig(anim, 17);
+                rig.Sink = OneRoom.RamenSink; rig.Burner = OneRoom.RamenBurner; rig.Knob = OneRoom.RamenKnob; rig.TapControl = OneRoom.RamenTap;
+                var bones = model.GetComponentsInChildren<Transform>(); var rest = bones.Select(t => t.localRotation).ToArray(); var pos = bones.Select(t => t.localPosition).ToArray();
+                Action reset = () => { for (int i = 0; i < bones.Length; i++) { bones[i].localRotation = rest[i]; bones[i].localPosition = pos[i]; } };
+                var rhand = anim.GetBoneTransform(HumanBodyBones.RightHand);
+                rig.Start(); rig.Tick(RamenClock.DropEnd - .5f); reset(); rig.Apply(0);
+                var last = rhand.rotation; float worst = 0; int stir = 0;
+                for (int i = 0; i < 80; i++)
+                {
+                    reset(); rig.Tick(.02f); rig.Apply(0);
+                    worst = Mathf.Max(worst, Quaternion.Angle(last, rhand.rotation)); last = rhand.rotation;
+                    if (rig.Phase == "Stir") stir++;
+                }
+                Debug.Log("RAMEN_STIR frames in stir " + stir + ", worst right-hand turn in one 0.02 s step " + worst.ToString("0.0") + " deg");
+                Assert.That(stir, Is.GreaterThan(40));
+                Assert.That(worst, Is.LessThan(8f), "no snap at the start of the stir");
+            }
+            finally { rig?.Dispose(); Object.DestroyImmediate(model); }
+        }
     }
 }

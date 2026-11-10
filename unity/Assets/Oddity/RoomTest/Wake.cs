@@ -114,7 +114,7 @@ namespace Oddity.RoomTest
         public float MouthOpen => disposed ? 0 : clock.MouthOpen;
         public string Phase => disposed ? "Disposed" : clock.Phase;
 
-        public WakeRig(Animator anim, int seed)
+        public WakeRig(Animator anim, int seed, Quaternion? restHeadFrame = null)
         {
             if (anim == null) throw new ArgumentNullException(nameof(anim));
             if (!anim.isHuman) throw new ArgumentException("WakeRig needs a humanoid Animator.", nameof(anim));
@@ -125,7 +125,7 @@ namespace Oddity.RoomTest
             spine = Bone(HumanBodyBones.Spine); chest = Bone(HumanBodyBones.Chest) ?? spine;
             neck = Bone(HumanBodyBones.Neck); head = Bone(HumanBodyBones.Head);
             if (hips == null || spine == null || head == null) throw new InvalidOperationException("WakeRig needs hips, spine and head.");
-            headFrame = Quaternion.Inverse(head.rotation) * anim.transform.rotation;
+            headFrame = restHeadFrame ?? Quaternion.Inverse(head.rotation) * anim.transform.rotation;
             for (int s = 0; s < 2; s++)
             {
                 upper[s] = Bone(s == 0 ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);

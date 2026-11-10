@@ -147,7 +147,7 @@ namespace Oddity.RoomTest
         public float ChestDownDegrees { get { var f = chest.rotation * chestFront; return -Mathf.Asin(Mathf.Clamp(f.y, -1, 1)) * Mathf.Rad2Deg; } }
         public Vector3 MugRimNear => Mug.TransformPoint(new Vector3(0, MugHeight / 2, -MugDiameter / 2));
 
-        public CoffeeRig(Animator anim, int seed)
+        public CoffeeRig(Animator anim, int seed, Quaternion? restHeadFrame = null)
         {
             if (anim == null) throw new ArgumentNullException(nameof(anim));
             if (!anim.isHuman) throw new ArgumentException("CoffeeRig needs a humanoid Animator.", nameof(anim));
@@ -155,7 +155,8 @@ namespace Oddity.RoomTest
             spine = Bone(HumanBodyBones.Spine); chest = Bone(HumanBodyBones.Chest) ?? spine;
             neck = Bone(HumanBodyBones.Neck); head = Bone(HumanBodyBones.Head);
             if (spine == null || head == null) throw new InvalidOperationException("CoffeeRig needs spine and head bones.");
-            headFrame = Quaternion.Inverse(head.rotation) * anim.transform.rotation;
+            // restHeadFrame: the head frame taken once from the imported T-pose, so a model loaded in the middle of another pose does not store a bent head as its neutral
+            headFrame = restHeadFrame ?? Quaternion.Inverse(head.rotation) * anim.transform.rotation;
             headFrameInv = headFrame * Vector3.forward; chestFront = Quaternion.Inverse(chest.rotation) * anim.transform.forward;
             Track(spine); Track(chest); Track(neck); Track(head);
             for (int s = 0; s < 2; s++)
@@ -267,8 +268,8 @@ namespace Oddity.RoomTest
                 Quaternion correction = Quaternion.FromToRotation(head.rotation * headFrame * Vector3.forward, gaze);
                 if (neck != null) RotateBy(neck, correction, w * NeckShare);
                 RotateBy(head, correction, w * (neck != null ? 1 - NeckShare : 1));
-                float bow = HeadDownDegrees - MaxHeadDown; // safety net in world space: whatever the bone axes or the base pose, the nose never points more than MaxHeadDown below the horizon
-                if (bow > 0) Rotate(head, right, -bow * w);
+                // safety net in world space on the real nose direction: whatever the bone axes, the base pose or the blend weight, the nose never points more than MaxHeadDown below the horizon
+                ClampNose(head, headFrameInv, MaxHeadDown, right);
 
                 Quaternion mugRotation = Quaternion.LookRotation(forward, up) * Quaternion.Euler(-SipTilt * clock.Lift, 0, 0);
                 Vector3 rest = chest.position + (forward * ChestForward + up * ChestUp) * anatomy;
@@ -286,6 +287,18 @@ namespace Oddity.RoomTest
             }
             for (int i = 0; i < controlled.Count; i++) if (controlled[i] != null) written[i] = controlled[i].localRotation;
             hasWritten = true;
+        }
+        // raises the nose to the limit about the horizontal axis at right angles to the nose (the gaze's own right), the full excess with no weight on it; returns the degrees it raised
+        public static float ClampNose(Transform head, Vector3 noseLocal, float maxDown, Vector3 fallbackRight)
+        {
+            Vector3 nose = head.rotation * noseLocal;
+            float down = -Mathf.Asin(Mathf.Clamp(nose.y, -1, 1)) * Mathf.Rad2Deg;
+            float excess = down - maxDown;
+            if (excess <= 0) return 0;
+            Vector3 axis = Vector3.Cross(Vector3.up, nose);
+            axis = axis.sqrMagnitude > 1e-6f ? axis.normalized : fallbackRight;
+            head.rotation = Quaternion.AngleAxis(-excess, axis) * head.rotation;
+            return excess;
         }
         static void RotateBy(Transform b, Quaternion delta, float weight)
         { b.rotation = Quaternion.Slerp(Quaternion.identity, delta, weight) * b.rotation; }

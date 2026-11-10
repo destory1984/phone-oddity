@@ -136,6 +136,39 @@ namespace Oddity.RoomTest.Tests
             }
             finally { rig?.Dispose(); Object.DestroyImmediate(model); }
         }
+
+        // item 5: the mouth comes from the head bone, the chopsticks sit at one fixed spot of the hand (error under 5 mm), the high lift is 0.15 m over the mouth
+        [Test]
+        public void FloorMeal_ChopsticksStayInTheHandMouthComesFromTheHeadAndTheHighLiftIs15cm()
+        {
+            var model = LoadModel(); FloorMealRig rig = null;
+            try
+            {
+                var anim = model.GetComponent<Animator>();
+                rig = new FloorMealRig(anim, 104);
+                model.transform.rotation = rig.Props.rotation;
+                var head = anim.GetBoneTransform(HumanBodyBones.Head);
+                rig.Start();
+                float worstGrip = 0, worstAngle = 0, highest = float.MinValue; int frames = 0, lifts = 0;
+                for (int i = 0; i < 7200; i++)
+                {
+                    rig.Tick(1f / 60);
+                    if (rig.Weight < 1) continue;
+                    rig.Apply(0);
+                    frames++;
+                    worstGrip = Mathf.Max(worstGrip, rig.StickDistanceFromGrip);
+                    worstAngle = Mathf.Max(worstAngle, rig.StickAngleFromFingers);
+                    Assert.That(Vector3.Distance(rig.MouthPoint, head.position), Is.LessThan(.13f), "the mouth hangs off the head bone");
+                    if (rig.Phase == "Lifting") { lifts++; highest = Mathf.Max(highest, rig.RightWristTarget.y - rig.MouthPoint.y); }
+                }
+                Debug.Log("FLOORMEAL_GRIP frames=" + frames + " worst stick-to-hand " + worstGrip.ToString("0.0000") + " m, worst stick-vs-fingers angle " + worstAngle.ToString("0.0") + " deg, highest wrist over mouth " + highest.ToString("0.000") + " m");
+                Assert.That(lifts, Is.GreaterThan(60));
+                Assert.That(worstGrip, Is.LessThan(.005f), "chopstick grip error under 5 mm");
+                Assert.That(highest, Is.LessThanOrEqualTo(.16f), "the high lift is 0.15 m over the mouth, not 0.26");
+                Assert.That(worstAngle, Is.LessThan(40f), "the fingers point roughly along the sticks");
+            }
+            finally { rig?.Dispose(); Object.DestroyImmediate(model); }
+        }
     }
 }
 #endif

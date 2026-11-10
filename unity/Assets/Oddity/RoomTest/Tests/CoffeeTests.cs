@@ -217,6 +217,93 @@ namespace Oddity.RoomTest.Tests
             }
             finally { rig?.Dispose(); Object.DestroyImmediate(model); }
         }
+
+        // item 1: a model reloaded in the middle of another pose must not store the bent head as its neutral
+        [Test]
+        public void Coffee_RigBuiltOnABentPoseWithTheRestFrameNoseMatchesOneBuiltStanding()
+        {
+            var model = LoadModel(); CoffeeRig standing = null, bent = null;
+            try
+            {
+                var anim = model.GetComponent<Animator>();
+                model.transform.SetPositionAndRotation(new Vector3(1.5f, 0, .62f), Quaternion.Euler(0, 180, 0));
+                var head = anim.GetBoneTransform(HumanBodyBones.Head); var root = anim.transform;
+                var restFrame = Quaternion.Inverse(head.rotation) * root.rotation;
+                var bones = model.GetComponentsInChildren<Transform>(); var original = bones.Select(t => t.localRotation).ToArray(); var positions = bones.Select(t => t.localPosition).ToArray();
+                Action reset = () => { for (int j = 0; j < bones.Length; j++) { bones[j].localRotation = original[j]; bones[j].localPosition = positions[j]; } };
+                standing = new CoffeeRig(anim, Seed);
+                // the V / K / C pose at reload time: the head bowed 40 degrees, the spine curled
+                head.rotation = Quaternion.AngleAxis(40, root.right) * head.rotation;
+                anim.GetBoneTransform(HumanBodyBones.Spine).rotation = Quaternion.AngleAxis(25, root.right) * anim.GetBoneTransform(HumanBodyBones.Spine).rotation;
+                bent = new CoffeeRig(anim, Seed, restFrame);
+                standing.Start(); bent.Start();
+                float worst = 0; int compared = 0;
+                for (int i = 0; i < 600; i++)
+                {
+                    reset(); standing.Tick(.05f); standing.Apply(.05f); float a = standing.HeadDownDegrees; var noseA = head.rotation * Quaternion.Inverse(restFrame) * root.forward;
+                    reset(); bent.Tick(.05f); bent.Apply(.05f); float b = bent.HeadDownDegrees; var noseB = head.rotation * Quaternion.Inverse(restFrame) * root.forward;
+                    if (standing.Weight < 1) continue;
+                    worst = Mathf.Max(worst, Vector3.Angle(noseA, noseB), Mathf.Abs(a - b)); compared++;
+                }
+                Debug.Log("COFFEE_RELOAD compared=" + compared + " worst nose difference " + worst.ToString("0.00") + " deg");
+                Assert.That(compared, Is.GreaterThan(300));
+                Assert.That(worst, Is.LessThan(2f), "a rig built on a bent pose with the shared rest frame points the nose like one built standing");
+            }
+            finally { standing?.Dispose(); bent?.Dispose(); Object.DestroyImmediate(model); }
+        }
+
+        // item 2: the 18 degree limit holds on the real nose direction, at every blend weight, even when the base pose bows deeper
+        [Test]
+        public void Coffee_NoseNeverPointsMoreThan18DegBelowTheHorizonDuringBlendsEvenFromABowedBase()
+        {
+            var model = LoadModel(); CoffeeRig rig = null;
+            try
+            {
+                var anim = model.GetComponent<Animator>();
+                model.transform.SetPositionAndRotation(new Vector3(1.5f, 0, .62f), Quaternion.Euler(0, 180 + 35, 0)); // the body is turned too, so the root's right is not the gaze's right
+                var head = anim.GetBoneTransform(HumanBodyBones.Head); var root = anim.transform;
+                rig = new CoffeeRig(anim, Seed);
+                var bones = model.GetComponentsInChildren<Transform>(); var original = bones.Select(t => t.localRotation).ToArray(); var positions = bones.Select(t => t.localPosition).ToArray();
+                float worst = 0; int blends = 0;
+                rig.Start();
+                for (int i = 0; i < 2400; i++)
+                {
+                    if (i == 1700) rig.Stop();
+                    for (int j = 0; j < bones.Length; j++) { bones[j].localRotation = original[j]; bones[j].localPosition = positions[j]; }
+                    head.rotation = Quaternion.AngleAxis(32, root.right) * head.rotation; // the base clip already bows the head 32 degrees
+                    rig.Tick(.02f); rig.Apply(.02f);
+                    if (rig.Weight <= 0) continue;
+                    if (rig.Weight < 1) blends++;
+                    worst = Mathf.Max(worst, rig.HeadDownDegrees);
+                }
+                Debug.Log("COFFEE_CLAMP worst nose down " + worst.ToString("0.00") + " deg, blend frames " + blends);
+                Assert.That(blends, Is.GreaterThan(20));
+                Assert.That(worst, Is.LessThanOrEqualTo(CoffeeRig.MaxHeadDown + .05f));
+            }
+            finally { rig?.Dispose(); Object.DestroyImmediate(model); }
+        }
+
+        [Test]
+        public void Coffee_ClampNoseRaisesOnlyTheExcessAboutTheNosesOwnRight()
+        {
+            var g = new GameObject("clamp"); var t = g.transform;
+            try
+            {
+                foreach (float yaw in new[] { 0f, 70f, 160f })
+                {
+                    t.rotation = Quaternion.Euler(0, yaw, 0);
+                    t.rotation = Quaternion.AngleAxis(40, t.right) * t.rotation; // nose 40 down, turned by yaw
+                    float raised = CoffeeRig.ClampNose(t, Vector3.forward, 18f, t.right);
+                    var n = t.forward;
+                    Assert.That(-Mathf.Asin(n.y) * Mathf.Rad2Deg, Is.EqualTo(18f).Within(.01f));
+                    Assert.That(raised, Is.EqualTo(22f).Within(.01f));
+                    Assert.That(Mathf.Abs(Mathf.DeltaAngle(Mathf.Atan2(n.x, n.z) * Mathf.Rad2Deg, yaw)), Is.LessThan(.01f), "only the pitch changes");
+                }
+                t.rotation = Quaternion.Euler(10, 0, 0);
+                Assert.That(CoffeeRig.ClampNose(t, Vector3.forward, 18f, t.right), Is.Zero);
+            }
+            finally { Object.DestroyImmediate(g); }
+        }
     }
 }
 #endif

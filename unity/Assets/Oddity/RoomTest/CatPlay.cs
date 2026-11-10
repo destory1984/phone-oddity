@@ -73,9 +73,9 @@ namespace Oddity.RoomTest
         public const float BlendSeconds = CatPlayTiming.BlendSeconds; // Entry and exit seconds.
         public const float SquatHeight = .32f, AnkleHeight = .08f; // Hip and ankle pivots above FloorY, metres.
         public const float StickLength = .6f, StringLength = .38f; // World-space metres, independent of model scale.
-        const float FootHalfWidth = .17f, FootAhead = .08f, HipBack = -.10f; // Squat support geometry, metres.
+        const float FootHalfWidth = .17f, FootAhead = .08f, HipBack = .10f; // Squat support geometry, metres; HipBack is how far BEHIND the root the hips sit (positive = back).
         const float KneeAhead = .55f, KneeOut = .18f; // Knee pole relative to each hip, metres.
-        const float SpineLean = 62f, ChestLean = 24f, GazeLimit = 65f, NeckShare = .3f; // Degrees and head/neck split.
+        const float HipFlex = 22f, SpineLean = 25f, ChestLean = 10f, GazeLimit = 65f, NeckShare = .3f, MaxHeadDown = 45f; // Degrees: the bend is split over hip joint 22 + spine 25 + chest 10 (was 62 + 24 on the waist), head/neck split, final nose limit.
         const float ContactGap = .014f, PalmLength = .055f; // Back-to-palm gap and wrist-to-palm centre, metres.
         const float LeftRestOut = .13f, LeftRestAhead = .25f, LeftRestDown = .04f; // Left wrist from hips, metres.
         const float HandAhead = .38f, HandSide = .10f, HandHeight = .53f; // Wand wrist relative to root/floor, metres.
@@ -118,8 +118,10 @@ namespace Oddity.RoomTest
         public Vector3 WandTipWorld { get; private set; }
         public Vector3 FeatherTipWorld { get; private set; } // Centre of the feather at the end of the string; valid after Apply.
         public Vector3 RightWristTarget { get; private set; }
+        public float LastHeadDown { get; private set; } // Degrees the nose pointed below the horizon after the last Apply.
+        public float TorsoLeanDegrees => HipFlex + SpineLean + ChestLean;
 
-        public CatPlayRig(Animator anim, int seed)
+        public CatPlayRig(Animator anim, int seed, Quaternion? restHeadFrame = null)
         {
             if (anim == null) throw new ArgumentNullException(nameof(anim));
             if (!anim.isHuman) throw new ArgumentException("CatPlayRig needs a humanoid Animator.", nameof(anim));
@@ -128,7 +130,7 @@ namespace Oddity.RoomTest
             chest = Bone(HumanBodyBones.Chest) ?? spine; neck = Bone(HumanBodyBones.Neck); head = Bone(HumanBodyBones.Head);
             if (hips == null || spine == null || head == null) throw new InvalidOperationException("CatPlayRig needs hips, spine and head.");
             hipsFrame = Quaternion.Inverse(anim.transform.rotation) * hips.rotation;
-            headFrame = Quaternion.Inverse(head.rotation) * anim.transform.rotation;
+            headFrame = restHeadFrame ?? Quaternion.Inverse(head.rotation) * anim.transform.rotation;
             for (int s = 0; s < 2; s++)
             {
                 arm[s] = Bone(s == 0 ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);
@@ -232,6 +234,7 @@ namespace Oddity.RoomTest
             var origin = new Vector3(root.position.x, FloorY, root.position.z);
             hips.position = Vector3.Lerp(hips.position, origin + Vector3.up * SquatHeight - forward * HipBack, w);
             hips.rotation = Quaternion.Slerp(hips.rotation, bodyFrame * hipsFrame, w);
+            Turn(hips, right, HipFlex * w); // the lean starts at the hip joint; the legs are solved after it
             for (int s = 0; s < 2; s++)
             {
                 float sign = s == 0 ? -1 : 1;
@@ -266,6 +269,8 @@ namespace Oddity.RoomTest
                 if (neck != null) neck.rotation = Quaternion.Slerp(Quaternion.identity, delta, NeckShare) * neck.rotation;
                 head.rotation = Quaternion.Slerp(Quaternion.identity, delta, neck != null ? 1 - NeckShare : 1) * head.rotation;
             }
+            CoffeeRig.ClampNose(head, headFrame * Vector3.forward, MaxHeadDown, right); // the real nose never points more than 45 degrees below the horizon
+            LastHeadDown = -Mathf.Asin(Mathf.Clamp((head.rotation * headFrame * Vector3.forward).y, -1, 1)) * Mathf.Rad2Deg;
             for (int i = 0; i < controlled.Count; i++) written[i] = controlled[i].localRotation;
             hipsWritten = hips.localPosition; hasWritten = true;
         }

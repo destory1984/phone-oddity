@@ -259,5 +259,43 @@ namespace Oddity.RoomTest.Tests
             }
             finally { r.Dispose(); Object.DestroyImmediate(m); Apartment.Use(null); }
         }
+
+        // item 7: B, after the body is on the quilt: knees never past 125 degrees, the gaze is recomputed from the real eyes to the real phone
+        [Test]
+        public void SofaMotions_BKneesStayUnder125DegAndTheGazeIsRecomputedFromTheEyesToThePhone()
+        {
+            Apartment.Use(OneRoom.Layout);
+            var (m, r) = Make();
+            try
+            {
+                var clip = AssetDatabase.LoadAllAssetsAtPath("Assets/Oddity/DevMotion/Resources/Motion/MxLayStomachElbows.fbx").OfType<AnimationClip>().FirstOrDefault(c => !c.name.StartsWith("__preview__"));
+                if (clip == null) Assert.Ignore("no clip MxLayStomachElbows");
+                var a = m.GetComponent<Animator>(); var lay = OneRoom.Layout;
+                m.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity); clip.SampleAnimation(m, 0);
+                var hips = a.GetBoneTransform(HumanBodyBones.Hips); var head = a.GetBoneTransform(HumanBodyBones.Head);
+                var axis = head.position - hips.position; axis.y = 0; float ay = Mathf.Atan2(axis.x, axis.z) * Mathf.Rad2Deg;
+                m.transform.SetPositionAndRotation(new Vector3(lay.bedSeat.x, 0, lay.bedSeat.z), Quaternion.Euler(0, 180 - ay, 0)); clip.SampleAnimation(m, 0);
+                var hp = hips.position; m.transform.position += new Vector3(lay.bedSeat.x - hp.x, lay.bedLieTop - 0.1f - hp.y + .1f, lay.bedSeat.z - hp.z); clip.SampleAnimation(m, 0);
+                var f = head.position - hips.position; f.y = 0; r.BedForward = f.normalized; r.MattressTop = lay.bedLieTop;
+                r.SetImmediate(SofaMode.Bed);
+                for (int i = 0; i < 5; i++) { r.Tick(.02f); clip.SampleAnimation(m, 0); r.Apply(.02f); }
+                // the body is then moved (LieFinish lifts it) and a leg is over-bent: the last pass must still hold the limits
+                m.transform.position += Vector3.up * .06f + f.normalized * .04f;
+                foreach (var id in new[] { HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg })
+                {
+                    var knee = a.GetBoneTransform(id); var thigh = a.GetBoneTransform(id == HumanBodyBones.LeftLowerLeg ? HumanBodyBones.LeftUpperLeg : HumanBodyBones.RightUpperLeg); var ft = a.GetBoneTransform(id == HumanBodyBones.LeftLowerLeg ? HumanBodyBones.LeftFoot : HumanBodyBones.RightFoot);
+                    float before = SofaRig.KneeFlex(thigh, knee, ft);
+                    var hinge = Vector3.Cross(knee.position - thigh.position, ft.position - knee.position); if (hinge.sqrMagnitude < 1e-8f) hinge = m.transform.right;
+                    knee.rotation = Quaternion.AngleAxis(110f, hinge.normalized) * knee.rotation; // more bend
+                    Assert.That(SofaRig.KneeFlex(thigh, knee, ft), Is.GreaterThan(SofaRig.MaxKneeFlex + 5f), "the test over-bends the knee first (was " + before + ")");
+                }
+                r.FinishBed();
+                Debug.Log("SOFA_B knee flex left " + r.LastKneeFlexLeft.ToString("0.0") + " right " + r.LastKneeFlexRight.ToString("0.0") + " gaze error " + r.LastBedGazeError.ToString("0.00") + " deg");
+                Assert.That(r.LastKneeFlexLeft, Is.LessThanOrEqualTo(SofaRig.MaxKneeFlex + .05f));
+                Assert.That(r.LastKneeFlexRight, Is.LessThanOrEqualTo(SofaRig.MaxKneeFlex + .05f));
+                Assert.That(r.LastBedGazeError, Is.LessThan(3f), "the nose points from the real eyes at the real phone");
+            }
+            finally { r.Dispose(); Object.DestroyImmediate(m); Apartment.Use(null); }
+        }
     }
 }

@@ -115,5 +115,32 @@ namespace Oddity.RoomTest.Tests
             }
             finally { rig?.Dispose(); Object.DestroyImmediate(model); }
         }
+
+        // item 3: the bend is split over hip joint, spine and chest (total 57, was 86 on the waist), the hips sit behind the root, the palm stays on the cat
+        [Test]
+        public void CatPlay_BendIsSplitAcrossHipSpineChestHipsSitBackAndPalmStaysOnTheBack()
+        {
+            var model = LoadModel(); CatPlayRig rig = null;
+            try
+            {
+                var anim = model.GetComponent<Animator>();
+                rig = new CatPlayRig(anim, 5);
+                rig.CatHead = new Vector3(.12f, .28f, .42f); rig.CatTail = new Vector3(-.12f, .28f, .42f);
+                Assert.That(rig.TorsoLeanDegrees, Is.LessThanOrEqualTo(60f), "hip + spine + chest bend sum");
+                rig.Start(); rig.Tick(.6f); rig.Apply(.6f);
+                var hips = anim.GetBoneTransform(HumanBodyBones.Hips);
+                Assert.That(Vector3.Dot(hips.position - anim.transform.position, anim.transform.forward), Is.LessThan(-.05f), "the hips are pulled back behind the root");
+                float worstGap = 0;
+                for (int i = 0; i < 300; i++)
+                {
+                    rig.Tick(.02f); rig.Apply(.02f);
+                    worstGap = Mathf.Max(worstGap, Vector3.Distance(anim.GetBoneTransform(HumanBodyBones.RightHand).position, rig.RightWristTarget));
+                    Assert.That(rig.LastHeadDown, Is.LessThanOrEqualTo(45.05f));
+                }
+                Debug.Log("CATPLAY_PALM worst hand-to-target gap " + worstGap.ToString("0.000") + " m");
+                Assert.That(worstGap, Is.LessThan(.04f), "the palm stays on the cat's back");
+            }
+            finally { rig?.Dispose(); Object.DestroyImmediate(model); }
+        }
     }
 }

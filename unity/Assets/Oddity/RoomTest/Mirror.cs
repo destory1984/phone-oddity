@@ -65,7 +65,7 @@ namespace Oddity.RoomTest
         public Vector3 LipPoint => head.position + HeadAxes() * new Vector3(0, -LipDown, LipAhead);
         Quaternion HeadAxes() => head.rotation * headFrame;
 
-        public MirrorRig(Animator anim, int seed)
+        public MirrorRig(Animator anim, int seed, Quaternion? restHeadFrame = null)
         {
             if (anim == null) throw new ArgumentNullException(nameof(anim));
             if (!anim.isHuman) throw new ArgumentException("MirrorRig needs a humanoid Animator.", nameof(anim));
@@ -74,7 +74,7 @@ namespace Oddity.RoomTest
             spine = Bone(HumanBodyBones.Spine); chest = Bone(HumanBodyBones.Chest) ?? spine;
             neck = Bone(HumanBodyBones.Neck); head = Bone(HumanBodyBones.Head);
             if (hips == null || spine == null || head == null) throw new InvalidOperationException("MirrorRig needs hips, spine and head.");
-            headFrame = Quaternion.Inverse(head.rotation) * anim.transform.rotation;
+            headFrame = restHeadFrame ?? Quaternion.Inverse(head.rotation) * anim.transform.rotation;
             for (int s = 0; s < 2; s++)
             {
                 upper[s] = Bone(s == 0 ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);

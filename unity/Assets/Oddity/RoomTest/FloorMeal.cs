@@ -113,7 +113,7 @@ namespace Oddity.RoomTest
         const float ChinBowlDown = .13f, ChinBowlAhead = .07f; // Held bowl centre below/in front of the mouth, metres.
         const float LeftGripOut = .085f, LeftGripDown = .015f; // Left wrist relative to bowl centre, metres.
         const float GatherOut = .13f, GatherUp = .10f, GatherBack = .04f; // Right wrist relative to bowl, metres.
-        const float HighOut = .14f, HighUp = .26f, HighAhead = .07f; // High noodle lift relative to mouth, metres.
+        const float HighOut = .17f, HighUp = .15f, HighAhead = .07f; // High noodle lift relative to mouth, metres.
         const float SlurpOut = .12f, SlurpUp = .045f, SlurpAhead = .08f; // Right wrist beside the mouth, metres.
         const float SlurpApproach = .55f; // Fraction of slurp spent approaching the mouth.
         const float ElbowOut = .3f, ElbowDown = .22f, ElbowAhead = .18f; // Arm IK poles from shoulder, metres.
@@ -146,6 +146,7 @@ namespace Oddity.RoomTest
         readonly Quaternion[] before, written;
         readonly Transform[,] strands = new Transform[NoodleStrands, NoodleSegments];
         readonly Transform movingStick;
+        readonly Quaternion headFrame; // head bone -> body frame, taken in the upright reference pose
         Vector3 hipBefore, hipWritten;
         bool hasWritten, disposed;
 
@@ -159,8 +160,12 @@ namespace Oddity.RoomTest
         public float EyesClosed => disposed ? 0 : clock.EyesClosed;
         public float MouthOpen => disposed ? 0 : clock.MouthOpen;
         public Vector3 RightWristTarget { get; private set; }
+        public Vector3 MouthPoint { get; private set; } // Lip estimate from the head bone's own frame, world; valid after Apply.
+        public Vector3 GripPoint => hand[1].position + hand[1].rotation * fingerAxis[1] * HandGripAhead; // The fixed spot of the right hand the chopsticks are held at.
+        public float StickDistanceFromGrip => Vector3.Distance(Chopsticks.position, GripPoint); // Metres between the chopsticks' grip and the hand; valid after Apply.
+        public float StickAngleFromFingers => Vector3.Angle(Chopsticks.forward, hand[1].rotation * fingerAxis[1]); // Degrees between the sticks and the fingers; valid after Apply.
 
-        public FloorMealRig(Animator anim, int seed)
+        public FloorMealRig(Animator anim, int seed, Quaternion? restHeadFrame = null)
         {
             if (anim == null) throw new ArgumentNullException(nameof(anim));
             if (!anim.isHuman) throw new ArgumentException("FloorMeal needs a humanoid Animator.", nameof(anim));
@@ -188,6 +193,7 @@ namespace Oddity.RoomTest
                 handFrame[s] = Quaternion.LookRotation(fingerAxis[s], palmAxis[s]);
                 footFrame[s] = Quaternion.Inverse(foot[s].rotation) * anim.transform.rotation;
             }
+            headFrame = restHeadFrame ?? Quaternion.Inverse(head.rotation) * anim.transform.rotation;
             before = new Quaternion[controlled.Count]; written = new Quaternion[controlled.Count];
             var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
             if (shader == null) throw new InvalidOperationException("No FloorMeal material shader found.");
@@ -319,7 +325,8 @@ namespace Oddity.RoomTest
                 Rotate(neck ?? head, right, NeckLean * w);
                 Rotate(head, right, (HeadLean + PhoneBow * clock.PhoneAttention - LaughNod * bob) * w);
                 Rotate(head, up, PhoneYaw * clock.PhoneAttention * w);
-                var mouth = head.position + up * -MouthDown + forward * MouthAhead;
+                var mouth = head.position + head.rotation * headFrame * new Vector3(0, -MouthDown, MouthAhead); // from the head bone, so a turned or bowed head carries its mouth
+                MouthPoint = mouth;
                 float held = clock.BowlLift * w;
                 var bowlWanted = Vector3.Lerp(rest, mouth - up * ChinBowlDown + forward * ChinBowlAhead, held);
                 var leftWrist = bowlWanted - right * LeftGripOut - up * LeftGripDown;
@@ -348,12 +355,16 @@ namespace Oddity.RoomTest
                     RightWristTarget = Vector3.Lerp(slurp, gather, p);
                     tipAim = Vector3.Lerp(mouth, tipAim, p);
                 }
-                Arm(1, RightWristTarget, forward, -right, w);
+                // the hand holds the sticks: its fingers point where the sticks point (towards the tip's aim), the sticks sit at a fixed spot of the hand
+                var aimDirection = tipAim - (RightWristTarget + forward * HandGripAhead);
+                if (aimDirection.sqrMagnitude < AxisEpsilon) aimDirection = forward;
+                aimDirection.Normalize();
+                Arm(1, RightWristTarget, aimDirection, -right, w);
                 // Scale compensation keeps primitive sticks in metres under scaled VRM bones.
                 var scale = hand[1].lossyScale;
                 Chopsticks.localScale = new Vector3(1 / Mathf.Max(Mathf.Abs(scale.x), PositionEpsilon),
                     1 / Mathf.Max(Mathf.Abs(scale.y), PositionEpsilon), 1 / Mathf.Max(Mathf.Abs(scale.z), PositionEpsilon));
-                var grip = hand[1].position + forward * HandGripAhead;
+                var grip = GripPoint;
                 var direction = tipAim - grip;
                 if (direction.sqrMagnitude < AxisEpsilon) direction = forward;
                 var stickUp = Vector3.ProjectOnPlane(up, direction).normalized;

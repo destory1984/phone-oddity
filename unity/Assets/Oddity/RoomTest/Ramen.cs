@@ -106,10 +106,13 @@ namespace Oddity.RoomTest
         public float MouthOpen { get; private set; }
         public Vector3 LeftTarget { get; private set; }
         public Vector3 RightTarget { get; private set; }
+        public Vector3 PotHandlePoint => Pot.TransformPoint(new Vector3(0, HandleY, -HandleReach)); // The spot of the handle her left wrist holds.
+        public bool CarryingPot => Active && (clock.Beat == 1 || clock.Beat == 10);
+        public Vector3 PacketHoldPoint => Packet.position; // Centre of the packet; valid after Apply.
         public bool InductionOn => Active && clock.Time >= RamenClock.OnEnd && clock.Time < RamenClock.OffEnd - TransitionSeconds;
         public bool TapOn => Active && clock.Time >= TransitionSeconds && clock.Time < RamenClock.FillEnd - TransitionSeconds;
 
-        public RamenRig(Animator anim, int seed)
+        public RamenRig(Animator anim, int seed, Quaternion? restHeadFrame = null)
         {
             if (anim == null) throw new ArgumentNullException(nameof(anim));
             if (!anim.isHuman) throw new ArgumentException("RamenRig needs a humanoid Animator.", nameof(anim));
@@ -117,7 +120,7 @@ namespace Oddity.RoomTest
             spine = Bone(HumanBodyBones.Spine); chest = Bone(HumanBodyBones.Chest) ?? spine;
             neck = Bone(HumanBodyBones.Neck); head = Bone(HumanBodyBones.Head);
             if (spine == null || head == null) throw new InvalidOperationException("RamenRig needs spine and head.");
-            headFrame = Quaternion.Inverse(head.rotation) * anim.transform.rotation;
+            headFrame = restHeadFrame ?? Quaternion.Inverse(head.rotation) * anim.transform.rotation;
             Track(spine); Track(chest); Track(neck); Track(head);
             for (int s = 0; s < 2; s++)
             {
@@ -289,7 +292,13 @@ namespace Oddity.RoomTest
                 var pole = upper[s].position + Right * (s == 0 ? -ElbowSide : ElbowSide) - Vector3.up * ElbowDown + Forward * ElbowAhead;
                 SofaRig.TwoBone(upper[s], lower[s], hand[s], target, pole, w);
                 Quaternion rotation = Quaternion.LookRotation(Forward, Vector3.down) * Quaternion.Inverse(handFrame[s]);
-                if (s == 1 && clock.Beat == 8) rotation = Quaternion.AngleAxis(StirTilt, Right) * rotation;
+                if (s == 1 && clock.Beat == 8)
+                {
+                    // the stirring wrist tilt eases in and out over TransitionSeconds instead of switching at the beat edges
+                    float stirEnd = clock.BeatStart + clock.BeatDuration;
+                    float stirW = Ease((t - clock.BeatStart) / TransitionSeconds) * Ease((stirEnd - t) / TransitionSeconds);
+                    rotation = Quaternion.AngleAxis(StirTilt * stirW, Right) * rotation;
+                }
                 if (s == 1 && (clock.Beat == 2 || clock.Beat == 9)) rotation = Quaternion.AngleAxis(KnobTurn * Mathf.Sin(Mathf.PI * (t - clock.BeatStart) / clock.BeatDuration), Forward) * rotation;
                 hand[s].rotation = Quaternion.Slerp(hand[s].rotation, rotation, w);
                 Curl(s, clock.Beat == 3 || clock.Beat == 4 ? SmileDone : 1, w);
@@ -301,6 +310,13 @@ namespace Oddity.RoomTest
         void ApplyProps(float t)
         {
             Pot.SetPositionAndRotation(PotAt(t), Quaternion.LookRotation(Forward, Vector3.up));
+            if (CarryingPot)
+            {
+                // the pot hangs on her real left hand: where the arm cannot reach the ideal path the pot follows the wrist, and the grip stays on the handle
+                float edge = Mathf.Min(t - clock.BeatStart, clock.BeatStart + clock.BeatDuration - t);
+                float k = Ease(edge / TransitionSeconds) * Ease(Weight);
+                Pot.position = Vector3.Lerp(Pot.position, hand[0].position + Forward * HandleReach - Vector3.up * HandleY, k);
+            }
             water.gameObject.SetActive(t >= TransitionSeconds && t < RamenClock.OffEnd);
             // Fill rises from the bottom; the return is an explicit empty-pot loop reset.
             water.localPosition = Vector3.up * Mathf.Lerp(PotBase, WaterY, Ease(t / RamenClock.FillEnd));
@@ -309,8 +325,10 @@ namespace Oddity.RoomTest
             Packet.SetParent(holdingPacket ? hand[0] : Props, true);
             if (holdingPacket)
             {
-                Packet.position = hand[0].position + Vector3.up * PacketPalmOffset;
-                Packet.rotation = Quaternion.LookRotation(Forward, Vector3.up) * Quaternion.Euler(clock.Beat == 7 ? PacketTilt * Ease((t - RamenClock.TearEnd) / (RamenClock.DropEnd - RamenClock.TearEnd)) : 0, 0, 0);
+                // the packet is fixed to the hand's own frame (palm side), so it turns with the wrist; with the ideal wrist this is the old world pose
+                var handWorld = hand[0].rotation * Quaternion.Inverse(handFrame[0]) * Quaternion.Euler(0, 0, 180);
+                Packet.position = hand[0].position + hand[0].rotation * palmAxis[0] * -PacketPalmOffset;
+                Packet.rotation = handWorld * Quaternion.Euler(clock.Beat == 7 ? PacketTilt * Ease((t - RamenClock.TearEnd) / (RamenClock.DropEnd - RamenClock.TearEnd)) : 0, 0, 0);
             }
             else Packet.SetPositionAndRotation(PacketRest, Quaternion.LookRotation(Forward, Vector3.up));
             Packet.gameObject.SetActive(clock.Beat <= 7);

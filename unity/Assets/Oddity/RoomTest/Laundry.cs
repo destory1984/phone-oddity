@@ -65,7 +65,8 @@ namespace Oddity.RoomTest
         public const float TravelArc = .08f, FoldArc = .06f; // Metres above the pickup/deposit and folding paths.
         public const float WristGap = .045f, WristLift = .018f; // Wrist behind contact and above fabric, metres.
         public const float ElbowSide = .24f, ElbowAhead = .15f, ElbowDown = .22f; // Pole relative to shoulder, metres.
-        public const float SpineBow = 12f, ChestBow = 8f, HeadBow = 22f, NeckBow = 8f, SideLean = 12f; // Degrees, additive upper-body offsets.
+        public const float SpineBow = 12f, ChestBow = 5f, HeadBow = 10f, NeckBow = 4f, SideLean = 12f; // Degrees, additive upper-body offsets (head 22 -> 10, neck 8 -> 4, chest 8 -> 5: the old 50 deg buried the chin in the chest).
+        public const float EdgeSwitchSeconds = .3f; // The hands slide to the folded cloth's new corner over this long when FoldWidth turns into Place.
         public const float BreathDegrees = .6f, BreathSeconds = 4.2f; // Small chest breathing.
         public const float CurlProximal = 22f, CurlMiddle = 28f, CurlDistal = 14f, ThumbCurl = 14f; // Pinch curl degrees.
         public const float OpenCurl = .15f, GripCurl = .75f; // Finger curl fractions for release and grasp.
@@ -94,7 +95,9 @@ namespace Oddity.RoomTest
         readonly Quaternion[] before, written;
         readonly LaundryTimeline clock;
         bool wanted, disposed, hasWritten;
-        float time;
+        float time, switchTime = 1;
+        string lastPhase = "";
+        Vector3 switchFromL, switchFromR;
 
         // Caller places this WORLD prop frame on the mattress: local +x her right, +z her forward, +y up.
         // Leave scale at one. It is deliberately not parented to the moving character.
@@ -324,6 +327,16 @@ namespace Oddity.RoomTest
                 }
                 grip = OpenCurl;
             }
+            if (Phase == "Place" && lastPhase == "FoldWidth") { switchFromL = LeftContact; switchFromR = RightContact; switchTime = 0; }
+            if (Phase != "Place") switchTime = 1;
+            if (switchTime < 1)
+            {
+                // the fold-corner switch: not a snap, the hands travel from where FoldWidth left them
+                switchTime = Mathf.Min(1, switchTime + dt / EdgeSwitchSeconds);
+                float k = Ease(switchTime);
+                contactL = Vector3.Lerp(switchFromL, contactL, k); contactR = Vector3.Lerp(switchFromR, contactR, k);
+            }
+            lastPhase = Phase;
             LeftContact = contactL; RightContact = contactR;
             float lean = Phase == "Reach" || Phase == "Lift" ? SideLean * (Phase == "Reach" ? e : 1 - e)
                 : Phase == "Place" || Phase == "Return" ? -SideLean * (Phase == "Place" ? e : 1 - e) : 0;
