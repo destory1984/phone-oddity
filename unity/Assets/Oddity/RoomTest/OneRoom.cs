@@ -23,6 +23,9 @@ namespace Oddity.RoomTest
         // where Q (coffee) stands: 0.62 m from the glass, to the east of the sill plant (x 1.50) and 0.3 m clear of the cat tower, facing south through the window
         public static readonly Vector2 CurtainSpot = new Vector2(1.5f, .40f); // mid-window, about 0.2 m from the curtain plane (CurtainPanel.PlaneZ)
         public static readonly Vector2 CoffeeSpot = new Vector2(1.85f, .62f);
+        // the free floor patch between the bed (east edge x 1.0) and the TV cabinet (west face x 2.65): the home-workout mat (0.6 x 1.7 m, long side north-south) is centred on WorkoutSpot, WorkoutArea is what the cats keep out of while she exercises
+        public static readonly Vector2 WorkoutSpot = new Vector2(1.7f, 1.8f);
+        public static readonly Rect WorkoutArea = Rect.MinMaxRect(1.15f, .9f, 2.25f, 2.7f);
         static Apartment.Layout layout;
         public static Apartment.Layout Layout => layout ?? (layout = MakeLayout());
 
