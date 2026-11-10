@@ -2700,7 +2700,7 @@ namespace Oddity.RoomTest
         }
         void Log(string key){Debug.Log("ROOMPLAY key="+key+" clip="+Keys[current].clip+" x="+F(x)+" z="+F(z)+" yaw="+F(yaw)+" heading="+F(heading)+" zoom="+F(zoom)+" floor="+F(floorError)+(room?" fov="+F(cameraView.fieldOfView)+" bodyPath="+F(wantPath)+" aimPath="+F(focusPath):""));wantPath=focusPath=0;}
         const string DefaultLine="6T-O2", IndoorLine="6T-I2";
-        static readonly string[] HiddenLines={"6T-I1","6T-O1","6T-N2"}; // hidden for now (I1, O1 2026-11-07; N2 2026-11-10, a test branch folded into N1-100): left out of the N / Shift+N cycle, still loadable with ODDITY_MODEL
+        static readonly string[] HiddenLines={"6T-I1","6T-O1"}; // hidden for now (I1, O1 2026-11-07): left out of the N / Shift+N cycle, still loadable with ODDITY_MODEL
         // the newest imported vrm of a line in Assets/Models/test, as an asset path
         static string NewestInTest(string line)
         {
