@@ -2639,6 +2639,7 @@ namespace Oddity.RoomTest
         }
         void Command(string key)
         {
+            if(ctl==null && LifeControl.IsHarinKey(key))LifeInput("key "+key);
             if(FaceKeys.ScriptDigit(key)>=0){SetFace(FaceKeys.ScriptDigit(key));return;} // Shift+digit: the face only, before the body and cat keys
             if(key=="shiftleft"||key=="shiftright"||key=="shiftup"||key=="shiftdown"){Log(key);return;} // script only: held by Update for the step's seconds
             if((sofaOn!=SofaMode.None || sofaPend) && ctl==null && SofaBodyKeys.Contains(key))SofaStop("key "+key);
@@ -2842,7 +2843,7 @@ namespace Oddity.RoomTest
                 input=new Vector2((kb.dKey.isPressed?1:0)-(kb.aKey.isPressed?1:0),(kb.wKey.isPressed?1:0)-(kb.sKey.isPressed?1:0));run=kb.shiftKey.isPressed;zoomKey=(kb.downArrowKey.isPressed?1:0)-(kb.upArrowKey.isPressed?1:0);
                 turning=(kb.leftArrowKey.isPressed?1:0)-(kb.rightArrowKey.isPressed?1:0);
                 if(kb.shiftKey.isPressed){camSx=turning;camTy=(kb.upArrowKey.isPressed?1:0)-(kb.downArrowKey.isPressed?1:0);turning=0;zoomKey=0;} // Shift + arrows move the camera instead
-                var mouse=Mouse.current;if(mouse!=null && mouse.leftButton.wasPressedThisFrame && room){var mp=mouse.position.ReadValue();if(ClickInGame(mp))ClickAt(cameraView.ScreenPointToRay(mp));else Debug.Log("ROOMPLAY_CLICK ignored at=("+F(mp.x)+","+F(mp.y)+") screen="+Screen.width+"x"+Screen.height+" over="+(EditorWindow.mouseOverWindow!=null?EditorWindow.mouseOverWindow.GetType().Name:"none"));}
+                var mouse=Mouse.current;if(mouse!=null && mouse.leftButton.wasPressedThisFrame && room){var mp=mouse.position.ReadValue();if(ClickInGame(mp)){if(ctl==null)LifeInput("click");ClickAt(cameraView.ScreenPointToRay(mp));}else Debug.Log("ROOMPLAY_CLICK ignored at=("+F(mp.x)+","+F(mp.y)+") screen="+Screen.width+"x"+Screen.height+" over="+(EditorWindow.mouseOverWindow!=null?EditorWindow.mouseOverWindow.GetType().Name:"none"));}
                 if(mouse!=null){var sc=mouse.scroll.ReadValue();float wheel=sc.y!=0?sc.y:kb.shiftKey.isPressed?sc.x:0; // Windows may turn Shift + wheel into a sideways scroll
                     if(wheel!=0){if(kb.altKey.isPressed)TiltNotchBy(wheel>0?1:-1);else if(kb.shiftKey.isPressed)SwingNotchBy(wheel>0?1:-1);else if(kb.ctrlKey.isPressed)LiftNotchBy(wheel>0?1:-1);else wheelZoom=Mathf.Clamp(wheelZoom+Mathf.Sign(wheel)*WheelNotch,-1,1);}} // wheel up zooms in, Ctrl + wheel up raises the camera
                 foreach(var entry in Keys)if(!Walk(entry.key) && entry.key!="left" && entry.key!="right" && entry.key!="tab" && entry.key!="o"){ // Tab and O have their own poll (TabPoll)
@@ -2857,6 +2858,8 @@ namespace Oddity.RoomTest
                 if(action && held && !pressed)Log("hold");held=pressed;
             }
             ShiftArrowTick(dt,camSx,camTy);
+            if(ctl==null && input!=Vector2.zero)LifeInput("walk");
+            LifeTick(dt);
             if(ctl!=null){CatTick(dt,input,run,turning);input=Vector2.zero;run=false;turning=0;} // WASD and shift drive the cat; Harin keeps her pose
             if(busy)return;
             zeroTwoInputReady=true;
@@ -4117,8 +4120,154 @@ namespace Oddity.RoomTest
             foreach(var o in new[]{new Vector2(-2,0),new Vector2(2,0),new Vector2(0,-2),new Vector2(0,2),new Vector2(-1.5f,-1.5f),new Vector2(1.5f,-1.5f),new Vector2(-1.5f,1.5f),new Vector2(1.5f,1.5f)})GUI.Label(new Rect(rect.x+o.x,rect.y+o.y,rect.width,rect.height),who,big);
             big.normal.textColor=tint;GUI.Label(rect,who,big);
             GUI.matrix=saved;
-            if(!catSfxOn){var small=new GUIStyle(GUI.skin.label){fontSize=13,alignment=TextAnchor.MiddleRight};var r2=new Rect(Screen.width-230,46,220,22);
+            if(LifeAuto){var auto=new GUIStyle(GUI.skin.label){fontSize=13,alignment=TextAnchor.MiddleRight};var ra=new Rect(Screen.width-230,40,220,22);auto.normal.textColor=new Color(0,0,0,.9f);GUI.Label(new Rect(ra.x+1,ra.y+1,ra.width,ra.height),"자동",auto);auto.normal.textColor=new Color(.7f,1f,.75f);GUI.Label(ra,"자동",auto);}
+            if(!catSfxOn){var small=new GUIStyle(GUI.skin.label){fontSize=13,alignment=TextAnchor.MiddleRight};var r2=new Rect(Screen.width-230,LifeAuto?60:46,220,22);
                 small.normal.textColor=new Color(0,0,0,.9f);GUI.Label(new Rect(r2.x+1,r2.y+1,r2.width,r2.height),"고양이 소리 끔",small);small.normal.textColor=new Color(1f,.85f,.6f);GUI.Label(r2,"고양이 소리 끔",small);}
+        }
+        // ---- HarinLife (HarinLife.cs): when nobody steers Harin she picks her next activity by weighted random and runs it through the same key functions the player uses.
+        // Any Harin key, walking or click hands her to the player at once (ROOMPLAY_LIFE off); ODDITY_LIFEIDLE seconds (20) without Harin input give her back. ODDITY_AUTOLIFE=0 off, =1 on; by default on in the studio, off in the other houses and in script runs. ODDITY_LIFESEED=n repeats a run.
+        LifeControl life;System.Random lifeRng;bool lifeInit,lifeEnabled,lifeEngaged;LifeAct lifeAct=LifeAct.None,lifeLast=LifeAct.None;float lifeSecs,lifeT,lifeSince,lifeGap;
+        void LifeSetup()
+        {
+            lifeInit=true;var e=Environment.GetEnvironmentVariable("ODDITY_AUTOLIFE");
+            lifeEnabled=e=="0"?false:e=="1"?true:(one && !scripted);
+            if(!lifeEnabled)return;
+            float il=20f;if(!float.TryParse(Environment.GetEnvironmentVariable("ODDITY_LIFEIDLE"),NumberStyles.Float,CultureInfo.InvariantCulture,out il) || il<=0)il=20f;
+            int seed;bool seeded=int.TryParse(Environment.GetEnvironmentVariable("ODDITY_LIFESEED"),out seed);lifeRng=seeded?new System.Random(seed):new System.Random();
+            life=new LifeControl(il,true);lifeGap=3f;
+            Debug.Log("ROOMPLAY_LIFE on idle="+F(il)+(seeded?" seed="+seed:""));
+        }
+        bool LifeAuto=>lifeEnabled && life!=null && life.Auto;
+        void LifeInput(string by)
+        {
+            if(!lifeEnabled || life==null)return;
+            if(life.Input()){Debug.Log("ROOMPLAY_LIFE off by="+by+" act="+lifeAct);lifeAct=LifeAct.None;lifeEngaged=false;}
+        }
+        bool LifeCatOnFloor()
+        {
+            foreach(var o in pets)if(o!=ctl && o.root!=null && o.graph.IsValid() && o.somali && o.perch==null && !o.onSofa && o.job==0 && o.hopPlan.Count==0 && o.sit!=12 && o.sit!=13)return true;
+            return false;
+        }
+        void LifeStopActs(string why){SofaStop(why);CallEnd(why);CoffeeEnd(why);CurtainEnd(why);WakeEnd(why);WorkoutEnd(why);EndNewActs(why);}
+        bool LifeSitting()=>current==SitIndex || current==CurlIndex || current==NapIndex || current==BedIndex;
+        bool LifeBusy()=>clickGoal.HasValue || chairJob!=null || sofaPend || callOn || coffeeOn || curtainOn || wakeOn || wakePend || workoutOn || ramenOn || mealOn || laundryOn || laundryPend || mirrorOn || mirrorPend || catOn || sofaOn!=SofaMode.None;
+        // true once the act is really under way (she has walked there and started), false while she is still walking to it
+        bool LifeEngagedNow(LifeAct a)
+        {
+            switch(a){
+                case LifeAct.Phone:return sofaOn==SofaMode.Phone;
+                case LifeAct.Tv:case LifeAct.LieTv:return sofaOn==SofaMode.Tv;
+                case LifeAct.Bed:return sofaOn==SofaMode.Bed;
+                case LifeAct.Nap:return current==NapIndex && weights[NapIndex]>.95f && !clickGoal.HasValue;
+                case LifeAct.Coffee:return coffeeOn && !coffeeWalk;
+                case LifeAct.Call:return callOn;
+                case LifeAct.Wake:return wakeOn;
+                case LifeAct.Workout:return workoutOn && !workoutWalk;
+                case LifeAct.Ramen:return ramenOn && !ramenWalk;
+                case LifeAct.Meal:return mealOn && !mealWalk;
+                case LifeAct.Laundry:return laundryOn;
+                case LifeAct.Mirror:return mirrorOn;
+                case LifeAct.Pet:case LifeAct.Wand:return catOn && !catWalk;
+                case LifeAct.CurtainClose:case LifeAct.CurtainOpen:return curtainOn && !curtainWalk;
+                case LifeAct.WindowStand:case LifeAct.RandomWalk:return !clickGoal.HasValue && lifeSince>.4f && direction==0;
+                case LifeAct.Yawn:return current==YawnIndex;
+                case LifeAct.HairSweep:return current==SweepIndex;
+                case LifeAct.HairToss:return current==TossIndex;
+            }
+            return false;
+        }
+        // false once an engaged act has stopped on its own
+        bool LifeStillOn(LifeAct a)
+        {
+            switch(a){
+                case LifeAct.Phone:return sofaOn==SofaMode.Phone;
+                case LifeAct.Tv:case LifeAct.LieTv:return sofaOn==SofaMode.Tv;
+                case LifeAct.Bed:return sofaOn==SofaMode.Bed;
+                case LifeAct.Nap:return current==NapIndex;
+                case LifeAct.Coffee:return coffeeOn;
+                case LifeAct.Call:return callOn;
+                case LifeAct.Wake:return wakeOn;
+                case LifeAct.Workout:return workoutOn;
+                case LifeAct.Ramen:return ramenOn;
+                case LifeAct.Meal:return mealOn;
+                case LifeAct.Laundry:return laundryOn;
+                case LifeAct.Mirror:return mirrorOn;
+                case LifeAct.Pet:case LifeAct.Wand:return catOn;
+                case LifeAct.CurtainClose:case LifeAct.CurtainOpen:return curtainOn;
+                case LifeAct.Yawn:return current==YawnIndex;
+                case LifeAct.HairSweep:return current==SweepIndex;
+                case LifeAct.HairToss:return current==TossIndex;
+            }
+            return true; // window stand and random walk are timed or one step
+        }
+        void LifeEnd(string why)
+        {
+            Debug.Log("ROOMPLAY_LIFE end act="+lifeAct+" why="+why+" ran="+F(lifeT)+"s walk="+F(lifeSince-lifeT)+"s at=("+F(x)+","+F(z)+")");
+            var a=lifeAct;lifeLast=a;lifeAct=LifeAct.None;lifeEngaged=false;lifeGap=1f+(float)lifeRng.NextDouble();
+            if(a==LifeAct.Yawn || a==LifeAct.HairSweep || a==LifeAct.HairToss){if(direction==0 && current!=9)Select(9);}
+            else if(a!=LifeAct.Nap)LifeStopActs("life "+why);
+        }
+        void LifeBegin()
+        {
+            if(direction!=0 || clickGoal.HasValue || busy || chairJob!=null)return; // wait until she stands still
+            var ctx=new LifeContext{Last=lifeLast,Night=LampEnv || Environment.GetEnvironmentVariable("ODDITY_NIGHT")=="1",CurtainOpen=curtain!=null && curtain.Openness>.5f,CatOnFloor=LifeCatOnFloor()};
+            var pick=HarinLife.Pick(lifeRng,ctx);
+            lifeAct=pick.Act;lifeSecs=pick.Seconds;lifeT=0;lifeSince=0;lifeEngaged=false;
+            Debug.Log("ROOMPLAY_LIFE pick="+pick.Act+" for="+(pick.Seconds>0?F(pick.Seconds):"auto")+"s from=("+F(x)+","+F(z)+") night="+(ctx.Night?1:0)+" curtainOpen="+(ctx.CurtainOpen?1:0)+" cat="+(ctx.CatOnFloor?1:0));
+            bool sofaAct=pick.Act==LifeAct.Phone || pick.Act==LifeAct.Tv || pick.Act==LifeAct.LieTv || pick.Act==LifeAct.Bed;
+            if(!sofaAct)LifeStopActs("life next"); // an act of the player's own that is still running must not be toggled off by the same key
+            else if(sofaOn!=SofaMode.None)LifeStopActs("life next");
+            switch(pick.Act){
+                case LifeAct.Phone:SofaKey(SofaMode.Phone);break;
+                case LifeAct.Tv:SofaKey(SofaMode.Tv);break;
+                case LifeAct.LieTv:LieTvKey();break;
+                case LifeAct.Bed:SofaKey(SofaMode.Bed);break;
+                case LifeAct.Nap:Sit(NapIndex,true);break;
+                case LifeAct.Coffee:CoffeeKey();break;
+                case LifeAct.Call:CallKey();break;
+                case LifeAct.Wake:WakeKey();break;
+                case LifeAct.Workout:WorkoutKey();break;
+                case LifeAct.Ramen:RamenKey();break;
+                case LifeAct.Meal:MealKey();break;
+                case LifeAct.Laundry:LaundryKey();break;
+                case LifeAct.Mirror:MirrorKey();break;
+                case LifeAct.Pet:CatPlayKey(false);break;
+                case LifeAct.Wand:CatPlayKey(true);break;
+                case LifeAct.CurtainClose:CurtainKey(false);break;
+                case LifeAct.CurtainOpen:CurtainKey(true);break;
+                case LifeAct.WindowStand:
+                    if(LifeSitting())Select(9);
+                    clickSeat=null;clickWindow=true;clickGoal=WinSpotNow;hPathGoal=null;hReplanned=false;clickStuck=0;break;
+                case LifeAct.RandomWalk:{
+                    if(LifeSitting())Select(9);
+                    var floors=new List<Rect>{Apartment.WanderBoxes.Length>0?Apartment.WanderBoxes[0]:Rect.MinMaxRect(LimX0,ZNear,LimX1,ZFar)};
+                    if(PacePlan.TryNext(floors,blockers,new Vector2(x,z),lifeRng,out var step)){clickSeat=null;clickWindow=false;clickGoal=step.Target;hPathGoal=null;hReplanned=false;clickStuck=0;}
+                    break;}
+                case LifeAct.Yawn:if(clips[YawnIndex]!=null)Select(YawnIndex);break;
+                case LifeAct.HairSweep:StartGesture(SweepIndex);break;
+                case LifeAct.HairToss:StartGesture(TossIndex);break;
+            }
+        }
+        void LifeTick(float dt)
+        {
+            if(!lifeInit)LifeSetup();
+            if(!lifeEnabled || model==null || busy || orbitOn)return;
+            if(life.Tick(dt)){Debug.Log("ROOMPLAY_LIFE resume");lifeAct=LifeAct.None;lifeEngaged=false;lifeGap=.5f;}
+            if(!life.Auto)return;
+            if(lifeAct==LifeAct.None){lifeGap-=dt;if(lifeGap<=0)LifeBegin();return;}
+            lifeSince+=dt;
+            if(!lifeEngaged){
+                if(LifeEngagedNow(lifeAct)){lifeEngaged=true;lifeT=0;Debug.Log("ROOMPLAY_LIFE engaged act="+lifeAct+" walk="+F(lifeSince)+"s at=("+F(x)+","+F(z)+")");}
+                else if(lifeSince>3f && !LifeBusy() && !(lifeAct==LifeAct.Nap && current==NapIndex) && current!=YawnIndex && !HairGestures.IsGesture(current)){LifeEnd("refused");return;}
+                else if(lifeSince>60f){LifeEnd("walk timeout");return;}
+                if(!lifeEngaged)return;
+            }
+            lifeT+=dt;
+            if(lifeAct==LifeAct.Yawn){if(lifeT>=(clips[YawnIndex]!=null?clips[YawnIndex].length:3f) || current!=YawnIndex)LifeEnd("done");return;}
+            if(!LifeStillOn(lifeAct)){LifeEnd("ended by itself");return;}
+            if(lifeSecs>0){if(lifeT>=lifeSecs)LifeEnd("time");}
+            else if(lifeAct==LifeAct.RandomWalk)LifeEnd("arrived");
+            else if(lifeT>HarinLife.Cap(lifeAct))LifeEnd("cap");
         }
         static void SafeDispose(System.IDisposable d){try{d?.Dispose();}catch(System.Exception e){Debug.LogWarning("ROOMPLAY_DISPOSE "+e.GetType().Name);}}
         void OnDestroy(){foreach(var pet in pets)if(pet.graph.IsValid())pet.graph.Destroy();SafeDispose(zeroTwoAudio);SafeDispose(zeroTwoDance);SafeDispose(sofaRig);SafeDispose(callRig);SafeDispose(coffeeRig);SafeDispose(curtainRig);SafeDispose(wakeRig);SafeDispose(workoutRig);SafeDispose(ramenRig);SafeDispose(mealRig);SafeDispose(laundryRig);SafeDispose(mirrorRig);SafeDispose(catRig);SafeDispose(curtain);SafeDispose(tv);if(clips!=null && clips[ZeroTwoIndex]!=null)Destroy(clips[ZeroTwoIndex]);DestroyGestureClips(clips);if(graph.IsValid())graph.Destroy();if(boundsMesh!=null)Destroy(boundsMesh);if(soleBake!=null)Destroy(soleBake);EditorSettings.enterPlayModeOptionsEnabled=oldEnabled;EditorSettings.enterPlayModeOptions=oldOptions;}
