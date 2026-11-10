@@ -3984,13 +3984,14 @@ namespace Oddity.RoomTest
             var vrm=model.GetComponent<Vrm10Instance>();
             if(vrm!=null && vrm.Runtime!=null)vrm.Runtime.Expression.SetWeight(ExpressionKey.Aa,catRig.MouthOpen*.7f);
         }
-        // indoors in Korea no shoes: a separate shoe mesh of the model is hidden (the apartment and the studio); a model with shoes baked into its body stays as it is
+        // indoors in Korea no shoes: a separate shoe mesh of the model is hidden (the apartment and the studio); a model with shoes baked into its body stays as it is.
+        // Off for now (2026-11-10): the Tripo O2/O6 models have no feet under their shoe mesh, so hiding it left bare stumps. ODDITY_SHOESOFF=1 turns the hiding back on
         static readonly string[] ShoeWords={"shoe","boot","sneaker","loafer","sandal","heel","pumps"};
         void HideIndoorShoes(GameObject m)
         {
             if(m==null)return;
             var all=m.GetComponentsInChildren<Renderer>(true);var hid=new List<string>();
-            if(apt)foreach(var r in all){var n=r.name.ToLowerInvariant();if(ShoeWords.Any(w=>n.Contains(w))){r.enabled=false;hid.Add(r.name);}}
+            if(apt && Environment.GetEnvironmentVariable("ODDITY_SHOESOFF")=="1")foreach(var r in all){var n=r.name.ToLowerInvariant();if(ShoeWords.Any(w=>n.Contains(w))){r.enabled=false;hid.Add(r.name);}}
             Debug.Log("ROOMPLAY_SHOES model="+Path.GetFileNameWithoutExtension(modelPath??modelName??"")+" hidden="+(hid.Count==0?"none":string.Join("|",hid))+" renderers="+string.Join("|",all.Select(r=>r.name)));
         }
         // Shift+T: lie on the bed (the K pose, on her side, head on the pillow) and watch the TV on the east wall
