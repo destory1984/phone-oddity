@@ -3261,11 +3261,22 @@ namespace Oddity.RoomTest
         static readonly bool noHud=Environment.GetEnvironmentVariable("ODDITY_NOHUD")=="1" || Environment.GetEnvironmentVariable("ODDITY_ORBIT")=="1";
         // script-only still cameras (for the shots): cam1..cam9 take "ex,ey,ez,ax,ay,az,fov" from the environment ODDITY_CAM1..9; camphone / camface / camback are placed from the pose; camoff gives the normal camera back
         string stillCam;
-        bool StillCamKey(string key){if(key=="camoff"){stillCam=null;return true;}if(key=="camphone"||key=="camface"||key=="camback"||(key.Length==4 && char.IsDigit(key[3]))){stillCam=key;return true;}return false;}
+        bool StillCamKey(string key){if(key=="camoff"){stillCam=null;return true;}if(key=="camphone"||key=="camface"||key=="camback"||key=="camcat"||(key.Length==4 && char.IsDigit(key[3]))){stillCam=key;return true;}return false;}
         void StillCam()
         {
             if(stillCam==null || cameraView==null || anim==null)return;
             Vector3 eye,aim;float fov=30;
+            if(stillCam=="camcat"){ // a low side view of the controlled cat (nose to the left), for comparing the sleeping poses with the Blender sheets
+                var cp=ctl!=null?ctl:pets.FirstOrDefault();if(cp==null || cp.root==null)return;
+                var rs=cp.root.GetComponentsInChildren<Renderer>();if(rs.Length==0)return;var bb=rs[0].bounds;foreach(var rr in rs)bb.Encapsulate(rr.bounds);
+                var ctr=new Vector3(bb.center.x,bb.min.y+Mathf.Max(.1f,bb.size.y*.5f),bb.center.z);var side=-cp.root.right;side.y=0;side.Normalize();
+                eye=new Vector3(ctr.x,bb.min.y+.12f,ctr.z)+side*1.15f;aim=ctr;
+                bool InRoom(Vector3 e)=>e.x>.2f && e.x<2.8f && e.z>.2f && e.z<5.3f;
+                if(!InRoom(eye)){var e2=new Vector3(ctr.x,bb.min.y+.12f,ctr.z)-side*1.15f;eye=InRoom(e2)?e2:new Vector3(Mathf.Clamp(eye.x,.2f,2.8f),eye.y,Mathf.Clamp(eye.z,.2f,5.3f));} // the studio's walls: look from the other side (the nose then points right) or from as far as the room allows
+                if(cp.perch!=null && cp.perch.name.StartsWith("tower")){ // on the cat tower: from the room's middle side, a little above the perch top, so the whole pose and the rim show
+                    var inward=new Vector3(1.5f-ctr.x,0,2.75f-ctr.z);if(inward.sqrMagnitude<.01f)inward=Vector3.back;inward.Normalize();
+                    eye=new Vector3(ctr.x,bb.min.y+.3f,ctr.z)+inward*1.3f;}
+                cameraView.fieldOfView=28;cameraView.transform.SetPositionAndRotation(eye,Quaternion.LookRotation(aim-eye,Vector3.up));return;}
             if(stillCam=="camphone" || stillCam=="camface" || stillCam=="camback"){
                 if(coffeeRig!=null && coffeeRig.Weight>.01f){ // the coffee: camphone close on the mug and hands from in front and a little to her left, camface in front of her, camback from her right side
                     var f3=Vector3.ProjectOnPlane(anim.transform.forward,Vector3.up).normalized;var r3=Vector3.Cross(Vector3.up,f3).normalized;var c3=coffeeRig.Mug.position;var hd3=anim.GetBoneTransform(HumanBodyBones.Head).position;
