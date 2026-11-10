@@ -190,6 +190,49 @@ namespace Oddity.RoomTest.Tests
             finally { Apartment.Use(null); if (model != null) Object.DestroyImmediate(model); }
         }
 
+
+        // V on the bed: she sits on the quilt, hips on it, feet flat in front, knees up above the hips, nothing sinks, everything inside the bed footprint
+        [TestCase("O2")]
+        [TestCase("N1")]
+        public void SofaMotions_VOnTheBedSitsOnTheQuiltWithKneesUpAndFeetFlat(string line)
+        {
+            Apartment.Use(OneRoom.Layout);
+            var (m, r) = Make(line); r.Dispose();
+            try
+            {
+                var clip = AssetDatabase.LoadAllAssetsAtPath("Assets/Oddity/DevMotion/Resources/Motion/KaSitWithBothLegsUpLoop.fbx").OfType<AnimationClip>().FirstOrDefault(c => !c.name.StartsWith("__preview__"));
+                if (clip == null) Assert.Ignore("no clip KaSitWithBothLegsUpLoop");
+                var a = m.GetComponent<Animator>(); var lay = OneRoom.Layout; var rig = new CurlRig(m, a);
+                for (int i = 0; i < 12; i++)
+                {
+                    m.transform.SetPositionAndRotation(Vector3.zero, Quaternion.Euler(0, 90, 0)); clip.SampleAnimation(m, 0); // facing east, like RoomPlay on the bed seat
+                    var hp = a.GetBoneTransform(HumanBodyBones.Hips).position; m.transform.position += lay.bedSeat - hp;
+                    rig.Place(1, Vector3.right, lay.bedLieTop, true);
+                }
+                float top = lay.bedLieTop; Transform T(HumanBodyBones b) => a.GetBoneTransform(b);
+                Assert.That(rig.TrueLowestY - top, Is.InRange(-.02f, .02f), "lowest skin point " + rig.TrueLowestY + " vs quilt " + top);
+                Assert.That(rig.LowestY - top, Is.InRange(-.02f, .02f), "body level on the quilt");
+                var hips = T(HumanBodyBones.Hips).position;
+                Assert.That(hips.y - top, Is.InRange(0f, .22f), "the hips rest on the quilt, not in the air: " + (hips.y - top) + " above it");
+                foreach (var (kb, fb) in new[] { (HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot), (HumanBodyBones.RightLowerLeg, HumanBodyBones.RightFoot) })
+                {
+                    var knee = T(kb).position; var foot = T(fb).position;
+                    Assert.That(knee.y, Is.GreaterThan(hips.y + .05f), kb + " above the hips");
+                    Assert.That(foot.y - top, Is.InRange(.02f, .13f), fb + " flat on the quilt, ankle " + (foot.y - top) + " above it");
+                    Assert.That(foot.x - hips.x, Is.GreaterThan(.12f), fb + " in front of the hips");
+                    Assert.That(foot.x, Is.InRange(0f, 1f), fb + " inside the bed"); Assert.That(foot.z, Is.InRange(.5f, 2.5f), fb + " inside the bed");
+                }
+                foreach (var (kb, fb, hb) in new[] { (HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot, HumanBodyBones.LeftHand), (HumanBodyBones.RightLowerLeg, HumanBodyBones.RightFoot, HumanBodyBones.RightHand) })
+                {
+                    var shin = Vector3.Lerp(T(kb).position, T(fb).position, .4f);
+                    Assert.That(Vector3.Distance(T(hb).position, shin), Is.LessThan(.16f), hb + " round the shin, " + Vector3.Distance(T(hb).position, shin) + " m from it (hand " + T(hb).position + " shin " + shin + ")");
+                }
+                foreach (var b in new[] { HumanBodyBones.Hips, HumanBodyBones.Head, HumanBodyBones.LeftHand, HumanBodyBones.RightHand })
+                    Assert.That(T(b).position.x, Is.InRange(-.05f, 1.05f), b + " over the bed in x");
+            }
+            finally { Apartment.Use(null); Object.DestroyImmediate(m); }
+        }
+
         // B (on the stomach with the phone): the phone is low in front of her face, below her eyes, tilted toward her
         [Test]
         public void SofaMotions_BPhoneIsBelowTheEyesLowInFrontOfTheFace()

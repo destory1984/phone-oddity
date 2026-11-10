@@ -147,6 +147,55 @@ namespace Oddity.RoomTest.Tests
             finally { rig?.Dispose(); Object.DestroyImmediate(model); }
         }
 
+
+        // the head's pitch in the world relative to the T-pose it was built in (the T-pose head looks level): bone axes do not matter, only how far the head's rotation has turned about the body's right axis
+        static float HeadDown(Animator anim, Quaternion rootToHeadRest)
+        {
+            var head = anim.GetBoneTransform(HumanBodyBones.Head); var rest = anim.transform.rotation * rootToHeadRest;
+            var f = head.rotation * Quaternion.Inverse(rest) * anim.transform.forward;
+            return -Mathf.Asin(Mathf.Clamp(f.y, -1, 1)) * Mathf.Rad2Deg;
+        }
+
+        [TestCase("O2")]
+        [TestCase("N1")]
+        [TestCase("N2")]
+        [TestCase("I2")]
+        public void Coffee_HeadNeverBowsMoreThan20Deg(string line)
+        {
+            string dir = Path.Combine(Application.dataPath, "Models/test");
+            string file = Directory.Exists(dir) ? Directory.GetFiles(dir, "harin-6T-" + line + "-*.vrm")
+                .OrderByDescending(p => int.TryParse(Path.GetFileNameWithoutExtension(p).Split('-').Last(), out int n) ? n : -1).FirstOrDefault() : null;
+            var prefab = file == null ? null : AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Models/test/" + Path.GetFileName(file));
+            if (prefab == null) Assert.Ignore("no 6T-" + line + " model installed");
+            var model = Object.Instantiate(prefab); CoffeeRig rig = null;
+            try
+            {
+                var anim = model.GetComponent<Animator>();
+                if (anim == null || !anim.isHuman) Assert.Ignore("no humanoid");
+                model.transform.SetPositionAndRotation(new Vector3(1.5f, 0, .62f), Quaternion.Euler(0, 180, 0));
+                var restRel = Quaternion.Inverse(anim.transform.rotation) * anim.GetBoneTransform(HumanBodyBones.Head).rotation;
+                rig = new CoffeeRig(anim, Seed);
+                var bones = model.GetComponentsInChildren<Transform>(); var original = bones.Select(t => t.localRotation).ToArray(); var positions = bones.Select(t => t.localPosition).ToArray();
+                var worst = new Dictionary<string, float>();
+                rig.Start();
+                for (int i = 0; i < (int)(RunSeconds / .05f); i++)
+                {
+                    for (int j = 0; j < bones.Length; j++) { bones[j].localRotation = original[j]; bones[j].localPosition = positions[j]; }
+                    rig.Tick(.05f); rig.Apply(.05f);
+                    if (rig.Weight < 1) continue;
+                    float down = HeadDown(anim, restRel);
+                    worst[rig.Phase] = worst.TryGetValue(rig.Phase, out var o) ? Mathf.Max(o, down) : down;
+                }
+                string report = string.Join(", ", worst.Select(kv => kv.Key + " " + kv.Value.ToString("0.0")));
+                Debug.Log("COFFEE_HEADDOWN " + line + " " + report);
+                foreach (var kv in worst) Assert.That(kv.Value, Is.LessThanOrEqualTo(20f), kv.Key + " bows the head " + kv.Value + " deg (" + report + ")");
+                if (worst.TryGetValue("Blow", out var blow)) Assert.That(blow, Is.InRange(8f, 20f), "blowing looks down at the mug");
+                if (worst.TryGetValue("Sip", out var sip)) Assert.That(sip, Is.LessThanOrEqualTo(5f), "sipping keeps the head level or back");
+                if (worst.TryGetValue("LookingOut", out var look)) Assert.That(look, Is.LessThanOrEqualTo(8f), "looking out is level");
+            }
+            finally { rig?.Dispose(); Object.DestroyImmediate(model); }
+        }
+
         [Test]
         public void Coffee_RepeatedApplyDoesNotAccumulateAndDisposeIsIdempotent()
         {

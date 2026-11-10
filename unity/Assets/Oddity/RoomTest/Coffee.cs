@@ -101,6 +101,7 @@ namespace Oddity.RoomTest
         const float ChestForward = .24f, ChestUp = .025f; // Mug centre relative to chest, metres.
         const float BlowLift = .70f, BlowGap = .055f; // Near-mouth lift fraction and extra blowing clearance, metres.
         const float MouthUp = .018f, MouthForward = .075f; // Lip estimate in calibrated head frame, metres.
+        public const float MaxHeadDown = 18f; // Degrees the nose may point below the horizon at most (neck and head together).
         const float SipTilt = 24f, SipHeadPitch = -7f, BlowHeadPitch = 12f; // Degrees; negative pitch raises chin.
         const float WristSide = .074f, WristDown = .035f, WristBack = .012f; // Wrists relative to mug, metres.
         const float GripSlant = .35f; // Finger direction rises this much while wrapping forward around mug.
@@ -124,7 +125,7 @@ namespace Oddity.RoomTest
         readonly Transform[,] thumbs = new Transform[2, 3];
         readonly Quaternion[] handFrame = new Quaternion[2];
         readonly Vector3[] fingerLocal = new Vector3[2], palmLocal = new Vector3[2];
-        readonly Quaternion headFrame;
+        readonly Quaternion headFrame; readonly Vector3 headFrameInv, chestFront;
         readonly List<Transform> controlled = new List<Transform>();
         readonly Quaternion[] before, written;
         readonly Material ceramic, coffee;
@@ -141,6 +142,9 @@ namespace Oddity.RoomTest
         public float EyesClosed => Weight * Mathf.Max(SipEyes * clock.Lift, SighEyes * clock.Sigh);
         public float MouthOpen => Weight * (BlowMouth * clock.Blow + SipMouth * clock.Lift + SighMouth * clock.Sigh);
         public Vector3 LipPoint => head.position + head.rotation * headFrame * (new Vector3(0, MouthUp, MouthForward) * anatomy);
+        // degrees the nose axis points below the horizon in the world (the axis taken from the pose the rig was built in)
+        public float HeadDownDegrees { get { var f = head.rotation * headFrameInv; return -Mathf.Asin(Mathf.Clamp(f.y, -1, 1)) * Mathf.Rad2Deg; } }
+        public float ChestDownDegrees { get { var f = chest.rotation * chestFront; return -Mathf.Asin(Mathf.Clamp(f.y, -1, 1)) * Mathf.Rad2Deg; } }
         public Vector3 MugRimNear => Mug.TransformPoint(new Vector3(0, MugHeight / 2, -MugDiameter / 2));
 
         public CoffeeRig(Animator anim, int seed)
@@ -152,6 +156,7 @@ namespace Oddity.RoomTest
             neck = Bone(HumanBodyBones.Neck); head = Bone(HumanBodyBones.Head);
             if (spine == null || head == null) throw new InvalidOperationException("CoffeeRig needs spine and head bones.");
             headFrame = Quaternion.Inverse(head.rotation) * anim.transform.rotation;
+            headFrameInv = headFrame * Vector3.forward; chestFront = Quaternion.Inverse(chest.rotation) * anim.transform.forward;
             Track(spine); Track(chest); Track(neck); Track(head);
             for (int s = 0; s < 2; s++)
             {
@@ -262,6 +267,8 @@ namespace Oddity.RoomTest
                 Quaternion correction = Quaternion.FromToRotation(head.rotation * headFrame * Vector3.forward, gaze);
                 if (neck != null) RotateBy(neck, correction, w * NeckShare);
                 RotateBy(head, correction, w * (neck != null ? 1 - NeckShare : 1));
+                float bow = HeadDownDegrees - MaxHeadDown; // safety net in world space: whatever the bone axes or the base pose, the nose never points more than MaxHeadDown below the horizon
+                if (bow > 0) Rotate(head, right, -bow * w);
 
                 Quaternion mugRotation = Quaternion.LookRotation(forward, up) * Quaternion.Euler(-SipTilt * clock.Lift, 0, 0);
                 Vector3 rest = chest.position + (forward * ChestForward + up * ChestUp) * anatomy;

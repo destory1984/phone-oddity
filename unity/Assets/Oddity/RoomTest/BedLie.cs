@@ -187,4 +187,52 @@ namespace Oddity.RoomTest
             return bake;
         }
     }
+
+    // V on the bed (knees hugged): she sits ON the quilt. The feet are put flat on it in front of her, the knees come up, the hands go round the shins,
+    // then the model is lifted or lowered so the skinned body's lowest surface touches the quilt (as LieRig does for K and B).
+    public sealed class CurlRig
+    {
+        public const float FootAhead = .30f, FootSide = .09f, AnkleUp = .07f, HandAhead = .075f;
+        readonly BedProbe probe; readonly Animator anim; readonly Transform root;
+        int frame;
+        public float LowRel = float.NaN, TrueRel = float.NaN;
+        public CurlRig(GameObject model, Animator anim) { probe = new BedProbe(model); this.anim = anim; root = model.transform; }
+        public float LowestY => LowRel + root.position.y; public float TrueLowestY => TrueRel + root.position.y;
+        Transform B(HumanBodyBones b) => anim.GetBoneTransform(b);
+        void Feet(Vector3 front, Vector3 right, Vector3 hipsAt, float y, float w, Vector3[] knees, Vector3[] ankles)
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                var ul = B(i == 0 ? HumanBodyBones.LeftUpperLeg : HumanBodyBones.RightUpperLeg); var ll = B(i == 0 ? HumanBodyBones.LeftLowerLeg : HumanBodyBones.RightLowerLeg); var ft = B(i == 0 ? HumanBodyBones.LeftFoot : HumanBodyBones.RightFoot);
+                if (ul == null || ll == null || ft == null) continue;
+                var t = hipsAt + front * FootAhead + right * (i == 0 ? -FootSide : FootSide); t.y = y;
+                SofaRig.TwoBone(ul, ll, ft, t, ll.position + Vector3.up * .5f + front * .15f, w);
+                if (knees != null) { knees[i] = ll.position; ankles[i] = ft.position; }
+            }
+        }
+        public bool Place(float w, Vector3 front, float quiltTop, bool forceBake)
+        {
+            var hips = B(HumanBodyBones.Hips); var head = B(HumanBodyBones.Head); if (hips == null || head == null) return false;
+            front.y = 0; front.Normalize(); var right = Vector3.Cross(Vector3.up, front).normalized;
+            var mp = root.position;
+            if (forceBake || float.IsNaN(LowRel) || frame++ % 3 == 0 || w < .999f)
+            {
+                Feet(front, right, hips.position, hips.position.y + .3f, w, null, null); // feet held up out of the way: the measure finds the seat, the feet are put down after the lift (no feedback between them)
+                probe.Measure(BedProbe.HeadCentre(head, B(HumanBodyBones.Neck)), out var low, out _, out var trueLow);
+                LowRel = low - mp.y; TrueRel = trueLow - mp.y;
+            }
+            mp.y = Mathf.Lerp(mp.y, quiltTop - LowRel + .003f, w); root.position = mp;
+            var knees = new Vector3[2]; var ankles = new Vector3[2];
+            Feet(front, right, hips.position, quiltTop + AnkleUp, w, knees, ankles);
+            for (int i = 0; i < 2; i++)
+            {
+                var ua = B(i == 0 ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm); var la = B(i == 0 ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm); var hd = B(i == 0 ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand);
+                if (ua == null || la == null || hd == null || knees[i] == Vector3.zero) continue;
+                float sg = i == 0 ? -1 : 1;
+                var t = Vector3.Lerp(knees[i], ankles[i], .4f) + front * HandAhead - right * sg * .02f + Vector3.up * .02f; // round the front of the shin, hands nearly meeting
+                SofaRig.TwoBone(ua, la, hd, t, ua.position + right * sg * .15f - Vector3.up * .15f, w);
+            }
+            return true;
+        }
+    }
 }

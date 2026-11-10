@@ -1876,7 +1876,7 @@ namespace Oddity.RoomTest
             if(clips[index]!=null && FloorClip(Keys[index].clip)){onFloor=true;Select(index);Notice("바닥 "+Keys[index].clip);return;}
             onFloor=false;faced=true; // her first-frame facing is not to be applied over a seat
             if(seats.Count==0 || clips[index]==null){Notice("앉을 자리가 없거나 앉기 클립이 없음");return;}
-            var pool=sofaOnly?seats.Where(t=>t.mark.root==sofa && t.mark.name==(apt && Apartment.HasBed?"SeatBed":"SeatC")).ToList():seats.Where(t=>t.mark.name!="SeatBed").ToList();if(pool.Count==0)pool=seats; // the nap: the sofa's middle seat, in the studio the bed
+            var pool=sofaOnly?seats.Where(t=>t.mark.root==sofa && t.mark.name==(apt && Apartment.HasBed?"SeatBed":"SeatC")).ToList():seats.Where(t=>index==CurlIndex && apt && Apartment.HasBed?t.mark.name!="SeatBedEdge":t.mark.name!="SeatBed").ToList();if(pool.Count==0)pool=seats; // the nap: the sofa's middle seat, in the studio the bed
             if(only!=null){var one=seats.Where(t=>t.mark==only).ToList();if(one.Count>0)pool=one;}
             pool=pool.Where(t=>!CatOnSeat(t.mark)).ToList();if(pool.Count==0){Notice("고양이가 그 자리에 있어요");return;} // a seat a cat lies on is not hers
             var seat=pool.OrderBy(t=>new Vector2(t.mark.position.x-x,t.mark.position.z-z).sqrMagnitude).First();
@@ -1895,7 +1895,7 @@ namespace Oddity.RoomTest
         {
             float w=weights[SitIndex]+weights[NapIndex]+(onFloor?0:weights[CurlIndex]);if(w<=0 || sofa==null)return;
             if(weights[NapIndex]>.5f){if(!seatIsBed)NapFeet(weights[NapIndex]);return;} // the sofa's armrest pull-in would drag a bed sleeper's legs across each other
-            if(!onFloor && weights[CurlIndex]>.5f){CurlFeet(weights[CurlIndex]);return;}
+            if(!onFloor && weights[CurlIndex]>.5f){if(!seatIsBed)CurlFeet(weights[CurlIndex]);return;} // on the bed CurlBedFinish puts the feet on the quilt
             for(int side=0;side<2;side++){
                 var upper=anim.GetBoneTransform(side==0?HumanBodyBones.LeftUpperLeg:HumanBodyBones.RightUpperLeg);
                 var lower=anim.GetBoneTransform(side==0?HumanBodyBones.LeftLowerLeg:HumanBodyBones.RightLowerLeg);
@@ -2910,7 +2910,7 @@ namespace Oddity.RoomTest
             if(step<0 || Environment.GetEnvironmentVariable("ODDITY_PLAYSHOTS")!="1")return;
             var dir=Path.GetFullPath("../shots/room_test/play");Directory.CreateDirectory(dir);
             ScreenCapture.CaptureScreenshot(Path.Combine(dir,step.ToString("00")+"_"+script[step].key+".png"));
-            var sp=cameraView.transform.position;Debug.Log("ROOMPLAY_SNAP step="+step+" key="+script[step].key+" cam=("+F(sp.x)+","+F(sp.y)+","+F(sp.z)+") fov="+F(cameraView.fieldOfView)+" inside="+(insideOn?1:0));
+            var sp=cameraView.transform.position;Debug.Log("ROOMPLAY_SNAP step="+step+" coffee="+(coffeeOn&&coffeeRig!=null?coffeeRig.Phase+" headDown="+F(coffeeRig.HeadDownDegrees):"-")+" key="+script[step].key+" cam=("+F(sp.x)+","+F(sp.y)+","+F(sp.z)+") fov="+F(cameraView.fieldOfView)+" inside="+(insideOn?1:0));
         }
         IEnumerator ReviewZeroTwo()
         {
@@ -3087,6 +3087,7 @@ namespace Oddity.RoomTest
             MirrorApply(dt);
             CatPlayApply(dt);
             LieFinish();
+            CurlBedFinish();
             if(sword!=null){sword.SetActive(current==12);shield.SetActive(current==12);if(current==12)PlaceShield();}
             if(blob!=null)blob.position=new Vector3(x,.004f,z+.02f);
         }
@@ -3501,8 +3502,9 @@ namespace Oddity.RoomTest
             if(coffeeWalk && !clickGoal.HasValue && (new Vector2(x,z)-CoffeeSpotNow).magnitude>.25f && coffeeTries<4){ // a cat or a give-up stopped her short of the window: walk again
                 coffeeTries++;clickSeat=null;clickWindow=true;clickGoal=CoffeeSpotNow;hPathGoal=null;hReplanned=false;clickStuck=0;Debug.Log("ROOMPLAY_COFFEE retry "+coffeeTries+" at=("+F(x)+","+F(z)+")");return;}
             if(coffeeWalk && !clickGoal.HasValue){ // arrived (ClickStep already turned her south): the mug comes up
-                coffeeWalk=false;coffeeRig.Start();Debug.Log("ROOMPLAY_COFFEE start at=("+F(x)+","+F(z)+") yaw="+F(yaw));}
+                coffeeWalk=false;coffeeRig.Start();Debug.Log("ROOMPLAY_COFFEEIDLE headDownT="+F(HeadDownT())+" clip="+Keys[current].clip);Debug.Log("ROOMPLAY_COFFEE start at=("+F(x)+","+F(z)+") yaw="+F(yaw));}
         }
+        float HeadDownT(){var hb=anim.GetBoneTransform(HumanBodyBones.Head);if(hb==null)return 0;var f=hb.rotation*headFront;return -Mathf.Asin(Mathf.Clamp(f.y,-1,1))*Mathf.Rad2Deg;} // the head's pitch from the T-pose nose axis RoomPlay measured at load
         void CoffeeApply(float dt)
         {
             if(coffeeRig==null || model==null)return;
@@ -3512,7 +3514,7 @@ namespace Oddity.RoomTest
             if(coffeeRig.Phase!=coffeeLastPhase){coffeeLastPhase=coffeeRig.Phase;Debug.Log("COFFEE phase="+coffeeLastPhase+" w="+F(coffeeRig.Weight)+(coffeeRig.LookingOut?" lookingout=1":""));}
             var vrm=model.GetComponent<Vrm10Instance>();
             if(vrm!=null && vrm.Runtime!=null)vrm.Runtime.Expression.SetWeight(ExpressionKey.Aa,coffeeRig.MouthOpen*.7f);
-            if(Time.unscaledTime-coffeeLogT>3 && coffeeRig.Weight>.99f){coffeeLogT=Time.unscaledTime;Debug.Log("ROOMPLAY_COFFEEPOSE mug=("+F(coffeeRig.Mug.position.x)+","+F(coffeeRig.Mug.position.y)+","+F(coffeeRig.Mug.position.z)+") lip=("+F(coffeeRig.LipPoint.x)+","+F(coffeeRig.LipPoint.y)+","+F(coffeeRig.LipPoint.z)+") phase="+coffeeRig.Phase+" mouth="+F(coffeeRig.MouthOpen));}
+            if(Time.unscaledTime-coffeeLogT>3 && coffeeRig.Weight>.99f){coffeeLogT=Time.unscaledTime;Debug.Log("ROOMPLAY_COFFEEPOSE mug=("+F(coffeeRig.Mug.position.x)+","+F(coffeeRig.Mug.position.y)+","+F(coffeeRig.Mug.position.z)+") lip=("+F(coffeeRig.LipPoint.x)+","+F(coffeeRig.LipPoint.y)+","+F(coffeeRig.LipPoint.z)+") phase="+coffeeRig.Phase+" mouth="+F(coffeeRig.MouthOpen)+" headDown="+F(coffeeRig.HeadDownDegrees)+" headDownT="+F(HeadDownT())+" chestDown="+F(coffeeRig.ChestDownDegrees));}
         }
         // ---- , (comma): wake up on the bed edge and stretch (Wake.cs: WakeRig, 8 s, one shot, arms, spine, head, mouth). From lying she first sits up on the bed's east edge; from elsewhere she walks to the edge and sits (the C path)
         WakeRig wakeRig;bool wakeOn,wakePend;float wakePendT;string wakeLastPhase="";
@@ -4054,6 +4056,16 @@ namespace Oddity.RoomTest
                 lieLogged=Time.unscaledTime;var hp=anim.GetBoneTransform(HumanBodyBones.Hips).position;var head=anim.GetBoneTransform(HumanBodyBones.Head);var hd=head.position;var hc=BedProbe.HeadCentre(head,anim.GetBoneTransform(HumanBodyBones.Neck));
                 if(!lieMeshLogged){lieMeshLogged=true;Debug.Log("ROOMPLAY_LIEMESH "+lieRig.Describe());}Debug.Log("ROOMPLAY_LIEGROUND lowest="+F(lieRig.LowestY)+" trueLowest="+F(lieRig.TrueLowestY)+" top="+F(Apartment.BedLieTop)+" headLow="+F(lieRig.HeadLowY)+" pillowTop="+F(Apartment.PillowTopAt(hc.x,hc.z))+" neck="+F(lieRig.Neck)+" legsApart="+F(lieRig.LegsApart)+" head=("+F(hd.x)+","+F(hd.y)+","+F(hd.z)+") modelYaw="+F(model.transform.eulerAngles.y)+" axisNow="+F(Mathf.Atan2(hd.x-hp.x,hd.z-hp.z)*Mathf.Rad2Deg)+" hips=("+F(hp.x)+","+F(hp.y)+","+F(hp.z)+") pillow="+(pillow?1:0)+" meshes="+lieRig.Meshes);
             }
+        }
+        // V on the bed: sitting on the quilt, knees up, feet flat on it, grounded with the skin probe (see CurlRig)
+        CurlRig curlRig;GameObject curlRigFor;float curlLogged=-9;
+        void CurlBedFinish()
+        {
+            float w=Mathf.Clamp01(weights[CurlIndex]);
+            if(!(seatIsBed && !onFloor && w>0 && model!=null && apt && Apartment.HasBed && chairSat==null))return;
+            if(curlRig==null || curlRigFor!=model){curlRig=new CurlRig(model,anim);curlRigFor=model;}
+            curlRig.Place(w,seatFront,Apartment.BedLieTop,false);
+            if(w>.99f && Time.unscaledTime-curlLogged>2){curlLogged=Time.unscaledTime;var lh=anim.GetBoneTransform(HumanBodyBones.LeftHand).position;var lk=anim.GetBoneTransform(HumanBodyBones.LeftLowerLeg).position;var la=anim.GetBoneTransform(HumanBodyBones.LeftFoot).position;Debug.Log("ROOMPLAY_CURLBED lhand=("+F(lh.x)+","+F(lh.y)+","+F(lh.z)+") lknee=("+F(lk.x)+","+F(lk.y)+","+F(lk.z)+") lankle=("+F(la.x)+","+F(la.y)+","+F(la.z)+") lowest="+F(curlRig.LowestY)+" trueLowest="+F(curlRig.TrueLowestY)+" top="+F(Apartment.BedLieTop));}
         }
         void SofaTick(float dt)
         {
