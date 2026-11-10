@@ -50,6 +50,23 @@ namespace Oddity.RoomTest.Tests
         }
 
         [Test]
+        public void OneRoom_WorkoutMatLiesBetweenBedAndTvCabinetAndSheFacesTheTv()
+        {
+            var mat = OneRoom.WorkoutMat;
+            Assert.That(mat.width, Is.EqualTo(WorkoutRig.MatLength).Within(1e-4f)); Assert.That(mat.height, Is.EqualTo(WorkoutRig.MatWidth).Within(1e-4f));
+            var solid = Apartment.Furniture().Where(f => f.block && f.y0 < .2f).Select(f => (f.name, r: R(f))).Concat(Apartment.PropFootprints().Select((r, i) => ("prop" + i, r))).ToList();
+            foreach (var q in solid) Assert.IsFalse(Overlap(mat, q.r, 0f), "the mat overlaps " + q.Item1 + " " + q.r);
+            Assert.IsTrue(OneRoom.WorkoutArea.Contains(mat.min) && OneRoom.WorkoutArea.Contains(mat.max));
+            Assert.IsTrue(mat.Contains(OneRoom.WorkoutSpot), "she stands on the mat");
+            var f2 = Apartment.Furniture().ToDictionary(q => q.name);
+            Assert.GreaterOrEqual(OneRoom.WorkoutSpot.x - f2["bed_frame"].x1, .45f, "0.45 m from the bed edge");
+            var toTv = new Vector2(Apartment.TvAt.x - OneRoom.WorkoutSpot.x, Apartment.TvAt.z - OneRoom.WorkoutSpot.y);
+            float yawToTv = Mathf.Atan2(toTv.x, toTv.y) * Mathf.Rad2Deg;
+            Assert.That(Mathf.Abs(Mathf.DeltaAngle(yawToTv, OneRoom.WorkoutYaw)), Is.LessThan(5f), "yaw " + OneRoom.WorkoutYaw + " vs " + yawToTv);
+            Assert.That(toTv.magnitude, Is.InRange(1.1f, 1.6f));
+        }
+
+        [Test]
         public void OneRoom_BedTvCabinetWardrobeAndCounterStandWhereTheBriefSays()
         {
             var f = Apartment.Furniture().ToDictionary(q => q.name);

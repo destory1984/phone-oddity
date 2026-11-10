@@ -88,6 +88,37 @@ namespace Oddity.RoomTest.Tests
         }
 
         [Test]
+        public void Workout_GazeKeepsTheNoseOnTheTvThroughTheCircuitWithinTheHeadLimits()
+        {
+            var model = Model(); WorkoutRig rig = null;
+            try
+            {
+                model.transform.SetPositionAndRotation(new Vector3(OneRoom.WorkoutSpot.x, 0f, OneRoom.WorkoutSpot.y), Quaternion.Euler(0f, OneRoom.WorkoutYaw, 0f));
+                var anim = model.GetComponent<Animator>(); rig = new WorkoutRig(anim, 17);
+                var tv = new Vector3(2.81f, .80f, 1.5f); rig.GazeTarget = tv;
+                rig.Start(); rig.Tick(WorkoutRig.BlendSeconds);
+                var seen = new HashSet<string>(); float worst = 0f, maxYaw = 0f, maxPitch = 0f; bool wipeOff = true; float wipeTime = 0f;
+                for (int i = 0; i < (int)(WorkoutRig.LoopSeconds / .05f) + 40; i++)
+                {
+                    rig.Tick(.05f); rig.Apply(.05f);
+                    maxYaw = Mathf.Max(maxYaw, Mathf.Abs(rig.GazeYawAdded)); maxPitch = Mathf.Max(maxPitch, Mathf.Abs(rig.GazePitchAdded));
+                    if (rig.Phase == "Wipe") { wipeTime += .05f; if (wipeTime > .5f && rig.GazeBlend > .01f) wipeOff = false; continue; }
+                    wipeTime = 0f;
+                    if (rig.GazeBlend < .99f) continue;
+                    seen.Add(rig.Phase);
+                    float angle = Vector3.Angle(rig.NoseWorld, tv - rig.HeadPosition);
+                    worst = Mathf.Max(worst, angle);
+                    Assert.That(angle, Is.LessThan(25f), rig.Phase + " nose is " + angle + " deg off the TV");
+                }
+                Assert.That(maxYaw, Is.LessThanOrEqualTo(WorkoutRig.GazeMaxYaw + .01f)); Assert.That(maxPitch, Is.LessThanOrEqualTo(WorkoutRig.GazeMaxPitch + .01f));
+                Assert.IsTrue(wipeOff, "the gaze is off during Wipe");
+                foreach (var ph in new[] { "StretchLeft", "StretchRight", "Squat", "LungeLeft", "LungeRight", "Breathe" }) Assert.IsTrue(seen.Contains(ph), "no gaze sample in " + ph);
+                Debug.Log("WORKOUT_GAZE worst nose error " + worst + " max added yaw " + maxYaw + " pitch " + maxPitch);
+            }
+            finally { rig?.Dispose(); UnityEngine.Object.DestroyImmediate(model); }
+        }
+
+        [Test]
         public void Workout_DefaultModelKeepsBothSolesOnFloorForAnEntireLoop()
         {
             var model = Model(); WorkoutRig rig = null;

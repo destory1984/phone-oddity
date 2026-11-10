@@ -23,9 +23,12 @@ namespace Oddity.RoomTest
         // where Q (coffee) stands: 0.62 m from the glass, to the east of the sill plant (x 1.50) and 0.3 m clear of the cat tower, facing south through the window
         public static readonly Vector2 CurtainSpot = new Vector2(1.5f, .40f); // mid-window, about 0.2 m from the curtain plane (CurtainPanel.PlaneZ)
         public static readonly Vector2 CoffeeSpot = new Vector2(1.85f, .62f);
-        // the free floor patch between the bed (east edge x 1.0) and the TV cabinet (west face x 2.65): the home-workout mat (0.6 x 1.7 m, long side north-south) is centred on WorkoutSpot, WorkoutArea is what the cats keep out of while she exercises
-        public static readonly Vector2 WorkoutSpot = new Vector2(1.7f, 1.8f);
-        public static readonly Rect WorkoutArea = Rect.MinMaxRect(1.15f, .9f, 2.25f, 2.7f);
+        // the free floor patch between the bed (east edge x 1.0) and the TV cabinet (west face x 2.65): the home-workout mat (0.6 x 1.6 m, long side east-west, x 1.025 -> 2.625) lies between them, she stands on its west part facing east (WorkoutYaw 90) and works out watching the TV (the screen centre is 1.3 m ahead, about 0.65 m lower than her eyes); WorkoutArea is the mat plus 0.15 m, what the cats keep out of while she exercises
+        public static readonly Vector2 WorkoutSpot = new Vector2(1.5f, 1.5f);
+        public const float WorkoutYaw = 90f;
+        public static readonly Vector2 WorkoutMatCentre = new Vector2(1.825f, 1.5f);
+        public static readonly Rect WorkoutMat = Rect.MinMaxRect(WorkoutMatCentre.x - WorkoutRig.MatLength / 2f, WorkoutMatCentre.y - WorkoutRig.MatWidth / 2f, WorkoutMatCentre.x + WorkoutRig.MatLength / 2f, WorkoutMatCentre.y + WorkoutRig.MatWidth / 2f);
+        public static readonly Rect WorkoutArea = Rect.MinMaxRect(WorkoutMat.xMin - .15f, WorkoutMat.yMin - .15f, WorkoutMat.xMax + .15f, WorkoutMat.yMax + .15f);
         // ; (ramen) at the kitchenette: she stands 0.23 m from the counter front (x 2.45) between the sink and the cooktop facing east; the rig's world contacts: pot-bottom centres at the sink and the cooktop, a fingertip contact on the burner knob and one on the tap lever
         public static readonly Vector2 RamenSpot = new Vector2(2.28f, 4.10f);
         public const float CounterBodyRadius = .12f; // her walk blocker margin at the kitchen counter front (the other furniture uses 0.2)

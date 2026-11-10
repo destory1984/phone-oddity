@@ -68,7 +68,7 @@ namespace Oddity.RoomTest
     public sealed class WorkoutRig : IDisposable
     {
         public const float BlendSeconds = .4f; // Start/Stop and transitions, seconds.
-        public const float MatWidth = .6f, MatLength = 1.7f, MatThickness = .006f; // World-space metres, x/y/z = width/thickness/length.
+        public const float MatWidth = .6f, MatLength = 1.6f, MatThickness = .006f; // World-space metres, x/y/z = width/thickness/length.
         public const int StretchReps = 4, SquatReps = 6, LungeReps = 4; // Stretch rep means one left/right pair.
         public const int RepsPerLoop = StretchReps + SquatReps + LungeReps; // Completed exercise reps per circuit.
         public const float StretchSeconds = 4f, SquatSeconds = 2f, LungeSeconds = 3f; // Seconds per rep.
@@ -123,14 +123,24 @@ namespace Oddity.RoomTest
         public Vector3 LeftContact => foot[0].TransformPoint(soleLocal[0]);
         public Vector3 RightContact => foot[1].TransformPoint(soleLocal[1]);
         public float MaxFootError { get; private set; }
+        // Watching a screen: while GazeTarget is set (and the phase is not Wipe) the head turns toward it, at most GazeMaxYaw sideways and GazeMaxPitch up or down on top of the pose; the eyes (VRM look-at, set by the room) do the rest.
+        public const float GazeMaxYaw = 45f, GazeMaxPitch = 15f, GazeNeckShare = .4f; // Degrees added to the pose and the neck's share of them.
+        public Vector3? GazeTarget; // World point (the screen centre); null = no gaze.
+        public float GazeBlend { get; private set; } // 0..1 over BlendSeconds, 0 in Wipe.
+        public float GazeYawAdded { get; private set; }
+        public float GazePitchAdded { get; private set; }
+        public Vector3 NoseWorld => head.rotation * noseLocal; // The head's forward axis in world space.
+        public Vector3 HeadPosition => head.position;
+        readonly Vector3 noseLocal;
 
-        public WorkoutRig(Animator anim, int seed)
+        public WorkoutRig(Animator anim, int seed, Quaternion? restHeadFrame = null)
         {
             if (anim == null || !anim.isHuman) throw new ArgumentException("Workout needs a humanoid Animator.", nameof(anim));
             this.anim = anim; clock = new WorkoutTimeline(seed);
             hips = Bone(HumanBodyBones.Hips); spine = Bone(HumanBodyBones.Spine);
             chest = anim.GetBoneTransform(HumanBodyBones.Chest) ?? spine;
             neck = anim.GetBoneTransform(HumanBodyBones.Neck); head = Bone(HumanBodyBones.Head);
+            noseLocal = (restHeadFrame ?? Quaternion.Inverse(head.rotation) * anim.transform.rotation) * Vector3.forward;
             for (int s = 0; s < 2; s++)
             {
                 thigh[s] = Bone(s == 0 ? HumanBodyBones.LeftUpperLeg : HumanBodyBones.RightUpperLeg);
@@ -213,6 +223,7 @@ namespace Oddity.RoomTest
             Smile = Weight * (recovery ? SmileRecovery : SmileBase);
             EyesClosed = Weight * EyeEffort * Mathf.Max(0f, clock.Breath);
             MouthOpen = Weight * (recovery ? MouthBreath : MouthEffort) * (clock.Breath + 1f) / 2f;
+            GazeBlend = Mathf.MoveTowards(GazeBlend, GazeTarget.HasValue && Phase != "Wipe" ? 1f : 0f, dt / BlendSeconds);
         }
 
         // Restore only values still equal to our last output; fresh Animator values win.
@@ -284,6 +295,7 @@ namespace Oddity.RoomTest
             Rotate(chest, r, BreathDegrees * clock.Breath);
             chest.position += u * (BreathRise * clock.Breath);
             Rotate(neck, r, lean * NeckCounter); Rotate(head, f, StretchDegrees * sideBend * NeckCounter);
+            ApplyGaze();
             MaxFootError = 0f;
             for (int s = 0; s < 2; s++)
             {
@@ -323,6 +335,25 @@ namespace Oddity.RoomTest
                 writtenRot[i] = b.localRotation; writtenPos[i] = b.localPosition;
             }
             written = true;
+        }
+
+        // Turn the head toward GazeTarget on top of the pose (yaw first, then pitch about the head's right axis), within the limits.
+        void ApplyGaze()
+        {
+            GazeYawAdded = GazePitchAdded = 0f;
+            if (!GazeTarget.HasValue || GazeBlend <= 0f) return;
+            var want = GazeTarget.Value - head.position; if (want.sqrMagnitude < 1e-6f) return; want.Normalize();
+            var nose = NoseWorld.normalized;
+            float yawF = Mathf.Atan2(nose.x, nose.z) * Mathf.Rad2Deg, yawW = Mathf.Atan2(want.x, want.z) * Mathf.Rad2Deg;
+            float yaw = Mathf.Clamp(Mathf.DeltaAngle(yawF, yawW), -GazeMaxYaw, GazeMaxYaw) * GazeBlend;
+            Rotate(neck, Vector3.up, yaw * GazeNeckShare); Rotate(head, Vector3.up, yaw * (neck != null ? 1f - GazeNeckShare : 1f));
+            nose = NoseWorld.normalized;
+            var flat = new Vector3(nose.x, 0f, nose.z); if (flat.sqrMagnitude < 1e-6f) { GazeYawAdded = yaw; return; }
+            var right = Vector3.Cross(Vector3.up, flat.normalized);
+            float pitchF = Mathf.Asin(Mathf.Clamp(nose.y, -1f, 1f)) * Mathf.Rad2Deg, pitchW = Mathf.Asin(Mathf.Clamp(want.y, -1f, 1f)) * Mathf.Rad2Deg;
+            float pitch = Mathf.Clamp(pitchW - pitchF, -GazeMaxPitch, GazeMaxPitch) * GazeBlend; // positive = look up
+            Rotate(neck, right, -pitch * GazeNeckShare); Rotate(head, right, -pitch * (neck != null ? 1f - GazeNeckShare : 1f));
+            GazeYawAdded = yaw; GazePitchAdded = pitch;
         }
 
         public void Dispose()
