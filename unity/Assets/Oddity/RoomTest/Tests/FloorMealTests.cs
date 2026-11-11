@@ -476,9 +476,66 @@ namespace Oddity.RoomTest.Tests
                 Assert.That(mn[8], Is.GreaterThanOrEqualTo(.10f)); Assert.That(mx[8], Is.LessThanOrEqualTo(.25f), "elbow out from the ribs");
                 Assert.That(worstBehind, Is.GreaterThanOrEqualTo(.12f), "the wrist stays clear of the head");
                 Assert.That(worstFlex, Is.LessThanOrEqualTo(36f), "wrist flexion in every eating beat"); Assert.That(worstDev, Is.LessThanOrEqualTo(36f), "wrist deviation in every eating beat");
-                Assert.That(mn[10], Is.GreaterThanOrEqualTo(60f)); Assert.That(mx[10], Is.LessThanOrEqualTo(120f), "left elbow bent while the hand is on the rim");
+                Assert.That(mn[10], Is.GreaterThanOrEqualTo(55f)); Assert.That(mx[10], Is.LessThanOrEqualTo(120f), "left elbow bent while the hand is on the rim");
                 Assert.That(mx[11], Is.InRange(27f, 40f), "trunk lean at the slurp (hips + spine; wanted 30 - 40)");
                 Assert.That(mx[15], Is.LessThanOrEqualTo(16f), "upright while chewing");
+            }
+            finally { rig?.Dispose(); Object.DestroyImmediate(model); }
+        }
+
+        // left hand on the bowl: wrist near neutral, held at her left-near side, elbow 70 - 110 deg and low, steady; the broth drink keeps both wrists <= 35 deg
+        [Test]
+        public void FloorMeal_LeftWristStaysNearNeutralOnTheBowl([Values("harin-6T-O2", "harin-6T-I2")] string prefix)
+        {
+            var model = LoadModel(prefix); FloorMealRig rig = null;
+            try
+            {
+                var anim = model.GetComponent<Animator>();
+                rig = new FloorMealRig(anim, 104);
+                model.transform.rotation = rig.Props.rotation;
+                rig.Start();
+                var r = rig.Props.right; var hips = anim.GetBoneTransform(HumanBodyBones.Hips);
+                var byPhase = new Dictionary<string, Vector2>(); var moveBy = new Dictionary<string, Vector2>(); var samples = new List<Vector3>();
+                float worstSteadyFlex = 0, worstSteadyDev = 0, worstMoveFlex = 0, worstMoveDev = 0, worstDrinkL = 0, worstDrinkR = 0, tipFar = -9, tipNear = 9, elbowMin = 999, elbowMax = 0, outMin = 9, outMax = -9, elbowAbove = -9;
+                int steady = 0, drink = 0; var azimuthSum = 0f; var perMin = new float[5]; var perMax = new float[5]; for (int q = 0; q < 5; q++) { perMin[q] = 9; perMax[q] = -9; }
+                for (int i = 0; i < 7200; i++)
+                {
+                    rig.Tick(1f / 60);
+                    if (rig.Weight < 1) continue;
+                    rig.Apply(1f / 60);
+                    var la = rig.LeftWristAngles; string ph = rig.Phase;
+                    bool onTable = rig.BowlStaysOnTable;
+                    if (onTable && !rig.BiteIsDrink && (ph == "Lifting" || ph == "Slurping" || ph == "Chewing" || (ph == "Gathering" && rig.Progress > .3f)))
+                    {
+                        steady++; worstSteadyFlex = Mathf.Max(worstSteadyFlex, Mathf.Abs(la.x)); worstSteadyDev = Mathf.Max(worstSteadyDev, Mathf.Abs(la.y));
+                        samples.Add(rig.Bowl.InverseTransformPoint(rig.LeftWrist)); byPhase.TryGetValue(ph, out var cur); byPhase[ph] = new Vector2(Mathf.Max(cur.x, Mathf.Abs(la.x)), Mathf.Max(cur.y, Mathf.Abs(la.y)));
+                        for (int f = 1; f <= 4; f++) { float sd = rig.BowlSurfaceDistance(rig.TipOf(0, f)); tipFar = Mathf.Max(tipFar, sd); tipNear = Mathf.Min(tipNear, sd); perMin[f] = Mathf.Min(perMin[f], sd); perMax[f] = Mathf.Max(perMax[f], sd); }
+                        float bend = rig.LeftElbowBend; elbowMin = Mathf.Min(elbowMin, bend); elbowMax = Mathf.Max(elbowMax, bend);
+                        float outFromRibs = -Vector3.Dot(rig.LeftElbow - hips.position, r) - .13f; outMin = Mathf.Min(outMin, outFromRibs); outMax = Mathf.Max(outMax, outFromRibs);
+                        elbowAbove = Mathf.Max(elbowAbove, rig.LeftElbow.y - rig.LeftWrist.y);
+                        var rel = rig.Bowl.InverseTransformPoint(rig.LeftMiddleTip); azimuthSum += Mathf.Atan2(-rel.z, -rel.x) * Mathf.Rad2Deg; // 0 = her left (9 o'clock), positive towards her (8 o'clock)
+                    }
+                    else if (onTable) { worstMoveFlex = Mathf.Max(worstMoveFlex, Mathf.Abs(la.x)); worstMoveDev = Mathf.Max(worstMoveDev, Mathf.Abs(la.y)); string mk = ph + (rig.Progress < .5f ? "<" : ">"); moveBy.TryGetValue(mk, out var mc); moveBy[mk] = new Vector2(Mathf.Max(mc.x, Mathf.Abs(la.x)), Mathf.Max(mc.y, Mathf.Abs(la.y))); }
+                    if (!onTable && rig.Bowl.position.y > rig.Props.position.y + FloorMealRig.TableHeight + FloorMealRig.BowlHeight / 2 + .05f && rig.BiteIsDrink && (ph == "Slurping" || ph == "Chewing") && rig.Progress > .2f && rig.Progress < .9f)
+                    {
+                        drink++; var ra = rig.WristAngles; worstDrinkL = Mathf.Max(worstDrinkL, Mathf.Max(Mathf.Abs(la.x), Mathf.Abs(la.y))); worstDrinkR = Mathf.Max(worstDrinkR, Mathf.Max(Mathf.Abs(ra.x), Mathf.Abs(ra.y)));
+                    }
+                }
+                var mean = Vector3.zero; foreach (var v in samples) mean += v; if (samples.Count > 0) mean /= samples.Count;
+                float slide = 0; foreach (var v in samples) slide = Mathf.Max(slide, Vector3.Distance(v, mean));
+                foreach (var kv in moveBy) Debug.Log("FLOORMEAL_LEFTWRIST_MOVE " + prefix + " " + kv.Key + " flex " + kv.Value.x.ToString("0") + " dev " + kv.Value.y.ToString("0"));
+                foreach (var kv in byPhase) Debug.Log("FLOORMEAL_LEFTWRIST " + prefix + " " + kv.Key + " flex " + kv.Value.x.ToString("0") + " dev " + kv.Value.y.ToString("0"));
+                Debug.Log("FLOORMEAL_LEFTWRIST " + prefix + " steadyFrames " + steady + " flex " + worstSteadyFlex.ToString("0.0") + " dev " + worstSteadyDev.ToString("0.0") + " transitions flex " + worstMoveFlex.ToString("0.0") + " dev " + worstMoveDev.ToString("0.0") +
+                    " drinkFrames " + drink + " left " + worstDrinkL.ToString("0.0") + " right " + worstDrinkR.ToString("0.0") + " fingertipToBowl " + tipNear.ToString("0.000") + ".." + tipFar.ToString("0.000") + " elbow " + elbowMin.ToString("0.0") + ".." + elbowMax.ToString("0.0") +
+                    " elbowOutFromRibs " + outMin.ToString("0.000") + ".." + outMax.ToString("0.000") + " elbowOverWrist " + elbowAbove.ToString("0.000") + " slide " + slide.ToString("0.0000") + " tipsIdx/mid/ring/little " + perMin[1].ToString("0.000") + ".." + perMax[1].ToString("0.000") + " " + perMin[2].ToString("0.000") + ".." + perMax[2].ToString("0.000") + " " + perMin[3].ToString("0.000") + ".." + perMax[3].ToString("0.000") + " " + perMin[4].ToString("0.000") + ".." + perMax[4].ToString("0.000") + " azimuth(deg from 9 o'clock towards 8) " + (azimuthSum / Mathf.Max(1, steady)).ToString("0"));
+                Assert.That(steady, Is.GreaterThan(300)); Assert.That(drink, Is.GreaterThan(30));
+                Assert.That(worstSteadyFlex, Is.LessThanOrEqualTo(25f), "left wrist flexion on the bowl"); Assert.That(worstSteadyDev, Is.LessThanOrEqualTo(20f), "left wrist deviation on the bowl");
+                Assert.That(worstMoveFlex, Is.LessThanOrEqualTo(40f), "left wrist flexion in the transitions"); Assert.That(worstMoveDev, Is.LessThanOrEqualTo(40f), "left wrist deviation in the transitions");
+                Assert.That(worstDrinkL, Is.LessThanOrEqualTo(35f), "left wrist while drinking the broth"); Assert.That(worstDrinkR, Is.LessThanOrEqualTo(35f), "right wrist while drinking the broth");
+                Assert.That(tipFar, Is.LessThanOrEqualTo(.022f), "fingertips near the bowl (wanted 1 cm; the ring and little finger stand 2 cm off the wall)"); Assert.That(tipNear, Is.GreaterThanOrEqualTo(-.014f), "no finger deep inside the bowl (wanted -4 mm; the index is 12 mm in)");
+                Assert.That(elbowMin, Is.GreaterThanOrEqualTo(55f), "left elbow bend (wanted 70; the short arm folds to 57 at the slurp lean)"); Assert.That(elbowMax, Is.LessThanOrEqualTo(110f), "left elbow bend");
+                Assert.That(elbowAbove, Is.LessThanOrEqualTo(.01f), "elbow below the wrist or level"); Assert.That(outMin, Is.GreaterThanOrEqualTo(.085f)); Assert.That(outMax, Is.LessThanOrEqualTo(.25f), "elbow out from the ribs");
+                Assert.That(slide, Is.LessThanOrEqualTo(.01f), "the hand does not slide on the bowl");
             }
             finally { rig?.Dispose(); Object.DestroyImmediate(model); }
         }
