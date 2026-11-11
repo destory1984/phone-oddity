@@ -12,7 +12,7 @@ namespace Oddity.RoomTest
         public const int Count = 7;
         // pose order is the order of the K key's cycle
         public static readonly string[] Id = { "LoafDoze", "Donut", "SideSprawl", "BellyUp", "PawCover", "Superman", "CurlC" };
-        public static readonly string[] Korean = { "식빵 졸기", "도넛", "옆으로 뻗기", "배 보이기", "앞발로 얼굴 가리기", "슈퍼맨", "C자" };
+        public static readonly string[] Korean = { "식빵 졸기", "둥글게 말기", "느슨하게 뻗기", "배 보이기", "앞발로 얼굴 가리기", "쭉 뻗기", "옆으로 말고 자기" };
         public static readonly string[] ScriptKey = { "catsleep1", "catsleep2", "catsleep3", "catsleep4", "catsleep5", "catsleep6", "catsleep7" };
         public const int LoafDoze = 0, Donut = 1, SideSprawl = 2, BellyUp = 3, PawCover = 4, Superman = 5, CurlC = 6;
         // the autonomous weights (percent-like): CurlC 25, Donut 20, LoafDoze 20, SideSprawl 10, PawCover 10, Superman 10, BellyUp 5
@@ -24,7 +24,7 @@ namespace Oddity.RoomTest
         public static string ClipName(int pose, int phase) => "Sleep" + Id[pose] + (phase == 0 ? "Down" : phase == 1 ? "Idle" : "Up");
         public static IEnumerable<string> AllClipNames() { for (int p = 0; p < Count; p++) for (int ph = 0; ph < 3; ph++) yield return ClipName(p, ph); }
 
-        // SideSprawl, BellyUp and Superman need room: only the floor or the bed
+        // SideSprawl, BellyUp and Superman (the full side stretch, longer than a tower top) need room: only the floor or the bed
         public static bool Allowed(int pose, Place place) => place == Place.Floor || place == Place.Bed || !(pose == SideSprawl || pose == BellyUp || pose == Superman);
 
         // the pose's footprint (metres, long and short side, tail included) against a perch top of w x d metres: the short side may overhang 5 cm, the long one 15 cm

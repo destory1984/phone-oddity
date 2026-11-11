@@ -778,14 +778,26 @@ def sleep_base(pel=(0, 0.0, 0.10)):
     return P
 
 def make_sprawl():
+    """Chart panel 'side loose': on its side, spine nearly straight, head on the ground, forelegs lying forward a little bent (one over the other), hind legs lying back, tail trailing."""
     P = sleep_base()
     P.update({'Spine01': (0, 3, 0), 'Spine02': (0, 3, 0), 'Neck': (-6, 50, 0), 'Head': (-4, -52, 0)})
     P = world_tail(P, [(0.15, 1, 0.1), (0.35, 1, 0), (0.6, 1, 0), (0.8, 1, 0), (0.9, 1, 0), (1, 1, 0)])
     return lie_fit(P, {
-        'FR': dict(off=(0.10, -0.30, 0), floor=True, pole=(0, 0.3, 1), pitch=48, yr=(0, -90)),
-        'FL': dict(off=(0.16, -0.26, 0), floor=True, lift=0.045, pole=(0, 0.3, 1), pitch=48, yr=(0, -90)),
-        'HR': dict(off=(0.18, 0.22, 0), floor=True, pole=(0, -0.3, 1), m=(0.0, 0.97, -0.2), pitch=40, yr=(0, -90)),
-        'HL': dict(off=(0.20, 0.24, 0), floor=True, lift=0.045, pole=(0, -0.3, 1), m=(0.0, 0.97, -0.2), pitch=40, yr=(0, -90))}, level=True)
+        'FR': dict(off=(0.10, -0.24, 0), floor=True, pole=(0, 0.3, 1), pitch=55, yr=(0, -90)),
+        'FL': dict(off=(0.16, -0.20, 0), floor=True, lift=0.045, pole=(0, 0.3, 1), pitch=55, yr=(0, -90)),
+        'HR': dict(off=(0.16, 0.18, 0), floor=True, pole=(0, -0.3, 1), m=(0.0, 0.97, -0.2), pitch=50, yr=(0, -90)),
+        'HL': dict(off=(0.20, 0.20, 0), floor=True, lift=0.045, pole=(0, -0.3, 1), m=(0.0, 0.97, -0.2), pitch=50, yr=(0, -90))}, level=True)
+
+def make_stretch():
+    """Chart panel 'full stretch': on its side fully elongated in one long line, forelegs reaching past the head, hind legs straight back, tail hooked up."""
+    P = sleep_base()
+    P.update({'Spine01': (0, 0, 0), 'Spine02': (0, 0, 0), 'Chest': (-4, 0, 0), 'Neck': (-6, 42, 0), 'Head': (-4, -44, 0)})
+    P = world_tail(P, [(0.15, 1, 0.1), (0.3, 1, 0.1), (0.4, 1, 0.3), (0.3, 1, 0.7), (0.15, 1, 1), (0.0, 0.6, 1)])
+    return lie_fit(P, {
+        'FR': dict(off=(0.10, -0.50, 0), floor=True, pole=(0, 0.3, 1), pitch=25, yr=(0, -90)),
+        'FL': dict(off=(0.16, -0.46, 0), floor=True, lift=0.045, pole=(0, 0.3, 1), pitch=25, yr=(0, -90)),
+        'HR': dict(off=(0.18, 0.40, 0), floor=True, pole=(0, -0.3, 1), m=(0.0, 0.97, -0.2), pitch=15, yr=(0, -90)),
+        'HL': dict(off=(0.22, 0.42, 0), floor=True, lift=0.045, pole=(0, -0.3, 1), m=(0.0, 0.97, -0.2), pitch=15, yr=(0, -90))}, level=True)
 
 def make_donut(cover=False):
     P = sleep_base()
@@ -821,22 +833,29 @@ def make_superman():
         'HL': dict(off=(0.12, 0.30, 0), floor=True, pole=(0.3, -0.3, 1), m=(0.25, 0.97, 0), pitch=-135),
         'HR': dict(off=(-0.12, 0.30, 0), floor=True, pole=(-0.3, -0.3, 1), m=(-0.25, 0.97, 0), pitch=-135)}, level=True)
 
-def make_curlc():
+def make_curlc(cover=False):
     P = sleep_base()
     P.update({'Spine01': (0, 20, 0), 'Spine02': (0, 25, 0), 'Chest': (0, 25, 0), 'Neck': (-8, 58, 0), 'Head': (-6, -30, 0)})
     P = world_tail(P, [(0.1, 1, 0.1), (0.4, 1, 0), (0.9, 1, 0), (1, 0.4, 0), (1, 0, 0), (1, -0.3, 0)])
-    return lie_fit(P, {
+    legs = {
         'FR': dict(off=(0.20, -0.08, 0), floor=True, pole=(0.3, 1, 0.1), pitch=48, yr=(0, -90)),
         'FL': dict(off=(0.20, -0.10, 0.04), pole=(0.3, 1, 0.1), pitch=48, yr=(0, -90)),
         'HR': dict(off=(0.22, -0.12, 0), floor=True, pole=(0.4, -1, 0.2), m=(0.5, -0.7, -0.2), pitch=40, yr=(0, -90)),
-        'HL': dict(off=(0.22, -0.14, 0.04), pole=(0.4, -1, 0.2), m=(0.5, -0.7, -0.2), pitch=40, yr=(0, -90))})
+        'HL': dict(off=(0.22, -0.14, 0.04), pole=(0.4, -1, 0.2), m=(0.5, -0.7, -0.2), pitch=40, yr=(0, -90))}
+    if cover:
+        legs['FL'] = dict(ref='Head', off=(0.0, 0.05, 0.05), pole=(0.3, 1, 0.1), pitch=70, yr=(0, -90))
+    return lie_fit(P, legs)
+
 
 def make_doze():
     """The loaf of the existing LoafDown/LoafIdle clips, exactly (the doze clips start from it)."""
-    return copy.deepcopy(LOAF)
+    P = copy.deepcopy(LOAF)
+    # chart panel 'loaf': the head sinks between the shoulders, a little forward and down, chest low, back a gentle arch
+    P.update({'Neck': (-14, 0, 0), 'Head': (8, 0, 0), 'Chest': (-12, 0, 0)})
+    return ground_all(P, iters=3)
 
-SLEEP_POSES = {'LoafDoze': make_doze, 'SideSprawl': make_sprawl, 'Donut': make_donut, 'PawCover': lambda: make_donut(True),
-               'BellyUp': make_belly_up, 'Superman': make_superman, 'CurlC': make_curlc}
+SLEEP_POSES = {'LoafDoze': make_doze, 'SideSprawl': make_sprawl, 'Donut': make_donut, 'PawCover': lambda: make_curlc(True),
+               'BellyUp': make_belly_up, 'Superman': make_stretch, 'CurlC': make_curlc, }
 SLEEP_BREATH = {'LoafDoze': 0.006, 'Donut': 0.008, 'SideSprawl': 0.016, 'BellyUp': 0.014, 'PawCover': 0.008, 'Superman': 0.008, 'CurlC': 0.008}
 SLEEP_DOWN_T = 1.6; SLEEP_UP_T = 1.1; SLEEP_IDLE_T = 8.0
 MEAS = {}      # clip name -> measurements recorded by make_action for the Sleep clips

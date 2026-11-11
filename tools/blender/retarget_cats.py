@@ -422,6 +422,48 @@ class Retarget:
             print('TAILR', [round(x, 3) for x in self.tail_r])
         return self.ref_m
 
+    def settle(self, fd, par, basis):
+        """Automatic per-cat settle of a lying pose, from this cat's own evaluated mesh (generic: only the cat's config masks are used).
+        1. the belly (vertices skinned to the cfg's rear + forward spine bones, neck excluded) rests on the floor: the 5 % quantile of its heights
+           is brought to the floor by lowering the whole body (pz); the paw targets are absolute, so the legs fold up under the lowered hips
+           instead of propping the body, and a paw that would still lie below the floor is lifted onto it.
+        2. the body's 1 % quantile of heights (neither a stray spike of a few vertices, nor the tail, ears, whiskers and eyes, which are masked out of M_body) must
+           not be under the floor: if it is, the pose is lifted by that much.
+        The result is a deterministic function of the landmarks, so a Down clip's last frame and the Idle's first frame (same landmarks) get the same pose."""
+        t = self.t; fl = self.floor; m = 0.003 * self.kb
+        if not hasattr(self, 'M_belly'):
+            cfg = self.cfg; names = set(cfg['rear']) | set(cfg['fwd'][:-1])
+            self.M_belly = np.isin(t.dom, list(names))
+            if self.M_belly.sum() < 20: self.M_belly = t.M_trunk
+        moved = 0.0
+        # only a body that is down: the weight fades from 1 (source trunk within a quarter of its standing clearance of the floor) to 0 (more than 0.6 of it), so a Down / Up clip
+        # keeps the standing frames untouched and its last / first frame, which has the Idle's landmarks, gets the Idle's settle exactly
+        r = fd['torso'] / max(self.S.ref['torso'], 1e-6); w = 1.0 - _smooth((r - 0.25) / 0.35)
+        if w < 1e-3:      # standing part of a transition: the old rule, the lowest vertex (paws) on the floor
+            for _ in range(5):
+                d = float(t.verts()[:, 2].min()) - fl
+                if abs(d) <= 0.003: break
+                par['pz'] -= d
+                for k in par['pawdz']: par['pawdz'][k] -= d
+                basis, posed = t.solve(self.build_spec(fd, par)); t.apply(basis)
+            SETTLE_LOG.setdefault(self.clip, []).append(0.0)
+            return basis
+        for _ in range(6 if w > 0.999 else 3):
+            z = t.verts()[:, 2]
+            gap = w * (float(np.percentile(z[self.M_belly], 5)) - (fl + m))
+            if w < 1e-3 or abs(gap) < 0.4 * m: break
+            par['pz'] -= gap; moved -= gap
+            basis, posed = t.solve(self.build_spec(fd, par)); t.apply(basis)
+        for _ in range(3):
+            z = t.verts()[:, 2]
+            under = float(np.percentile(z[t.M_body], 1)) - (fl - m)
+            if under >= 0 or w < 1e-3: break
+            par['pz'] -= under; moved -= under
+            for k in par['pawdz']: par['pawdz'][k] -= under
+            basis, posed = t.solve(self.build_spec(fd, par)); t.apply(basis)
+        SETTLE_LOG.setdefault(self.clip, []).append(moved)
+        return basis
+
     def solve_frame(self, fd):
         t = self.t; ref = self.S.ref; kb = self.kb; fl = self.floor; rm = self.ref_m
         par = {'sf': 1.0, 'sr': 1.0, 'pz': kb * (fd['H']['Pelvis'].z - ref['H']['Pelvis'].z), 'pawdz': {k: 0.0 for k in self.cfg['pawkeys']}}
@@ -469,7 +511,7 @@ class Retarget:
         if DEBUG: print('   WANT trunk %.3f paws %s srcpaw %s refpaw %s' % (wt-fl, {k: round(v-fl,3) for k,v in wp.items()}, {k: round(v,3) for k,v in fd['paw'].items()}, {k: round(v,3) for k,v in ref['paw'].items()})); print('   FRAME sf %.2f sr %.2f fl %s pz %.3f pawdz %s clamped %s' % (par['sf'], par['sr'], {k: round(v, 3) for k, v in self.fl.items()}, par['pz'], {k: round(v, 3) for k, v in par['pawdz'].items()}, self.clamped))
         # never sink: the lowest body vertex must not go below the floor
         m = t.measure()
-        if m['body'] < fl - 0.002:
+        if m['body'] < fl - 0.002 and not (str(self.clip).startswith('Sleep') and fd['torso'] / max(ref['torso'], 1e-6) < 0.6):
             d = fl - m['body']
             par['pz'] += d
             for k in par['pawdz']: par['pawdz'][k] += d
@@ -477,7 +519,9 @@ class Retarget:
             if DEBUG:
                 m2 = t.measure(); zz = t.verts()[:, 2]; ii = np.where(t.M_body)[0][np.argmin(zz[t.M_body])]
                 print('   LIFT %.3f -> body %.3f lowest vertex group %s' % (d, m2['body'] - fl, t.dom[ii]))
-        if str(self.clip).startswith('Sleep') or lw > 0:      # a lying cat must not hover: bring the lowest vertex down to the floor (ears and head count)
+        if str(self.clip).startswith('Sleep'):
+            basis = self.settle(fd, par, basis)
+        elif lw > 0:      # a lying cat must not hover: bring the lowest vertex down to the floor (ears and head count)
             for _ in range(5):
                 zlow = float(t.verts()[:, 2].min())      # every vertex counts (ears, tail tip)
                 if abs(zlow - fl) > 0.003:       # both ways: hovering or any vertex (tail, ears) under the floor
@@ -522,6 +566,7 @@ def default_frames(cn, nf):
     if cn == 'Walk': return [0, 8, 15, 23, nf]
     return [0, nf // 2, nf]
 
+SETTLE_LOG = {}   # sleep clip -> per-frame pelvis shift (model units, negative = lowered) of the automatic settle
 LOAFMIN = {}; LOAFMAX = {}   # somali loaf clips: lowest vertex over frames (min / max), printed
 MEAS = {}      # sleep clip name -> lowest vertex, footprint, head heights (written into the json)
 
@@ -566,6 +611,7 @@ def build_clips(rt, shots, only, frames_arg, cam):
                       " ".join("%s%+.3f" % (a, b - rt.floor) for a, b in m['paw'].items()), m['body'] - rt.floor))
                 render_views("%s_f%02d" % (cn, k), shots, rt.C, rt.floor, cam[0], cam[1])
         print("CLIP %-11s %d frames, IK overreach total %.3f" % (cn, nf + 1, t.over))
+        if cn in SETTLE_LOG: print("SETTLE %-18s mean %+.4f max %+.4f min %+.4f units (target units, x model size for metres)" % (cn, float(np.mean(SETTLE_LOG[cn])), max(SETTLE_LOG[cn]), min(SETTLE_LOG[cn])))
         if cn in LOAFMIN: print("LOAFMIN %s %.4f %.4f" % (cn, LOAFMIN[cn], LOAFMAX[cn]))
         arm.animation_data.action = None
         act.use_fake_user = True

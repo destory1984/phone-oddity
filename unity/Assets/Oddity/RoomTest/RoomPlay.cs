@@ -1612,18 +1612,22 @@ namespace Oddity.RoomTest
                     p.pawMask[i]=mask;}
                 p.pawFallback=pawCount<20;Debug.Log("ROOMPLAY_"+p.tag+" paw vertices="+pawCount+(p.pawFallback?" (too few: the four lowest clusters are used)":""));
             }
-            float lo=float.MaxValue;var verts=new List<Vector3>();p.lowPts.Clear();var pawPts=new List<Vector3>();var allPts=new List<Vector3>();
+            var verts=new List<Vector3>();p.lowPts.Clear();var pawPts=new List<Vector3>();var allPts=new List<Vector3>();var bodyPts=new List<Vector3>();
             float f0=float.MaxValue,f1=float.MinValue,s0=float.MaxValue,s1=float.MinValue;var rp=p.root.position;bool fit=p.onSofa && p.fitFront!=Vector3.zero;
             for(int i=0;i<p.smrs.Length;i++){
                 var smr=p.smrs[i];smr.BakeMesh(p.bake,true);p.bake.GetVertices(verts);var m=smr.transform.localToWorldMatrix;
                 for(int v=0;v<verts.Count;v++){
                     if(p.tailMask[i][v])continue;var w=m.MultiplyPoint3x4(verts[v]);
-                    if(w.y<lo+.03f){if(w.y<lo){lo=w.y;}p.lowPts.Add(w);}
+                    bodyPts.Add(w);
                     if(p.pawMask[i][v])pawPts.Add(w);else if(p.pawFallback && w.y<rp.y+.25f)allPts.Add(w);
                     if(fit){var d=w-rp;float a=Vector3.Dot(d,p.fitFront),b=Vector3.Dot(d,p.fitSide);if(a<f0)f0=a;if(a>f1)f1=a;if(b<s0)s0=b;if(b>s1)s1=b;}
                 }
             }
-            p.lowPts.RemoveAll(w=>w.y>lo+.03f);
+            // the body's lowest point is the 1 % quantile of the vertex heights, not the single lowest vertex: the retargeted Somali has a patch of four vertices skinned 100 % to Hip.R that a lying pose swings
+            // 4-5 cm under the belly (a spike), and snapping that spike to the surface left the whole cat hovering. Paws are still grounded by their own lowest vertex (conPts below)
+            float lo=float.MaxValue;
+            if(bodyPts.Count>0){var ys=new float[bodyPts.Count];for(int k=0;k<ys.Length;k++)ys[k]=bodyPts[k].y;Array.Sort(ys);lo=ys[Mathf.Min(ys.Length-1,(int)(ys.Length*.01f))];}
+            foreach(var w in bodyPts)if(w.y<lo+.03f && w.y>=lo-.005f)p.lowPts.Add(w);
             if(fit){p.ext[0]=f0;p.ext[1]=f1;p.ext[2]=s0;p.ext[3]=s1;}
             // the points that must not sink: the lowest vertex of each paw (up to four clusters of 4.5 cm), a few of its neighbours within 1 cm, and the lowest body vertices (a lying belly)
             p.conPts.Clear();
