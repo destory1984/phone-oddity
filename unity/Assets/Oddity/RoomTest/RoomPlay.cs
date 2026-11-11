@@ -2919,7 +2919,7 @@ namespace Oddity.RoomTest
             if(step<0 || Environment.GetEnvironmentVariable("ODDITY_PLAYSHOTS")!="1")return;
             var dir=Path.GetFullPath("../shots/room_test/play");Directory.CreateDirectory(dir);
             ScreenCapture.CaptureScreenshot(Path.Combine(dir,step.ToString("00")+"_"+script[step].key+".png"));
-            var sp=cameraView.transform.position;Debug.Log("ROOMPLAY_SNAP step="+step+" coffee="+(coffeeOn&&coffeeRig!=null?coffeeRig.Phase+" headDown="+F(coffeeRig.HeadDownDegrees):"-")+" laundry="+(laundryOn&&laundryRig!=null?laundryRig.Phase:"-")+" meal="+(mealOn&&mealRig!=null?mealRig.Phase:"-")+" ramen="+(ramenOn&&ramenRig!=null?ramenRig.Phase:"-")+" cat="+(catOn&&catRig!=null?catRig.Phase:"-")+" key="+script[step].key+" cam=("+F(sp.x)+","+F(sp.y)+","+F(sp.z)+") fov="+F(cameraView.fieldOfView)+" inside="+(insideOn?1:0));
+            var sp=cameraView.transform.position;Debug.Log("ROOMPLAY_SNAP step="+step+" coffee="+(coffeeOn&&coffeeRig!=null?coffeeRig.Phase+" headDown="+F(coffeeRig.HeadDownDegrees):"-")+" laundry="+(laundryOn&&laundryRig!=null?laundryRig.Phase:"-")+" meal="+(mealOn&&mealRig!=null?mealRig.Phase+"@"+F(mealRig.Progress)+(mealRig.BiteIsDrink?"D":"")+"b"+mealRig.BiteNumber:"-")+" ramen="+(ramenOn&&ramenRig!=null?ramenRig.Phase:"-")+" cat="+(catOn&&catRig!=null?catRig.Phase:"-")+" key="+script[step].key+" cam=("+F(sp.x)+","+F(sp.y)+","+F(sp.z)+") fov="+F(cameraView.fieldOfView)+" inside="+(insideOn?1:0));
         }
         IEnumerator ReviewZeroTwo()
         {
@@ -3767,7 +3767,7 @@ namespace Oddity.RoomTest
             mealRig.Apply(dt);
             if(mealRig.Phase!=mealLastPhase){mealLastPhase=mealRig.Phase;Debug.Log("MEAL phase="+mealLastPhase+" T="+F(Time.unscaledTime)+" w="+F(mealRig.Weight)+" mouth="+F(mealRig.MouthOpen));}
             var vrm=model.GetComponent<Vrm10Instance>();
-            if(vrm!=null && vrm.Runtime!=null)vrm.Runtime.Expression.SetWeight(ExpressionKey.Aa,mealRig.MouthOpen*.7f);
+            if(vrm!=null && vrm.Runtime!=null)vrm.Runtime.Expression.SetWeight(ExpressionKey.Aa,mealRig.MouthOpen*.7f);vrm.Runtime.Expression.SetWeight(ExpressionKey.Ou,mealRig.MouthPurse*.8f);
         }
         // / : fold laundry on the bed's east edge (Laundry.cs: LaundryRig, five cloths, heap on her left, folded stack on her right). Like , she first sits up from lying or walks to the edge and sits; when the fifth cloth is folded and patted the stack stays 6 s and then the motion ends by itself and the props vanish with the blend-out
         LaundryRig laundryRig;bool laundryOn,laundryPend;float laundryPendT,laundryDoneT;string laundryLastPhase="";
