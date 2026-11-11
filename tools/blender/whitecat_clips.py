@@ -9,6 +9,12 @@ frame by frame and solving the pose each frame. Bone world orientations are abso
 (not accumulated), so paws stay flat on the floor unless a pose bends them.
 Model units: floor z = 0, the cat faces -Y, its left side is +X, 1 unit = about 0.55 m.
 Outputs OUT.glb (clips as NLA tracks, 30 fps) and OUT.json (clip lengths, floor, size).
+Regenerate all three cats (about 3 minutes; IN is a copy of whitecat-2-2.vrm renamed .glb), then install the outputs:
+  blender -b --python tools/blender/whitecat_clips.py -- --in IN.glb --out whitecat-2-N-anim.glb      -> unity/Assets/Models/test/
+  blender -b --python tools/blender/retarget_cats.py -- extract --sleep --src whitecat-2-N-anim.glb --out landmarks.json
+  blender -b --python tools/blender/retarget_cats.py -- somali --sleep --src landmarks.json --in unity/Assets/Oddity/DevMotion/Cat/Somali/somali_cat_lie.glb --out somali_cat_shared.glb
+  blender -b --python tools/blender/retarget_cats.py -- cat4   --sleep --src landmarks.json --in unity/Assets/Models/test/cat4-3.glb --out cat4_shared.glb
+Env SETTLE=0 builds the old, unsettled lying poses; SETTLEKEYS (default pel,oHd) picks the segments settled onto the floor.
 """
 import bpy, sys, math, os, json, copy
 import numpy as np
@@ -49,6 +55,10 @@ for pb in arm.pose.bones:
     pb.rotation_mode = 'QUATERNION'
 if arm.animation_data:
     arm.animation_data.action = None
+    for _t in list(arm.animation_data.nla_tracks):      # an input that already carries clips (a previous output) starts clean
+        arm.animation_data.nla_tracks.remove(_t)
+    for _a in list(bpy.data.actions):
+        bpy.data.actions.remove(_a)
 else:
     arm.animation_data_create()
 
@@ -180,6 +190,7 @@ def default_pose():
     for k in ('FLtoe', 'FRtoe', 'HLtoe', 'HRtoe'): P[k] = (0,)
     for k in ('FLyr', 'FRyr', 'HLyr', 'HRyr'): P[k] = (0, 0)     # paw yaw, roll (lying poses)
     P['oS2'] = (0, 0, 0); P['oCh'] = (0, 0, 0)                    # breathing offsets of Spine02 / Chest heads
+    P['oNk'] = (0, 0, 0); P['oHd'] = (0, 0, 0)                    # Neck / Head head offsets (lying poses settle each trunk segment onto the floor)
     return P
 
 def lerp_pose(A, B, s):
@@ -207,7 +218,7 @@ def build_spec(P, ground=None):
     for i in range(6):
         spec['aim']['Tail0%d' % (i + 1)] = V(P['A%d' % (i + 1)])
     spec['inc']['Tail07'] = euler(*P['A7'])
-    spec['off'] = {'Spine02': V(P['oS2']), 'Chest': V(P['oCh'])}
+    spec['off'] = {'Spine02': V(P['oS2']), 'Chest': V(P['oCh']), 'Neck': V(P['oNk']), 'Head': V(P['oHd'])}
     # pass 1: heads of shoulders and hips (they do not depend on the leg aims)
     _, posed0 = solve_chain(spec)
     for s in 'LR':
@@ -317,7 +328,7 @@ def set_cam(co, view, center, scale):
     co.data.ortho_scale = scale
     c = Vector(center)
     d = {'front34': Vector((2.2, -3.2, 1.7)), 'side': Vector((9, 0, 0.2)), 'top': Vector((0, 0.001, 9)),
-         'back34': Vector((-2.2, 3.2, 1.7))}[view].normalized() * 20
+         'back34': Vector((-2.2, 3.2, 1.7)), 'front': Vector((0.001, -9, 0.2))}[view].normalized() * 20
     co.location = c + d
     look = (c - co.location).normalized()
     co.rotation_euler = look.to_track_quat('-Z', 'Y').to_euler()
@@ -662,7 +673,60 @@ def world_tail(P, dirs):
         Q['A%d' % (i + 1)] = tuple(V(d).normalized())
     return Q
 
-def lie_fit(P, legs, iters=6, tail_margin=0.03, droop=True):
+M_SEG = {'pel': mask(('Pelvis', 'Spine01')), 'oS2': mask(('Spine02',)), 'oCh': mask(('Chest', 'Scapula')), 'oNk': mask(('Neck',)),
+         'oHd': mask(('Head',)) & ~M_EAR}
+SETTLE_ALL = ('pel', 'oS2', 'oCh', 'oNk', 'oHd')
+OFFCAP = {'oS2': 0.03, 'oCh': 0.03, 'oNk': 0.05, 'oHd': 0.09}      # the most a segment may be moved: more would crease the skin
+def settle(P, keys=SETTLE_ALL, target=0.003, pct=2.0, passes=2, cap=0.12):
+    """A lying body spreads under its weight: lower each trunk segment (pelvis, mid, chest, neck, head) until the lowest 2 % of its
+    vertices rest on the floor. Segment heights are free offsets of the bone heads; everything below a segment in the chain follows."""
+    P = copy.deepcopy(P)
+    for _ in range(passes):
+        for key in SETTLE_ALL:
+            if key not in keys: continue
+            apply_basis(pose_basis(P)[0])
+            z = float(np.percentile(verts()[M_SEG[key]][:, 2], 0.0 if key == 'oHd' else pct))   # the head by its lowest vertex (ground_all lifts the whole body by it)
+            d = max(-cap, min(cap, target - z))
+            x, y, zz = P[key]; P[key] = (x, y, max(-OFFCAP[key], min(OFFCAP[key], zz + d)) if key != 'pel' else zz + d)
+    return P
+
+M_EARR = mask(('Ear.R',)); M_EARL = mask(('Ear.L',))
+def tuck_ears(P, margin=0.008):
+    """An ear that would be the lowest part of the lying head (the ear on the floor side) is folded flat against the head instead of lifting the body."""
+    P = copy.deepcopy(P)
+    for key, m in (('EarL', M_EARL), ('EarR', M_EARR)):
+        apply_basis(pose_basis(P)[0]); v = verts(); hmin = float(v[M_SEG['oHd']][:, 2].min())
+        if float(v[m][:, 2].min()) > hmin + margin: continue
+        best = None
+        for pit in (-50, 0, 50):
+            for yaw in (-50, 0, 50):
+                for rol in (-50, 0, 50):
+                    Q = copy.deepcopy(P); Q[key] = (pit, yaw, rol); apply_basis(pose_basis(Q)[0]); v = verts()
+                    h = float(v[m][:, 2].min()) - float(v[M_SEG['oHd']][:, 2].min())
+                    if best is None or h > best[0]: best = (h, Q)
+        P = best[1]
+    return P
+
+def settle_pitch(P, keys=('Spine01', 'Spine02', 'Chest', 'Neck'), target=0.005, sweeps=3):
+    """Level the trunk: coordinate descent on the spine pitches (bends about the world X axis, which is the sag of a lying body whatever side
+    it lies on) so that the pelvis, mid, chest and neck segments all rest at the same height just above the floor."""
+    P = copy.deepcopy(P)
+    segs = ('pel', 'oS2', 'oCh', 'oNk')
+    def cost(Q):
+        apply_basis(pose_basis(Q)[0]); v = verts()
+        z = [float(np.percentile(v[M_SEG[k]][:, 2], 10)) for k in segs]
+        return float(np.var(z))                  # all four at one height; the pelvis height itself is set afterwards
+    best = cost(P)
+    for _ in range(sweeps):
+        for k in keys:
+            for dlt in (6, -6, 3, -3, 1.5, -1.5):
+                Q = copy.deepcopy(P); a, b, c = Q[k]; Q[k] = (max(-14, min(14, a + dlt)), b, c)
+                c2 = cost(Q)
+                if c2 < best - 1e-9: best, P = c2, Q
+    return P
+
+def lie_fit(P, legs, iters=6, tail_margin=0.03, droop=True, settle_keys=None, level=False):
+    if settle_keys is None: settle_keys = tuple(os.environ.get('SETTLEKEYS', 'pel,oHd').split(',')) if os.environ.get('SETTLE', '1') == '1' else ()
     """Grounded lying pose. legs: {'FL': dict(ref=bone?, off=(dx,dy,dz), floor=True?, pole=, pitch=, yr=(yaw,roll), toe=, m=(hind))}.
     A paw target is the head of `ref` (default: that leg's shoulder/hip) plus off in world axes. A leg with floor=True instead
     keeps adjusting the target height until its paw mesh rests on the floor (the body is grounded by the torso only)."""
@@ -682,14 +746,17 @@ def lie_fit(P, legs, iters=6, tail_margin=0.03, droop=True):
             P[k + 'pitch'] = (d.get('pitch', 0),); P[k + 'yr'] = tuple(d.get('yr', (0, 0))); P[k + 'toe'] = (d.get('toe', 0),)
             if kind == 'H': P[k + 'm'] = tuple(d.get('m', (0, 1, -0.3)))
         P = ground(P, iters=2, torso=True)
+        if level and it == 0: P = settle_pitch(P, sweeps=4)
+        if settle_keys: P = settle(P, settle_keys)
         apply_basis(pose_basis(P)[0])
         v = verts()
         for k, d in legs.items():
             if d.get('floor'):
-                zc[k] += clear - float(v[M_PAW[k]][:, 2].min())
+                zc[k] += clear + d.get('lift', 0.0) - float(v[M_PAW[k]][:, 2].min())   # lift: this paw rests that high (on another paw)
         P = droop_tail(P, shoulders_hips(P), tail_margin) if droop else clamp_tail(P, shoulders_hips(P), tail_margin)
     for it in range(3):
         P = ground(P, iters=2, torso=True)
+        if settle_keys: P = settle(P, settle_keys)
     return ground_all(P)
 
 def ground_all(P, iters=4):
@@ -706,7 +773,7 @@ def ground_all(P, iters=4):
 
 def sleep_base(pel=(0, 0.0, 0.10)):
     P = copy.deepcopy(STAND)
-    P.update({'pel': pel, 'Pelvis': (0, 0, -90), 'Spine01': (0, 0, 0), 'Spine02': (0, 0, 0), 'Chest': (0, 0, 0),
+    P.update({'pel': pel, 'Pelvis': (0, 0, -90), 'Spine01': (-1, 0, 0), 'Spine02': (-2, 0, 0), 'Chest': (-4, 0, 0),
               'Neck': (0, 45, 0), 'Head': (0, -45, 0)})
     return P
 
@@ -716,9 +783,9 @@ def make_sprawl():
     P = world_tail(P, [(0.15, 1, 0.1), (0.35, 1, 0), (0.6, 1, 0), (0.8, 1, 0), (0.9, 1, 0), (1, 1, 0)])
     return lie_fit(P, {
         'FR': dict(off=(0.10, -0.30, 0), floor=True, pole=(0, 0.3, 1), pitch=48, yr=(0, -90)),
-        'FL': dict(off=(0.14, -0.28, 0.07), pole=(0, 0.3, 1), pitch=48, yr=(0, -90)),
+        'FL': dict(off=(0.16, -0.26, 0), floor=True, lift=0.045, pole=(0, 0.3, 1), pitch=48, yr=(0, -90)),
         'HR': dict(off=(0.18, 0.22, 0), floor=True, pole=(0, -0.3, 1), m=(0.0, 0.97, -0.2), pitch=40, yr=(0, -90)),
-        'HL': dict(off=(0.20, 0.24, 0.07), pole=(0, -0.3, 1), m=(0.0, 0.97, -0.2), pitch=40, yr=(0, -90))})
+        'HL': dict(off=(0.20, 0.24, 0), floor=True, lift=0.045, pole=(0, -0.3, 1), m=(0.0, 0.97, -0.2), pitch=40, yr=(0, -90))}, level=True)
 
 def make_donut(cover=False):
     P = sleep_base()
@@ -738,10 +805,10 @@ def make_belly_up():
     P.update({'Pelvis': (0, -12, 168), 'Spine01': (0, 5, 4), 'Spine02': (0, 6, 5), 'Chest': (0, 0, 4), 'Neck': (45, 10, 0), 'Head': (-37, 0, -75)})
     P = world_tail(P, [(0.1, 1, 0.1), (0.4, 1, 0), (0.8, 1, 0), (1, 0.6, 0), (1, 0.2, 0), (1, 0.0, 0)])
     return lie_fit(P, {
-        'FL': dict(off=(0.04, -0.14, 0.20), pole=(0.3, 1, 0.5), pitch=30, yr=(0, 160)),
-        'FR': dict(off=(-0.04, -0.16, 0.20), pole=(-0.3, 1, 0.5), pitch=30, yr=(0, -160)),
-        'HL': dict(off=(0.12, -0.05, 0.28), pole=(0.5, -1, 0.3), m=(0.3, 0.3, 1), pitch=0, yr=(0, 180)),
-        'HR': dict(off=(-0.10, -0.02, 0.28), pole=(-0.5, -1, 0.3), m=(-0.3, 0.3, 1), pitch=0, yr=(0, 180))})
+        'FL': dict(off=(0.05, -0.12, 0.12), pole=(0.3, 1, 0.5), pitch=30, yr=(0, 160)),
+        'FR': dict(off=(-0.05, -0.14, 0.12), pole=(-0.3, 1, 0.5), pitch=30, yr=(0, -160)),
+        'HL': dict(off=(0.20, -0.02, 0.16), pole=(0.5, -1, 0.3), m=(0.5, 0.3, 1), pitch=0, yr=(0, 180)),
+        'HR': dict(off=(-0.18, 0.0, 0.16), pole=(-0.5, -1, 0.3), m=(-0.5, 0.3, 1), pitch=0, yr=(0, 180))}, level=True)
 
 def make_superman():
     P = copy.deepcopy(STAND)
@@ -752,7 +819,7 @@ def make_superman():
         'FL': dict(off=(0.04, -0.34, 0), floor=True, pole=(0.3, 0.3, 1), pitch=48),
         'FR': dict(off=(-0.04, -0.34, 0), floor=True, pole=(-0.3, 0.3, 1), pitch=48),
         'HL': dict(off=(0.12, 0.30, 0), floor=True, pole=(0.3, -0.3, 1), m=(0.25, 0.97, 0), pitch=-135),
-        'HR': dict(off=(-0.12, 0.30, 0), floor=True, pole=(-0.3, -0.3, 1), m=(-0.25, 0.97, 0), pitch=-135)})
+        'HR': dict(off=(-0.12, 0.30, 0), floor=True, pole=(-0.3, -0.3, 1), m=(-0.25, 0.97, 0), pitch=-135)}, level=True)
 
 def make_curlc():
     P = sleep_base()
@@ -785,7 +852,7 @@ def sleep_idle_fn(name, base, frames):
         ph = 2 * math.pi * 3 * fr / frames
         b = 0.5 - 0.5 * math.cos(ph)
         P = copy.deepcopy(base)
-        P['oS2'] = (0, 0, amp * b); P['oCh'] = (0, 0, amp * 1.3 * b)
+        P['oS2'] = tuple(x + y for x, y in zip(P['oS2'], (0, 0, amp * b))); P['oCh'] = tuple(x + y for x, y in zip(P['oCh'], (0, 0, amp * 1.3 * b)))
         eL = pulse(t, 1.5, 0.45); eR = pulse(t, 5.5, 0.45)
         P = add(P, EarL=(0, 12 * eL, 18 * eL), EarR=(0, -12 * eR, -18 * eR))
         tw = pulse(t, 2.4, 1.3) - 0.8 * pulse(t, 6.2, 1.1)
@@ -804,14 +871,23 @@ def sleep_idle_fn(name, base, frames):
         return ground_all(P, iters=1)
     return f
 
-def sleep_trans(A, B, T, mid=None, blend=None):
+def sleep_trans(A, B, T, mid=None, blend=None, rest=None, down=True):
+    """rest: the settled Idle pose the clip must end on (down) or start from (up): the last / first 8 frames blend to it, so Idle never pops."""
     def g(fr):
         keys = [(0.0, A)] + ([(T * 0.42, mid)] if mid is not None else []) + [(T, B)]
         if blend is not None:
             fn = grounded_blend(keyed(keys, fr), fr, blend)
         else:
             fn = grounded(keyed(keys, fr))
-        return lambda f: ground_all(fn(f), iters=1)
+        def h(f):
+            P = ground_all(fn(f), iters=1)
+            if rest is not None:
+                w = ease((f - (fr - 8)) / 8.0) if down else ease(1.0 - f / 8.0)
+                if f >= fr and down: return copy.deepcopy(rest)
+                if f <= 0 and not down: return copy.deepcopy(rest)
+                if w > 0: P = lerp_pose(P, rest, w)
+            return P
+        return h
     return g
 
 def lift(fn):
@@ -855,12 +931,13 @@ def build_all(only=None):
         names = ['Sleep%sDown' % nm, 'Sleep%sIdle' % nm, 'Sleep%sUp' % nm]
         if only is not None and not any(n in only for n in names): continue
         B = SLEEP_POSES[nm]()
+        Bg = sleep_idle_fn(nm, B, 240)(0)        # the Idle's first frame (grounded base, no breathing): the Down ends on it, the Up starts from it
         if nm == 'LoafDoze':
-            mk(names[0], lambda fr, B=B: sleep_trans(STAND, B, fr / FPS, blend=True)(fr), SLEEP_DOWN_T - 0.1, False)
-            mk(names[2], lambda fr, B=B: sleep_trans(B, STAND, fr / FPS, blend=False)(fr), SLEEP_UP_T, False)
+            mk(names[0], lambda fr, B=B, Bg=Bg: sleep_trans(STAND, B, fr / FPS, blend=True, rest=Bg)(fr), SLEEP_DOWN_T - 0.1, False)
+            mk(names[2], lambda fr, B=B, Bg=Bg: sleep_trans(B, STAND, fr / FPS, blend=False, rest=Bg, down=False)(fr), SLEEP_UP_T, False)
         else:
-            mk(names[0], lambda fr, B=B: sleep_trans(STAND, B, fr / FPS, mid=LOAF)(fr), SLEEP_DOWN_T, False)
-            mk(names[2], lambda fr, B=B: sleep_trans(B, STAND, fr / FPS, mid=LOAF)(fr), SLEEP_UP_T, False)
+            mk(names[0], lambda fr, B=B, Bg=Bg: sleep_trans(STAND, B, fr / FPS, mid=LOAF, rest=Bg)(fr), SLEEP_DOWN_T, False)
+            mk(names[2], lambda fr, B=B, Bg=Bg: sleep_trans(B, STAND, fr / FPS, mid=LOAF, rest=Bg, down=False)(fr), SLEEP_UP_T, False)
         mk(names[1], lambda fr, nm=nm, B=B: sleep_idle_fn(nm, B, fr), SLEEP_IDLE_T, True)
     return out
 

@@ -2223,7 +2223,13 @@ namespace Oddity.RoomTest
             if(Apartment.InsideSpot(room,insideAnchor,insideBase,inSwing,out var spot)) // a swing keeps the camera on free spots; a long jump (a skipped blocked angle) is a cut
                 insideCamXZ=Vector2.Distance(spot,insideCamXZ)>.8f?spot:Vector2.Lerp(insideCamXZ,spot,1-Mathf.Exp(-12*dt));
             var cp=new Vector3(insideCamXZ.x,inLift,insideCamXZ.y);
-            var want=Quaternion.LookRotation(InsideAim()-cp,Vector3.up);
+            var aimAt=InsideAim();
+            if(ctl!=null){ // following a cat: its root moves with every head and paw move, so the aim gets slack (a cut, a Tab or a long jump re-centres at once)
+                if(!insideFocusSet || insideFocusWho!=ctl || Vector3.Distance(insideFocus,aimAt)>.8f){insideFocus=aimAt;insideFocusWho=ctl;insideFocusSet=true;}
+                insideFocus=SlackFollow(insideFocus,aimAt,cp,insideFov>0?insideFov:InsideFovFar,InsideCatSlack,8,dt);aimAt=insideFocus;
+            }
+            else insideFocusSet=false;
+            var want=Quaternion.LookRotation(aimAt-cp,Vector3.up);
             insideRot=Quaternion.Slerp(insideRot,want,1-Mathf.Exp(-8*dt));
             var rot=inTilt!=0?Quaternion.AngleAxis(-inTilt,insideRot*Vector3.right)*insideRot:insideRot;
             float fovWant=Mathf.Clamp(Apartment.InsideFov(Vector2.Distance(t,insideCamXZ))*Mathf.Pow(InsideFovNear/InsideFovFar,insideZoom-InsideZoom0),InsideFovNear*.6f,90f); // a close camera widens the default lens (60 at 1.2 m -> 80 at 0.6 m); the zoom keys work relative to that
@@ -2470,7 +2476,8 @@ namespace Oddity.RoomTest
             if(ctl!=null)want=ctl.root.position+Vector3.up*.15f;
             else{var chest=anim!=null?(anim.GetBoneTransform(HumanBodyBones.Chest)??anim.GetBoneTransform(HumanBodyBones.Hips)):null;want=chest!=null?chest.position:new Vector3(x,1.1f,z);}
             if(!peepFocusSet){peepFocus=want;peepFocusSet=true;}
-            peepFocus=Vector3.Lerp(peepFocus,want,1-Mathf.Exp(-4*dt));
+            if(ctl!=null)peepFocus=SlackFollow(peepFocus,want,eye,fov,RoomSlack,4,dt); // a cat's root shifts with every head and paw move (ground snap, spot fit): the aim only follows once the cat leaves the slack circle, like Harin's aim in the old room
+            else peepFocus=Vector3.Lerp(peepFocus,want,1-Mathf.Exp(-4*dt));
             float wAuto=Mathf.SmoothStep(0,1,Mathf.InverseLerp(PeepAutoFov,PeepAutoFull,fov)); // 0 above fov 15, full at 9 and below
             peepAutoW=Mathf.MoveTowards(peepAutoW,Time.unscaledTime-peepTouched>PeepIdle?wAuto:0,dt/.6f);
             var aim=Vector3.Lerp(peepAim,peepFocus,peepAutoW);
@@ -2479,7 +2486,14 @@ namespace Oddity.RoomTest
             cameraView.fieldOfView=fov;cameraView.transform.SetPositionAndRotation(eye,rot);
             if(Time.unscaledTime-peepLog>1f){peepLog=Time.unscaledTime;Debug.Log("ROOMPLAY_PEEP fov="+F(fov)+" pan="+F(peepPan)+" tilt="+F(peepTilt)+" cam=("+F(eye.x)+","+F(eye.y)+","+F(eye.z)+") auto="+F(peepAutoW));}
         }
-        const float RoomFovNear=5f, RoomSlack=.3f, RoomFollow=5f;
+        const float RoomFovNear=5f, RoomSlack=.3f, RoomFollow=5f, InsideCatSlack=.15f;
+        // The aim stays put while the target is inside a circle of `ratio` of the half frame around it, and eases after it once it leaves (never closer than the circle's edge)
+        public static Vector3 SlackFollow(Vector3 focus,Vector3 want,Vector3 eye,float fov,float ratio,float rate,float dt)
+        {
+            float slack=Vector3.Distance(eye,focus)*Mathf.Tan(fov*.5f*Mathf.Deg2Rad)*ratio;var off=want-focus;float m=off.magnitude;
+            return m>slack?Vector3.Lerp(focus,focus+off*(1-slack/m),1-Mathf.Exp(-rate*dt)):focus;
+        }
+        Vector3 insideFocus;Pet insideFocusWho;bool insideFocusSet;
         void RoomFrame(float dt,float zoomKey)
         {
             float outZoom=roomZoom;if(insideOn)roomZoom=insideZoom; // the inside camera has its own zoom; the outside one comes back untouched
@@ -3320,9 +3334,13 @@ namespace Oddity.RoomTest
                 var cp=ctl!=null?ctl:pets.FirstOrDefault();if(cp==null || cp.root==null)return;
                 var rs=cp.root.GetComponentsInChildren<Renderer>();if(rs.Length==0)return;var bb=rs[0].bounds;foreach(var rr in rs)bb.Encapsulate(rr.bounds);
                 var ctr=new Vector3(bb.center.x,bb.min.y+Mathf.Max(.1f,bb.size.y*.5f),bb.center.z);var side=-cp.root.right;side.y=0;side.Normalize();
-                eye=new Vector3(ctr.x,bb.min.y+.12f,ctr.z)+side*1.15f;aim=ctr;
+                float eyeH=cp.perch!=null?.12f:.18f;eye=new Vector3(ctr.x,bb.min.y+eyeH,ctr.z)+side*1.0f;aim=cp.perch!=null?ctr:new Vector3(ctr.x,bb.min.y+.1f,ctr.z); // on the floor: an eye 2 cm above it looking level, so any gap under the body shows as light
                 bool InRoom(Vector3 e)=>e.x>.2f && e.x<2.8f && e.z>.2f && e.z<5.3f;
-                if(!InRoom(eye)){var e2=new Vector3(ctr.x,bb.min.y+.12f,ctr.z)-side*1.15f;eye=InRoom(e2)?e2:new Vector3(Mathf.Clamp(eye.x,.2f,2.8f),eye.y,Mathf.Clamp(eye.z,.2f,5.3f));} // the studio's walls: look from the other side (the nose then points right) or from as far as the room allows
+                if(cp.perch==null){ // floor: the open strip between the bed, the TV cabinet and the kitchen is x 1.05..2.15, so try both sides and both ends of the cat at 1.0 then 0.75 m
+                    var fw=cp.root.forward;fw.y=0;fw.Normalize();bool found=false;
+                    foreach(var dist in new[]{1f,.75f})foreach(var dir in new[]{side,-side,fw,-fw}){var cand=new Vector3(ctr.x,bb.min.y+eyeH,ctr.z)+dir*dist;if(cand.x>.95f && cand.x<2.3f && cand.z>.5f && cand.z<5f){eye=cand;found=true;break;}if(found)break;}
+                }
+                if(cp.perch!=null && !InRoom(eye)){var e2=new Vector3(ctr.x,bb.min.y+eyeH,ctr.z)-side*1.15f;eye=InRoom(e2)?e2:new Vector3(Mathf.Clamp(eye.x,.2f,2.8f),eye.y,Mathf.Clamp(eye.z,.2f,5.3f));} // the studio's walls: look from the other side (the nose then points right) or from as far as the room allows
                 if(cp.perch!=null && cp.perch.name.StartsWith("tower")){ // on the cat tower: from the room's middle side, a little above the perch top, so the whole pose and the rim show
                     var inward=new Vector3(1.5f-ctr.x,0,2.75f-ctr.z);if(inward.sqrMagnitude<.01f)inward=Vector3.back;inward.Normalize();
                     eye=new Vector3(ctr.x,bb.min.y+.3f,ctr.z)+inward*1.3f;}
