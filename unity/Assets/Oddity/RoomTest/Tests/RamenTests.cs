@@ -147,7 +147,7 @@ namespace Oddity.RoomTest.Tests
                 Assert.That(worstPot, Is.LessThan(.005f), "pot on its handle under 5 mm");
 
                 // the packet: its place in the left hand's frame does not move while the wrist turns (Packet / Tear beats, before the pour tilt)
-                reset(); rig.Tick(RamenClock.PhoneEnd + .3f - (RamenClock.FillEnd + 2.0f)); rig.Apply(0); // forward to the packet beat
+                reset(); rig.Tick(RamenClock.PhoneEnd + 1.8f - (RamenClock.FillEnd + 2.0f)); rig.Apply(0); // forward to the packet beat, after the reach, pickup and turn upright
                 Assert.That(rig.Phase, Is.EqualTo("Packet"));
                 var local0 = lhand.InverseTransformPoint(rig.Packet.position); var rot0 = Quaternion.Inverse(lhand.rotation) * rig.Packet.rotation;
                 float worstShift = 0, worstTurn = 0;
@@ -160,6 +160,44 @@ namespace Oddity.RoomTest.Tests
                 }
                 Debug.Log("RAMEN_PACKET shift in the hand frame " + worstShift.ToString("0.0000") + " m, turn " + worstTurn.ToString("0.00") + " deg");
                 Assert.That(worstShift, Is.LessThan(.003f)); Assert.That(worstTurn, Is.LessThan(.5f));
+            }
+            finally { rig?.Dispose(); Object.DestroyImmediate(model); }
+        }
+
+        // three-fixes item 1: the packet is a thin bag lying flat on the counter until it is pinched between thumb and index at its top corner
+        [Test]
+        public void Ramen_PacketIsAThinBagLyingFlatOnTheCounterAndPinchedAtTheCorner()
+        {
+            var model = LoadModel(); RamenRig rig = null;
+            try
+            {
+                model.transform.SetPositionAndRotation(new Vector3(2.20f, 0, 4.06f), Quaternion.Euler(0, 90, 0));
+                var anim = model.GetComponent<Animator>();
+                rig = new RamenRig(anim, 17);
+                rig.Sink = OneRoom.RamenSink; rig.Burner = OneRoom.RamenBurner; rig.Knob = OneRoom.RamenKnob; rig.TapControl = OneRoom.RamenTap;
+                var bones = model.GetComponentsInChildren<Transform>(); var rest = bones.Select(t => t.localRotation).ToArray(); var pos = bones.Select(t => t.localPosition).ToArray();
+                Action reset = () => { for (int i = 0; i < bones.Length; i++) { bones[i].localRotation = rest[i]; bones[i].localPosition = pos[i]; } };
+                rig.Start(); reset(); rig.Tick(RamenClock.WaitEnd + 1f); rig.Apply(0);
+                Assert.That(rig.Phase, Is.EqualTo("Phone"));
+                Assert.That(rig.PacketThickness, Is.LessThanOrEqualTo(.006f), "bag thickness");
+                var renderer = rig.Packet.GetComponentInChildren<MeshRenderer>();
+                Assert.That(Mathf.Min(Vector3.Angle(rig.Packet.forward, Vector3.up), Vector3.Angle(rig.Packet.forward, Vector3.down)), Is.LessThan(5f), "flat face parallel to the counter");
+                Assert.That(renderer.bounds.min.y, Is.EqualTo(rig.Burner.y).Within(.002f), "rests on the counter top");
+                Assert.That(rig.PacketHeld, Is.False);
+                float worstCorner = 0, worstGap = 0, worstTip = 0; int frames = 0;
+                for (int i = 0; i < 200; i++)
+                {
+                    reset(); rig.Tick(.05f); rig.Apply(0);
+                    if (rig.Phase != "Tear" && rig.Phase != "Drop") continue;
+                    frames++;
+                    var local = rig.Packet.InverseTransformPoint(rig.LeftPinch);
+                    worstCorner = Mathf.Max(worstCorner, Mathf.Max(0, Mathf.Abs(local.x) - .06f), Mathf.Max(0, .075f - local.y), Mathf.Abs(local.z));
+                    var d = anim.GetBoneTransform(HumanBodyBones.LeftIndexDistal); var th = anim.GetBoneTransform(HumanBodyBones.LeftThumbDistal);
+                    worstGap = Mathf.Max(worstGap, Vector3.Distance(d.position, th.position)); worstTip = Mathf.Max(worstTip, Vector3.Distance(rig.LeftPinch, d.position) * 2);
+                }
+                Debug.Log("RAMEN_BAG held frames=" + frames + " pinch off the top corner " + worstCorner.ToString("0.0000") + " m, worst thumb-index distal gap " + worstGap.ToString("0.000") + " m, tip-to-tip gap " + worstTip.ToString("0.000") + " m, thickness " + rig.PacketThickness.ToString("0.0000"));
+                Assert.That(frames, Is.GreaterThan(30));
+                Assert.That(worstCorner, Is.LessThan(.015f), "pinch at the top corner");
             }
             finally { rig?.Dispose(); Object.DestroyImmediate(model); }
         }

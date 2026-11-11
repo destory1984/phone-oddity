@@ -16,7 +16,10 @@ namespace Oddity.RoomTest
         const float HandleLength = .085f, HandleWidth = .016f, GripToCentre = .115f, GripDepth = .015f; // Mirror grip geometry, metres.
         const float TintLength = .060f, TintDiameter = .012f, TintExposed = .015f; // Uncapped solid tint geometry, metres.
         const float TintGripHeight = .025f, TintGripDepth = .012f; // Tint bottom relative to right wrist, metres.
-        const float MirrorLeft = .13f, MirrorAhead = .32f, MirrorUp = .035f; // Disc centre relative to head, metres.
+        const float MirrorSide = .08f, MirrorAhead = .23f, MirrorBelow = .08f; // Disc centre relative to the resting eye midpoint: to her left, ahead, below, metres (about 0.25 m from the eyes).
+        const float EyeUp = .07f, EyeAhead = .08f; // Eye midpoint from the head bone when the avatar has no eye bones, metres.
+        const float LookYaw = -9f, LookPitch = 9f; // Head turn toward the mirror (negative = to her left) and bow, degrees.
+        const float ElbowIn = .06f, ElbowDrop = .30f, ElbowBack = .02f; // Left elbow pole: tucked near the ribs, metres.
         const float LipDown = .035f, LipAhead = .095f, LipSweep = .014f, LipGap = .003f; // Lip approximation and lateral tint stroke, metres.
         const float FringeUp = .13f, FringeAhead = .125f, FringeStart = -.025f, FringeFinish = .065f; // Forehead contact path, metres.
         const float FingerReachFallback = .15f, FingerTipLength = .018f; // Missing-finger wrist reach and terminal phalanx extension, metres.
@@ -64,6 +67,15 @@ namespace Oddity.RoomTest
         public Vector3 TintTip => Tint.TransformPoint(Vector3.up * (TintLength + TintExposed));
         public Vector3 LipPoint => head.position + HeadAxes() * new Vector3(0, -LipDown, LipAhead);
         Quaternion HeadAxes() => head.rotation * headFrame;
+        public Vector3 EyePoint
+        {
+            get
+            {
+                var l = anim.GetBoneTransform(HumanBodyBones.LeftEye); var r = anim.GetBoneTransform(HumanBodyBones.RightEye);
+                return l != null && r != null ? (l.position + r.position) / 2 : head.position + HeadAxes() * new Vector3(0, EyeUp, EyeAhead);
+            }
+        }
+        public Vector3 MirrorNormal => -Mirror.forward; // The reflecting face looks along this.
 
         public MirrorRig(Animator anim, int seed, Quaternion? restHeadFrame = null)
         {
@@ -184,17 +196,22 @@ namespace Oddity.RoomTest
             if (w > 0)
             {
                 var r = anim.transform.right; var u = anim.transform.up; var f = anim.transform.forward;
+                var eyeRest = EyePoint;
                 Rotate(chest, r, BreathDegrees * Mathf.Sin(time * Tau / BreathPeriod) * w);
                 float check = Envelope(time, 0, CheckEnd);
-                float yaw = CheckYaw * variation * Mathf.Sin(time * Tau / CheckEnd) * check;
+                float yaw = (CheckYaw * variation * Mathf.Sin(time * Tau / CheckEnd) * check + LookYaw) ;
                 Rotate(neck ?? head, u, yaw * NeckShare * w);
                 Rotate(head, u, yaw * (1 - NeckShare) * w);
-                Rotate(head, r, CheckPitch * check * w);
+                Rotate(head, r, (CheckPitch * check + LookPitch) * w);
                 Rotate(head, f, SquintRoll * Envelope(time, SmileEnd, SquintEnd) * w);
                 var axes = HeadAxes();
-                var centre = head.position - r * MirrorLeft + f * MirrorAhead + u * MirrorUp;
-                var leftFrame = Quaternion.LookRotation(u, -f);
-                PoseArm(0, centre - u * GripToCentre - f * GripDepth, leftFrame, r, u, f, w);
+                // the mirror hangs in front of her face, a little low and to her left; its face is turned to her eyes and the handle points up from the hand
+                var centre = eyeRest - r * MirrorSide + f * MirrorAhead - u * MirrorBelow;
+                var n = (EyePoint - centre).normalized;
+                var up = Vector3.ProjectOnPlane(u, n); up = up.sqrMagnitude < Epsilon ? f : up.normalized;
+                var leftFrame = Quaternion.LookRotation(up, n);
+                var pole0 = upper[0].position - r * ElbowIn - u * ElbowDrop - f * ElbowBack;
+                PoseArm(0, centre - up * GripToCentre + n * GripDepth, leftFrame, r, u, f, w, pole0);
 
                 var rest = hips.position + r * LapRight + u * LapUp + f * LapAhead;
                 var restFrame = Quaternion.LookRotation(f, u);
@@ -216,9 +233,9 @@ namespace Oddity.RoomTest
             for (int i = 0; i < controlled.Count; i++) written[i] = controlled[i].localRotation;
             hasWritten = true;
         }
-        void PoseArm(int side, Vector3 target, Quaternion frame, Vector3 r, Vector3 u, Vector3 f, float w)
+        void PoseArm(int side, Vector3 target, Quaternion frame, Vector3 r, Vector3 u, Vector3 f, float w, Vector3? elbow = null)
         {
-            var pole = upper[side].position + r * (side == 0 ? -PoleOut : PoleOut) - u * PoleDown + f * PoleAhead;
+            var pole = elbow ?? upper[side].position + r * (side == 0 ? -PoleOut : PoleOut) - u * PoleDown + f * PoleAhead;
             SofaRig.TwoBone(upper[side], lower[side], hand[side], target, pole, w);
             hand[side].rotation = Quaternion.Slerp(hand[side].rotation, frame * Quaternion.Inverse(handFrame[side]), w);
         }

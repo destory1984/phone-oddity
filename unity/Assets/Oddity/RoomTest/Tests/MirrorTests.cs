@@ -76,7 +76,7 @@ namespace Oddity.RoomTest.Tests
                     rig.Start(); rig.Tick(9); rig.Apply(0);
                     var head = a.GetBoneTransform(HumanBodyBones.Head);
                     Assert.That(Mathf.Abs(rig.MirrorCentre.y - head.position.y), Is.LessThan(.10f));
-                    Assert.That(Vector3.Distance(rig.MirrorCentre, head.position), Is.InRange(.24f, .45f));
+                    Assert.That(Vector3.Distance(rig.MirrorCentre, head.position), Is.InRange(.15f, .45f));
                     Assert.That(Vector3.Dot(-rig.Mirror.forward, (head.position - rig.MirrorCentre).normalized), Is.GreaterThan(.8f));
                     Assert.That(Vector3.Distance(rig.TintTip, rig.LipPoint), Is.LessThan(.055f));
                     Assert.That(rig.Mirror.Find("rim").lossyScale.x, Is.EqualTo(.12f).Within(.001f));
@@ -113,6 +113,46 @@ namespace Oddity.RoomTest.Tests
                 }
             }
             finally { Object.DestroyImmediate(a); Object.DestroyImmediate(b); }
+        }
+
+        // three-fixes item 3: she looks into the mirror - 0.18-0.27 m from the eyes, face turned to them, elbow bent near 90 deg, right hand clear of it
+        [Test]
+        public void Mirror_IsHeldInFrontOfTheFaceFacingTheEyesWithABentElbow()
+        {
+            var m = Model();
+            try
+            {
+                var a = m.GetComponent<Animator>();
+                using (var rig = new MirrorRig(a, 71))
+                {
+                    m.transform.rotation = Quaternion.Euler(0, 90, 0);
+                    var shoulder = a.GetBoneTransform(HumanBodyBones.LeftUpperArm); var elbow = a.GetBoneTransform(HumanBodyBones.LeftLowerArm); var wrist = a.GetBoneTransform(HumanBodyBones.LeftHand);
+                    var rhand = a.GetBoneTransform(HumanBodyBones.RightHand);
+                    float dMin = 9, dMax = 0, aimWorst = 0, eMin = 999, eMax = 0, tintMirror = 9, handForearm = 9; int frames = 0;
+                    rig.Start();
+                    for (int i = 0; i < 100; i++)
+                    {
+                        rig.Tick(.25f); rig.Apply(0);
+                        if (rig.Weight < 1 || rig.Phase == "Smile" || rig.Phase == "Squint" || rig.Phase == "Return") continue;
+                        frames++;
+                        var toEye = rig.EyePoint - rig.MirrorCentre;
+                        dMin = Mathf.Min(dMin, toEye.magnitude); dMax = Mathf.Max(dMax, toEye.magnitude);
+                        aimWorst = Mathf.Max(aimWorst, Vector3.Angle(rig.MirrorNormal, toEye));
+                        float e = Vector3.Angle(shoulder.position - elbow.position, wrist.position - elbow.position); eMin = Mathf.Min(eMin, e); eMax = Mathf.Max(eMax, e);
+                        tintMirror = Mathf.Min(tintMirror, Vector3.Distance(rig.TintTip, rig.MirrorCentre), Vector3.Distance(rhand.position, rig.MirrorCentre));
+                        var seg = wrist.position - elbow.position; float tt = Mathf.Clamp01(Vector3.Dot(rhand.position - elbow.position, seg) / seg.sqrMagnitude);
+                        handForearm = Mathf.Min(handForearm, Vector3.Distance(rhand.position, elbow.position + seg * tt));
+                    }
+                    Debug.Log("MIRROR_LOOK frames=" + frames + " eye-to-mirror " + dMin.ToString("0.000") + " - " + dMax.ToString("0.000") + " m, normal off the eyes " + aimWorst.ToString("0.0") + " deg, left elbow " + eMin.ToString("0") + " - " + eMax.ToString("0") + " deg, right hand/tint to the disc " + tintMirror.ToString("0.000") + " m, right hand to left forearm " + handForearm.ToString("0.000") + " m");
+                    Assert.That(frames, Is.GreaterThan(30));
+                    Assert.That(dMin, Is.GreaterThanOrEqualTo(.18f)); Assert.That(dMax, Is.LessThanOrEqualTo(.27f));
+                    Assert.That(aimWorst, Is.LessThan(10f), "the disc faces her eyes");
+                    Assert.That(eMin, Is.GreaterThanOrEqualTo(70f)); Assert.That(eMax, Is.LessThanOrEqualTo(115f), "elbow bent about 90 degrees");
+                    Assert.That(tintMirror, Is.GreaterThan(.07f), "the right hand does not pass through the mirror");
+                    Assert.That(handForearm, Is.GreaterThan(.04f), "the right hand does not pass through the left forearm");
+                }
+            }
+            finally { Object.DestroyImmediate(m); }
         }
     }
 }

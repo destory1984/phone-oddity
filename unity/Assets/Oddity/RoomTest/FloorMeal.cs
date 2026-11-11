@@ -111,7 +111,9 @@ namespace Oddity.RoomTest
         const float PhoneBow = 8f, LaughNod = 3f, LaughHz = 3.5f, BreathDegrees = .7f, BreathHz = .23f; // Secondary torso/head motion.
         const float MouthDown = .025f, MouthAhead = .075f; // Mouth estimate from head pivot, metres; check per VRM.
         const float ChinBowlDown = .13f, ChinBowlAhead = .07f; // Held bowl centre below/in front of the mouth, metres.
-        const float LeftGripOut = .085f, LeftGripDown = .015f; // Left wrist relative to bowl centre, metres.
+        const float LeftRestSide = .22f, LeftRestAhead = .04f, LeftRestGap = .0165f; // Resting left fingertips: left of the hips, ahead of the table's near edge, above the table top, metres.
+        const float CupInset = .01f, CupUnder = .003f, TipExtension = .012f; // Middle fingertip inside the far rim, under the bowl bottom; distal pad length, metres.
+        const float CupFingerCurl = .45f, CupRoll = 12f, RestFingerCurl = .15f, CupThumbCurl = 1.4f; // Left finger curl scales (1 = the grip angles).
         const float GatherOut = .13f, GatherUp = .10f, GatherBack = .04f; // Right wrist relative to bowl, metres.
         const float HighOut = .17f, HighUp = .15f, HighAhead = .07f; // High noodle lift relative to mouth, metres.
         const float SlurpOut = .12f, SlurpUp = .045f, SlurpAhead = .08f; // Right wrist beside the mouth, metres.
@@ -146,6 +148,7 @@ namespace Oddity.RoomTest
         readonly Quaternion[] before, written;
         readonly Transform[,] strands = new Transform[NoodleStrands, NoodleSegments];
         readonly Transform movingStick;
+        readonly Vector3 middleTipInHand; // left middle fingertip relative to the left wrist in the neutral pose (rotation only), metres.
         readonly Quaternion headFrame; // head bone -> body frame, taken in the upright reference pose
         Vector3 hipBefore, hipWritten;
         bool hasWritten, disposed;
@@ -192,6 +195,11 @@ namespace Oddity.RoomTest
                 palmAxis[s] = Quaternion.Inverse(hand[s].rotation) * palm;
                 handFrame[s] = Quaternion.LookRotation(fingerAxis[s], palmAxis[s]);
                 footFrame[s] = Quaternion.Inverse(foot[s].rotation) * anim.transform.rotation;
+            }
+            {
+                var d = finger[0, 2, 2]; var m = finger[0, 2, 1];
+                var tip = d != null && m != null ? d.position + (d.position - m.position).normalized * TipExtension : hand[0].position + hand[0].rotation * fingerAxis[0] * .16f;
+                middleTipInHand = Quaternion.Inverse(hand[0].rotation) * (tip - hand[0].position);
             }
             headFrame = restHeadFrame ?? Quaternion.Inverse(head.rotation) * anim.transform.rotation;
             before = new Quaternion[controlled.Count]; written = new Quaternion[controlled.Count];
@@ -329,10 +337,18 @@ namespace Oddity.RoomTest
                 MouthPoint = mouth;
                 float held = clock.BowlLift * w;
                 var bowlWanted = Vector3.Lerp(rest, mouth - up * ChinBowlDown + forward * ChinBowlAhead, held);
-                var leftWrist = bowlWanted - right * LeftGripOut - up * LeftGripDown;
-                Arm(0, leftWrist, forward, up, w);
-                // A held bowl follows the actual hand even if a small avatar cannot reach the ideal target.
-                Bowl.position = bowlWanted + (hand[0].position - leftWrist) * held;
+                // the left hand rests flat on the table beside the bowl; when the bowl is lifted it slides under the bowl, middle fingertip under the far side of the bottom
+                float handW = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(.15f, .7f, held));
+                var restFrame = Quaternion.LookRotation(forward, -up); var cupFrame = Quaternion.AngleAxis(CupRoll, right) * Quaternion.LookRotation(right, up);
+                var tipRest = Props.TransformPoint(new Vector3(-LeftRestSide, TableHeight + LeftRestGap, TableAhead - TableDepth / 2 + LeftRestAhead));
+                var tipCup = bowlWanted + right * (BowlRadius - CupInset) - up * (BowlHeight / 2 + CupUnder);
+                var wristRest = tipRest - restFrame * Quaternion.Inverse(handFrame[0]) * middleTipInHand;
+                var wristCup = tipCup - cupFrame * Quaternion.Inverse(handFrame[0]) * middleTipInHand;
+                var leftWrist = Vector3.Lerp(wristRest, wristCup, handW);
+                Arm(0, leftWrist, Quaternion.Slerp(restFrame, cupFrame, handW), Mathf.Lerp(RestFingerCurl, CupFingerCurl, handW), Mathf.Lerp(RestFingerCurl, CupThumbCurl, handW), w);
+                // a held bowl sits on the actual hand even if a small avatar cannot reach the ideal target
+                var bowlOnHand = LeftMiddleTip - right * (BowlRadius - CupInset) + up * (BowlHeight / 2 + CupUnder);
+                Bowl.position = Vector3.Lerp(bowlWanted, bowlOnHand, handW);
                 var gather = Bowl.position + right * GatherOut + up * GatherUp - forward * GatherBack;
                 var high = mouth + right * HighOut + up * HighUp + forward * HighAhead;
                 var slurp = mouth + right * SlurpOut + up * SlurpUp + forward * SlurpAhead;
@@ -359,7 +375,7 @@ namespace Oddity.RoomTest
                 var aimDirection = tipAim - (RightWristTarget + forward * HandGripAhead);
                 if (aimDirection.sqrMagnitude < AxisEpsilon) aimDirection = forward;
                 aimDirection.Normalize();
-                Arm(1, RightWristTarget, aimDirection, -right, w);
+                Arm(1, RightWristTarget, Quaternion.LookRotation(aimDirection, -right), 1, 1, w);
                 // Scale compensation keeps primitive sticks in metres under scaled VRM bones.
                 var scale = hand[1].lossyScale;
                 Chopsticks.localScale = new Vector3(1 / Mathf.Max(Mathf.Abs(scale.x), PositionEpsilon),
@@ -377,16 +393,32 @@ namespace Oddity.RoomTest
             hipWritten = hips.localPosition; hasWritten = true;
         }
 
-        void Arm(int side, Vector3 target, Vector3 fingers, Vector3 palm, float w)
+        // Fingertip of the left middle finger (distal pad), world; valid after Apply.
+        public Vector3 LeftMiddleTip => TipOf(0, 2);
+        public Vector3 TipOf(int side, int fingerIndex)
+        {
+            var d = finger[side, fingerIndex, 2]; var m = finger[side, fingerIndex, 1];
+            return d.position + (d.position - m.position).normalized * TipExtension;
+        }
+        public float TableTopY => Props.position.y + TableHeight;
+        public float LeftHandToBowlRim => Mathf.Max(0, BowlSurfaceDistance(LeftMiddleTip));
+        // Signed distance from a world point to the bowl solid (a cylinder: radius BowlRadius + wall, BowlHeight tall); negative = inside.
+        public float BowlSurfaceDistance(Vector3 world)
+        {
+            var l = Bowl.InverseTransformPoint(world);
+            float radial = new Vector2(l.x, l.z).magnitude - (BowlRadius + BowlWall / 2), vertical = Mathf.Abs(l.y) - BowlHeight / 2;
+            return radial > 0 && vertical > 0 ? Mathf.Sqrt(radial * radial + vertical * vertical) : Mathf.Max(radial, vertical);
+        }
+
+        void Arm(int side, Vector3 target, Quaternion frame, float fingerCurl, float thumbCurl, float w)
         {
             SofaRig.TwoBone(upper[side], lower[side], hand[side], target,
                 upper[side].position + Props.right * (side == 0 ? -ElbowOut : ElbowOut) - Props.up * ElbowDown + Props.forward * ElbowAhead, w);
-            hand[side].rotation = Quaternion.Slerp(hand[side].rotation,
-                Quaternion.LookRotation(fingers, palm) * Quaternion.Inverse(handFrame[side]), w);
+            hand[side].rotation = Quaternion.Slerp(hand[side].rotation, frame * Quaternion.Inverse(handFrame[side]), w);
             var axis = hand[side].rotation * Vector3.Cross(fingerAxis[side], palmAxis[side]).normalized;
             // SofaRig's Curl is private; preserve its calibrated palm-axis convention here.
             for (int f = 0; f < 5; f++) for (int j = 0; j < 3; j++)
-                Rotate(finger[side, f, j], axis, (f == 0 ? ThumbCurl : j == 0 ? CurlProximal : j == 1 ? CurlIntermediate : CurlDistal) * w);
+                Rotate(finger[side, f, j], axis, (f == 0 ? ThumbCurl * thumbCurl : (j == 0 ? CurlProximal : j == 1 ? CurlIntermediate : CurlDistal) * fingerCurl) * w);
         }
 
         void DrawNoodles(Vector3 mouth, Vector3 right, Vector3 up, float w)

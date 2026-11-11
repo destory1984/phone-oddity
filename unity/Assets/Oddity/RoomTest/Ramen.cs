@@ -44,13 +44,15 @@ namespace Oddity.RoomTest
         const float PotWall = .008f, PotBase = .008f, RimHeight = .012f; // Metres: primitive pot shell.
         const int RimSegments = 16; // Boxes approximate the open cylindrical wall.
         const float HandleLength = .14f, HandleWidth = .025f, HandleY = .065f; // West-facing grip in metres.
-        const float HandleReach = .15f, CarryLift = .10f; // Wrist offset from pot centre and transfer arc.
+        const float HandleReach = .15f, CarryLift = .04f; // Wrist offset from pot centre and transfer arc.
         const float WristHover = .07f, RestSide = .15f, RestAhead = .22f; // Counter hand positions in body frame.
         const float TapHeight = .004f, TapHz = 2.3f, TapCurl = 10f; // Waiting finger motion in metres, Hz, degrees.
-        const float PacketW = .12f, PacketH = .15f, PacketT = .025f; // Packet dimensions in metres.
+        const float PacketW = .12f, PacketH = .15f, PacketEdge = .004f, PacketMid = .0058f; // Bag width, height, edge thickness and pillowed middle thickness in metres.
+        const float PacketCornerInset = .01f, PacketRestForward = .11f, PacketRestLeft = .17f, PacketThumbDefault = 60f; // Pinch inset from the top corner, resting spot beside the burner (metres), thumb closing angle (degrees).
+        const float PacketGrab = .5f, PacketRaise = 1.2f; // Seconds spent reaching the flat bag, then lifting and turning it upright.
         const float PacketSide = .08f, PacketLift = .22f, TearSpread = .085f; // Pick-up and tearing distances.
         const float PacketTilt = 115f, PacketPalmOffset = -.06f; // Pour angle in degrees, palm-to-packet metres.
-        const float StripWidth = .018f, NoodleSize = .095f, NoodleThickness = .025f; // Torn edge and noodle block metres.
+        const float StripWidth = .018f, StripLength = .05f, NoodleSize = .095f, NoodleThickness = .025f; // Torn edge and noodle block metres.
         const float ChopLength = .24f, ChopRadius = .003f, ChopGap = .014f; // Chopstick geometry metres.
         const float ChopGrip = .075f, StirRadius = .035f, StirHz = .7f; // Grip offset metres, stirring radius metres and Hz.
         const float StirPullIn = .05f; // Stir centre pulled toward her so the hand reaches the whole circle.
@@ -83,6 +85,10 @@ namespace Oddity.RoomTest
         public Vector3 TapControl = new Vector3(TapX, TapY, TapZ); // Requires a near-edge tap lever.
         public readonly Transform Props, Pot, Chopsticks, Packet, Phone;
         readonly Transform strip, noodles, water;
+        public static float PacketThumb = PacketThumbDefault; // thumb closing angle while pinching, degrees
+        readonly Transform[,] thumb = new Transform[2, 3];
+        readonly Vector3[] pinchInHand = new Vector3[2]; // pinch point (thumb tip and index tip midpoint) relative to the wrist in the hand's own rotation frame
+        readonly List<Mesh> meshes = new List<Mesh>();
         readonly Animator anim;
         readonly Transform spine, chest, neck, head;
         readonly Transform[] upper = new Transform[2], lower = new Transform[2], hand = new Transform[2];
@@ -134,6 +140,7 @@ namespace Oddity.RoomTest
                     finger[s, f, j] = Bone((HumanBodyBones)((int)(s == 0 ? HumanBodyBones.LeftIndexProximal : HumanBodyBones.RightIndexProximal) + f * 3 + j));
                     Track(finger[s, f, j]);
                 }
+                for (int j = 0; j < 3; j++) { thumb[s, j] = Bone((HumanBodyBones)((int)(s == 0 ? HumanBodyBones.LeftThumbProximal : HumanBodyBones.RightThumbProximal) + j)); Track(thumb[s, j]); }
                 Vector3 direction = finger[s, 1, 0] != null ? finger[s, 1, 0].position - hand[s].position : hand[s].position - lower[s].position;
                 Vector3 palm = Vector3.ProjectOnPlane(-anim.transform.up, direction).normalized;
                 if (palm.sqrMagnitude < Epsilon) palm = Vector3.ProjectOnPlane(anim.transform.forward, direction).normalized;
@@ -141,6 +148,7 @@ namespace Oddity.RoomTest
                 palmAxis[s] = Quaternion.Inverse(hand[s].rotation) * palm;
                 handFrame[s] = Quaternion.LookRotation(fingerAxis[s], palmAxis[s]);
             }
+            for (int s = 0; s < 2; s++) pinchInHand[s] = Quaternion.Inverse(hand[s].rotation) * (PinchPoint(s) - hand[s].position);
             before = new Quaternion[controlled.Count]; written = new Quaternion[controlled.Count];
             Props = new GameObject("RamenProps").transform;
             var metal = Mat(MetalColor); var dark = Mat(DarkColor);
@@ -157,8 +165,8 @@ namespace Oddity.RoomTest
             }
             Part(Pot, "handle", PrimitiveType.Cube, new Vector3(0, HandleY, -PotDiameter / 2 - HandleLength / 2), new Vector3(HandleWidth, HandleWidth, HandleLength), dark);
             water = Part(Pot, "water", PrimitiveType.Cylinder, Vector3.up * WaterY, new Vector3(PotDiameter - LiquidInset, RimHeight / 2, PotDiameter - LiquidInset), liquid);
-            Packet = Root("Packet"); Part(Packet, "wrapper", PrimitiveType.Cube, Vector3.zero, new Vector3(PacketW, PacketH, PacketT), red);
-            strip = Root("TornEdge"); Part(strip, "edge", PrimitiveType.Cube, Vector3.zero, new Vector3(PacketW, StripWidth, PacketT), red);
+            Packet = Root("Packet"); MeshPart(Packet, "wrapper", BagMesh(), red);
+            strip = Root("TornEdge"); Part(strip, "edge", PrimitiveType.Cube, Vector3.zero, new Vector3(StripLength, StripWidth, PacketEdge), red);
             noodles = Root("Noodles"); Part(noodles, "block", PrimitiveType.Cube, Vector3.zero, new Vector3(NoodleSize, NoodleThickness, NoodleSize), yellow);
             Chopsticks = Root("Chopsticks");
             for (int i = 0; i < 2; i++) Part(Chopsticks, "stick", PrimitiveType.Cylinder, new Vector3((i - .5f) * ChopGap, -ChopGrip, 0), new Vector3(ChopRadius * 2, ChopLength / 2, ChopRadius * 2), wood);
@@ -172,13 +180,63 @@ namespace Oddity.RoomTest
             Props.gameObject.SetActive(false); Chopsticks.gameObject.SetActive(false);
         }
 
+        // Pinch point: midpoint of the index fingertip and the thumb tip, world.
+        Vector3 PinchPoint(int s)
+        {
+            var d = finger[s, 0, 2]; var m = finger[s, 0, 1]; var td = thumb[s, 2];
+            Vector3 index = d != null && m != null ? d.position + (d.position - m.position).normalized * .01f : hand[s].position;
+            Vector3 thumbTip = td != null && thumb[s, 1] != null ? td.position + (td.position - thumb[s, 1].position).normalized * .01f : index;
+            return (index + thumbTip) / 2;
+        }
+        // A thin ramen bag: 4 mm at the sealed edges, pillowed to 5.8 mm in the middle; local x = width, y = height (open top at +y), z = thickness.
+        Mesh BagMesh()
+        {
+            const int nx = 8, ny = 10;
+            var v = new List<Vector3>(); var tri = new List<int>();
+            for (int face = 0; face < 2; face++)
+            {
+                float sign = face == 0 ? 1 : -1; int baseIndex = v.Count;
+                for (int j = 0; j <= ny; j++) for (int i = 0; i <= nx; i++)
+                {
+                    float u = (float)i / nx * 2 - 1, w = (float)j / ny * 2 - 1;
+                    float bump = (1 - u * u) * (1 - w * w);
+                    v.Add(new Vector3(u * PacketW / 2, w * PacketH / 2, sign * (PacketEdge + (PacketMid - PacketEdge) * bump) / 2));
+                }
+                for (int j = 0; j < ny; j++) for (int i = 0; i < nx; i++)
+                {
+                    int a = baseIndex + j * (nx + 1) + i, b = a + 1, c = a + nx + 1, d = c + 1;
+                    if (face == 0) { tri.Add(a); tri.Add(c); tri.Add(b); tri.Add(b); tri.Add(c); tri.Add(d); }
+                    else { tri.Add(a); tri.Add(b); tri.Add(c); tri.Add(b); tri.Add(d); tri.Add(c); }
+                }
+            }
+            // thin side walls along the four edges
+            Action<Vector3, Vector3> wall = (p, q) =>
+            {
+                int k = v.Count; var o = Vector3.forward * PacketEdge / 2;
+                v.Add(p + o); v.Add(q + o); v.Add(q - o); v.Add(p - o);
+                tri.AddRange(new[] { k, k + 1, k + 2, k, k + 2, k + 3 }); tri.AddRange(new[] { k, k + 2, k + 1, k, k + 3, k + 2 });
+            };
+            float hx = PacketW / 2, hy = PacketH / 2;
+            wall(new Vector3(-hx, -hy, 0), new Vector3(hx, -hy, 0)); wall(new Vector3(hx, -hy, 0), new Vector3(hx, hy, 0));
+            wall(new Vector3(hx, hy, 0), new Vector3(-hx, hy, 0)); wall(new Vector3(-hx, hy, 0), new Vector3(-hx, -hy, 0));
+            var mesh = new Mesh { name = "RamenBag" }; mesh.SetVertices(v); mesh.SetTriangles(tri, 0); mesh.RecalculateNormals(); mesh.RecalculateBounds();
+            meshes.Add(mesh); return mesh;
+        }
+        static void MeshPart(Transform parent, string name, Mesh mesh, Material material)
+        {
+            var g = new GameObject(name); g.transform.SetParent(parent, false);
+            g.AddComponent<MeshFilter>().sharedMesh = mesh; g.AddComponent<MeshRenderer>().sharedMaterial = material;
+        }
+        public float PacketThickness => Packet.GetComponentInChildren<MeshFilter>().sharedMesh.bounds.size.z;
+        public bool PacketHeld => Packet.parent != Props;
+        public Vector3 LeftPinch => PinchPoint(0);
         Transform Bone(HumanBodyBones id) => anim.GetBoneTransform(id);
         void Track(Transform t) { if (t != null && !controlled.Contains(t)) controlled.Add(t); }
         Transform Root(string name) { var t = new GameObject(name).transform; t.SetParent(Props, false); return t; }
         Material Mat(Color color)
         {
             var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            var m = new Material(shader); m.color = color; materials.Add(m); return m;
+            var m = new Material(shader); m.color = color; if (m.HasProperty("_Cull")) m.SetFloat("_Cull", 0); materials.Add(m); return m;
         }
         static Transform Part(Transform parent, string name, PrimitiveType type, Vector3 p, Vector3 size, Material material)
         {
@@ -216,7 +274,13 @@ namespace Oddity.RoomTest
         Vector3 Forward => Vector3.ProjectOnPlane(anim.transform.forward, Vector3.up).normalized;
         Vector3 Right => Vector3.Cross(Vector3.up, Forward).normalized;
         Vector3 Handle(Vector3 pot) => pot - Forward * HandleReach + Vector3.up * HandleY;
-        Vector3 PacketRest => Burner - Right * PacketSide - Forward * HandleReach;
+        Vector3 PacketRest => new Vector3(Burner.x, Burner.y + PacketMid / 2, Burner.z) - Forward * PacketRestForward - Right * PacketRestLeft; // bag centre, lying flat beside the burner
+        Quaternion PacketFlat => Quaternion.LookRotation(Vector3.down, Forward); // x = right, y = away from her, z = down: the bag lies on the counter
+        Vector3 CornerLeft => new Vector3(-PacketW / 2 + PacketCornerInset, PacketH / 2 - .003f, 0);
+        Vector3 CornerRight => new Vector3(PacketW / 2 - PacketCornerInset, PacketH / 2 - .003f, 0);
+        Vector3 PacketLifted => Burner + Vector3.up * PacketLift - Right * PacketSide; // left pinch while the bag hangs over the pot
+        Quaternion IdealHand(int s) => Quaternion.LookRotation(Forward, Vector3.down) * Quaternion.Inverse(handFrame[s]);
+        Vector3 WristFor(int s, Vector3 pinch) => pinch - IdealHand(s) * pinchInHand[s];
         Vector3 PhoneRest => Sink - Right * PhoneOffset - Forward * HandleReach + Vector3.up * PhoneRaise;
         Vector3 Rest(int side) => anim.transform.position + Forward * RestAhead + Right * (side == 0 ? -RestSide : RestSide) + Vector3.up * (Burner.y + WristHover - anim.transform.position.y);
         Vector3 PotAt(float t)
@@ -238,9 +302,19 @@ namespace Oddity.RoomTest
             else if (beat == 1 || beat == 10) l = Handle(PotAt(t));
             else if (beat == 2 || beat == 9) { l = Handle(Burner); r = Knob - Forward * KnobWrist; }
             else if (beat == 3) l += Vector3.up * (TapHeight * Mathf.Max(0, Mathf.Sin(t * Tau * TapHz)));
-            else if (beat == 5) { l = Vector3.Lerp(PacketRest, Burner + Vector3.up * PacketLift - Right * PacketSide, Ease((t - RamenClock.PhoneEnd) / (RamenClock.PacketEnd - RamenClock.PhoneEnd))); r = l + Right * PacketW; }
-            else if (beat == 6) { float tear = Ease((t - RamenClock.PacketEnd) / (RamenClock.TearEnd - RamenClock.PacketEnd)); l = Burner + Vector3.up * PacketLift - Right * (PacketSide + TearSpread * tear); r = l + Right * (PacketW + TearSpread * tear); }
-            else if (beat == 7) { l = Burner + Vector3.up * PacketLift - Right * PacketSide; r = Rest(1); }
+            else if (beat == 5)
+            {
+                float u = Ease((t - RamenClock.PhoneEnd - PacketGrab) / PacketRaise);
+                var restL = PacketRest + PacketFlat * CornerLeft; var restR = PacketRest + PacketFlat * CornerRight;
+                var liftedR = PacketLifted + Right * (PacketW - 2 * PacketCornerInset);
+                l = WristFor(0, Vector3.Lerp(restL, PacketLifted, u)); r = WristFor(1, Vector3.Lerp(restR, liftedR, u));
+            }
+            else if (beat == 6)
+            {
+                float tear = Ease((t - RamenClock.PacketEnd) / (RamenClock.TearEnd - RamenClock.PacketEnd));
+                l = WristFor(0, PacketLifted - Right * (TearSpread * tear)); r = WristFor(1, PacketLifted + Right * (PacketW - 2 * PacketCornerInset));
+            }
+            else if (beat == 7) { l = WristFor(0, PacketLifted); r = Rest(1); }
             else if (beat == 8) { l = Handle(Burner); r = Burner - Forward * StirPullIn + Vector3.up * StirHandHeight + (Right * Mathf.Cos(t * Tau * StirHz) + Forward * Mathf.Sin(t * Tau * StirHz)) * StirRadius; }
         }
         void RestoreLast()
@@ -261,6 +335,18 @@ namespace Oddity.RoomTest
                 float angle = j == 0 ? CurlProximal : j == 1 ? CurlMiddle : CurlDistal;
                 if (clock.Beat == 3 && side == 0) angle += TapCurl * Mathf.Sin(clock.Time * Tau * TapHz + f);
                 Turn(b, axis, angle * grip, w);
+            }
+            float pinch = clock.Beat == 5 || clock.Beat == 6 || (clock.Beat == 7 && side == 0) ? Ease((clock.Time - RamenClock.PhoneEnd) / TransitionSeconds) : 0;
+            if (pinch <= 0 || finger[side, 0, 2] == null || thumb[side, 2] == null) return;
+            // close the thumb onto the index fingertip: each joint swings the thumb tip toward it (limited per joint), two passes from the tip joint to the base
+            for (int pass = 0; pass < 4; pass++) for (int j = 2; j >= 0; j--)
+            {
+                var b = thumb[side, j]; if (b == null) continue;
+                var index = finger[side, 0, 2].position + (finger[side, 0, 2].position - finger[side, 0, 1].position).normalized * .01f;
+                var tip = thumb[side, 2].position + (thumb[side, 2].position - thumb[side, 1].position).normalized * .01f;
+                var q = Quaternion.FromToRotation(tip - b.position, index - b.position);
+                q.ToAngleAxis(out float angle, out Vector3 swing); if (angle > 180) angle -= 360;
+                b.rotation = Quaternion.AngleAxis(Mathf.Clamp(angle, -PacketThumb, PacketThumb) * pinch * w, swing) * b.rotation;
             }
         }
         public void Apply(float dt)
@@ -304,6 +390,7 @@ namespace Oddity.RoomTest
                 Curl(s, clock.Beat == 3 || clock.Beat == 4 ? SmileDone : 1, w);
             }
             ApplyProps(t);
+            if (w >= 1 && clock.Beat >= 5 && clock.Beat <= 6) for (int s = 0; s < 2; s++) pinchInHand[s] = Quaternion.Inverse(hand[s].rotation) * (PinchPoint(s) - hand[s].position);
             for (int i = 0; i < controlled.Count; i++) written[i] = controlled[i].localRotation;
             hasWritten = true;
         }
@@ -321,19 +408,23 @@ namespace Oddity.RoomTest
             // Fill rises from the bottom; the return is an explicit empty-pot loop reset.
             water.localPosition = Vector3.up * Mathf.Lerp(PotBase, WaterY, Ease(t / RamenClock.FillEnd));
             Phone.SetPositionAndRotation(PhoneRest, Quaternion.LookRotation(Forward, Vector3.up) * Quaternion.Euler(PhoneTilt, 0, 0));
-            bool holdingPacket = clock.Beat >= 5 && clock.Beat <= 7;
+            bool holdingPacket = clock.Beat == 6 || clock.Beat == 7 || (clock.Beat == 5 && t >= RamenClock.PhoneEnd + PacketGrab - .2f);
             Packet.SetParent(holdingPacket ? hand[0] : Props, true);
+            var flatRotation = PacketFlat;
             if (holdingPacket)
             {
-                // the packet is fixed to the hand's own frame (palm side), so it turns with the wrist; with the ideal wrist this is the old world pose
-                var handWorld = hand[0].rotation * Quaternion.Inverse(handFrame[0]) * Quaternion.Euler(0, 0, 180);
-                Packet.position = hand[0].position + hand[0].rotation * palmAxis[0] * -PacketPalmOffset;
-                Packet.rotation = handWorld * Quaternion.Euler(clock.Beat == 7 ? PacketTilt * Ease((t - RamenClock.TearEnd) / (RamenClock.DropEnd - RamenClock.TearEnd)) : 0, 0, 0);
+                // the bag is pinched at its left top corner between the thumb and index fingertips and fixed in the hand's own frame, so it turns with the wrist
+                float u = clock.Beat == 5 ? Ease((t - RamenClock.PhoneEnd - PacketGrab) / PacketRaise) : 1;
+                var hanging = hand[0].rotation * handFrame[0] * Quaternion.Euler(0, 0, 180);
+                var rotation = Quaternion.Slerp(flatRotation, hanging, u) * Quaternion.Euler(clock.Beat == 7 ? PacketTilt * Ease((t - RamenClock.TearEnd) / (RamenClock.DropEnd - RamenClock.TearEnd)) : 0, 0, 0);
+                float attach = clock.Beat == 5 ? Ease((t - (RamenClock.PhoneEnd + PacketGrab - .2f)) / .2f) : 1;
+                Packet.rotation = rotation;
+                Packet.position = Vector3.Lerp(PacketRest, PinchPoint(0) - rotation * CornerLeft, attach);
             }
-            else Packet.SetPositionAndRotation(PacketRest, Quaternion.LookRotation(Forward, Vector3.up));
+            else Packet.SetPositionAndRotation(PacketRest, flatRotation);
             Packet.gameObject.SetActive(clock.Beat <= 7);
             strip.gameObject.SetActive(clock.Beat == 6);
-            strip.position = hand[1].position; strip.rotation = Packet.rotation;
+            strip.position = PinchPoint(1) - Right * (StripLength / 2); strip.rotation = Quaternion.LookRotation(Forward, Vector3.up);
             noodles.gameObject.SetActive(clock.Beat == 7 || clock.Beat == 8 || clock.Beat == 9);
             float fall = Ease((t - RamenClock.TearEnd) / (RamenClock.DropEnd - RamenClock.TearEnd));
             noodles.position = Burner + Vector3.up * Mathf.Lerp(PotHeight + PourFall, WaterY, fall);
@@ -355,6 +446,7 @@ namespace Oddity.RoomTest
             DestroyOwned(Packet != null ? Packet.gameObject : null);
             DestroyOwned(Props != null ? Props.gameObject : null);
             foreach (var m in materials) DestroyOwned(m);
+            foreach (var mesh in meshes) DestroyOwned(mesh);
         }
     }
 }

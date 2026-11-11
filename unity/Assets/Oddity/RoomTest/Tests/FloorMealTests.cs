@@ -169,6 +169,53 @@ namespace Oddity.RoomTest.Tests
             }
             finally { rig?.Dispose(); Object.DestroyImmediate(model); }
         }
+
+        // three-fixes item 2: the left hand cups the lifted bowl (fingertips on its bottom) and rests on the table while the bowl is down
+        [Test]
+        public void FloorMeal_LeftHandCupsTheLiftedBowlAndRestsOnTheTableWhenItIsDown()
+        {
+            var model = LoadModel(); FloorMealRig rig = null;
+            try
+            {
+                var anim = model.GetComponent<Animator>();
+                rig = new FloorMealRig(anim, 104);
+                model.transform.rotation = rig.Props.rotation;
+                var lhand = anim.GetBoneTransform(HumanBodyBones.LeftHand);
+                rig.Start();
+                float worstTip = -9, worstInside = 9, wristMin = 9, wristMax = 0, worstHover = -9, worstSink = 9; int lifted = 0, down = 0; float maxBowl = 0; var perFinger = new float[5];
+                for (int i = 0; i < 7200; i++)
+                {
+                    rig.Tick(1f / 60);
+                    if (rig.Weight < 1) continue;
+                    rig.Apply(0);
+                    maxBowl = Mathf.Max(maxBowl, rig.Bowl.position.y - rig.Props.position.y); bool up = rig.Bowl.position.y - rig.Props.position.y > FloorMealRig.TableHeight + FloorMealRig.BowlHeight / 2 + .03f;
+                    if (up && (rig.Phase == "Slurping" || rig.Phase == "Chewing"))
+                    {
+                        lifted++;
+                        for (int f = 1; f <= 4; f++)
+                        {
+                            float sd = rig.BowlSurfaceDistance(rig.TipOf(0, f));
+                            worstTip = Mathf.Max(worstTip, sd); worstInside = Mathf.Min(worstInside, sd); perFinger[f] = sd;
+                        }
+                        float wr = Vector3.Distance(lhand.position, rig.Bowl.position); wristMin = Mathf.Min(wristMin, wr); wristMax = Mathf.Max(wristMax, wr);
+                    }
+                    else if (!up && (rig.Phase == "Phone" || rig.Phase == "Laughing" || rig.Phase == "Returning"))
+                    {
+                        down++;
+                        float low = float.MaxValue;
+                        for (int f = 1; f <= 4; f++) low = Mathf.Min(low, rig.TipOf(0, f).y - rig.TableTopY);
+                        worstHover = Mathf.Max(worstHover, low); worstSink = Mathf.Min(worstSink, low);
+                    }
+                }
+                Debug.Log("FLOORMEAL_LEFT last fingers idx/mid/ring/little " + perFinger[1].ToString("0.000") + "/" + perFinger[2].ToString("0.000") + "/" + perFinger[3].ToString("0.000") + "/" + perFinger[4].ToString("0.000") + " maxBowlY=" + maxBowl.ToString("0.000") + " lifted=" + lifted + " worst fingertip-to-bowl " + worstTip.ToString("0.0000") + " m, deepest inside " + worstInside.ToString("0.0000") + ", wrist-to-bowl-centre " + wristMin.ToString("0.000") + " - " + wristMax.ToString("0.000") + "; down=" + down + " worst fingertip hover over the table " + worstHover.ToString("0.0000") + ", lowest " + worstSink.ToString("0.0000"));
+                Assert.That(lifted, Is.GreaterThan(60)); Assert.That(down, Is.GreaterThan(60));
+                Assert.That(worstTip, Is.LessThanOrEqualTo(.01f), "fingertips within 1 cm of the bowl surface");
+                Assert.That(worstInside, Is.GreaterThanOrEqualTo(-.004f), "no finger inside the bowl");
+                Assert.That(wristMin, Is.GreaterThan(FloorMealRig.BowlRadius - .03f)); Assert.That(wristMax, Is.LessThan(FloorMealRig.BowlRadius + .06f), "wrist about the bowl radius from its centre");
+                Assert.That(worstHover, Is.LessThanOrEqualTo(.01f), "left hand on the table, not hovering"); Assert.That(worstSink, Is.GreaterThan(-.012f), "left hand not through the table");
+            }
+            finally { rig?.Dispose(); Object.DestroyImmediate(model); }
+        }
     }
 }
 #endif
