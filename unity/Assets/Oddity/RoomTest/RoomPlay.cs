@@ -129,17 +129,17 @@ namespace Oddity.RoomTest
                 var curlClip=Environment.GetEnvironmentVariable("ODDITY_PLAYCURL");if(!string.IsNullOrWhiteSpace(curlClip))Keys[CurlIndex].clip=curlClip; // and V
                 var napClip=Environment.GetEnvironmentVariable("ODDITY_PLAYNAP");if(!string.IsNullOrWhiteSpace(napClip))Keys[NapIndex].clip=napClip; // and K
                 else if(apt && Apartment.HasBed)Keys[NapIndex].clip="KaSleepCurlUpSidewaysLoop"; // the bed: curled on her side rests on the quilt with the head on the pillow, the side-turn clip hovers
-                var envModel=Environment.GetEnvironmentVariable("ODDITY_MODEL");var startLine=apt?IndoorLine:DefaultLine; // indoors (the studio and the apartment) she starts in the indoor clothes (I2), the old room in the outing ones (O2)
+                var envModel=Environment.GetEnvironmentVariable("ODDITY_MODEL");var startLine=Solo && !HideHarin?ViewLine:apt?IndoorLine:DefaultLine; // indoors (the studio and the apartment) she starts in the indoor clothes (I2), the old room in the outing ones (O2)
                 var startPath=envModel??NewestInTest(startLine)??NewestInTest(DefaultLine)??NewestInTest(null)??"Assets/Models/test/harin-6T-I1-30.vrm"; // the newest build of that line, else O2, else the newest vrm of any line
-                Debug.Log("ROOMPLAY_STARTMODEL "+Path.GetFileNameWithoutExtension(startPath)+" why="+(envModel!=null?"ODDITY_MODEL":apt?"indoor house -> "+IndoorLine:"outdoor room -> "+DefaultLine));
+                Debug.Log("ROOMPLAY_STARTMODEL "+Path.GetFileNameWithoutExtension(startPath)+" why="+(envModel!=null?"ODDITY_MODEL":Solo && !HideHarin?"hand-started play shows "+ViewLine:apt?"indoor house -> "+IndoorLine:"outdoor room -> "+DefaultLine));
                 LoadModel(startPath);
                 PlaceSofa();
                 BuildPerches();
                 SpawnPets();
                 if(apt){startYaw=Apartment.StartYaw;heading=yaw=targetYaw=turnStart=startYaw;turnTime=1;Select(9);} // she starts facing the house's first camera
-                if(Solo && pets.Count>0){ctl=pets[0];AiPause(ctl);}
+                if(Solo && HideHarin && pets.Count>0){ctl=pets[0];AiPause(ctl);}
                 var at=Environment.GetEnvironmentVariable("ODDITY_HARINAT"); // "x,z,yaw"
-                if(Solo && one && string.IsNullOrWhiteSpace(at))at="0.7,4.8,0"; // the hidden Harin waits by the entrance, out of the cat's way: where Harin starts and which way she faces (0 = north, 180 = south), for lighting tests
+                if(Solo && HideHarin && one && string.IsNullOrWhiteSpace(at))at="0.7,4.8,0"; // the hidden Harin waits by the entrance, out of the cat's way: where Harin starts and which way she faces (0 = north, 180 = south), for lighting tests
                 if(!string.IsNullOrWhiteSpace(at)){var v=at.Split(',').Select(t=>float.Parse(t,CultureInfo.InvariantCulture)).ToArray();x=v[0];z=v[1];heading=yaw=targetYaw=turnStart=startYaw=v[2];Debug.Log("ROOMPLAY_HARINAT x="+F(x)+" z="+F(z)+" yaw="+F(yaw));}
                 var text=Environment.GetEnvironmentVariable("ODDITY_PLAYKEYS");scripted=!string.IsNullOrWhiteSpace(text);
                 if(scripted)foreach(var part in text.Split(',')){
@@ -408,6 +408,9 @@ namespace Oddity.RoomTest
         // For now (2026-11-11, while the white cat's sleep poses are reworked one by one) a hand-played run shows the WHITE cat alone: the Somali and the tabby
         // are not spawned (ODDITY_SOMALI=1 / ODDITY_TABBY=1 bring one back), Harin is invisible, parked by the entrance and does not live on her own, and the
         // keys start on the cat. ODDITY_SOLO=0 turns this off, =1 forces it; script runs (ODDITY_PLAYKEYS) are untouched unless ODDITY_SOLO=1.
+        // 2026-11-12: Harin is shown again in the hand-started play, in the N2 line (the user is looking at N2 builds); ODDITY_HIDEHARIN=1 hides her as before and gives the keys to the cat
+        static bool HideHarin=>PetEnv("ODDITY_HIDEHARIN")=="1";
+        const string ViewLine="6T-N2";
         static bool Solo=>PetEnv("ODDITY_SOLO")=="1" || (PetEnv("ODDITY_SOLO")!="0" && string.IsNullOrWhiteSpace(PetEnv("ODDITY_PLAYKEYS")));
         // the third cat TABBY: the striped tabby "cat4" (CC BY 4.0, git-ignored), the same 14 shared clips; body length 0.44 m, ODDITY_TABBYLENGTH overrides, ODDITY_TABBY=0 leaves it out
         const string TabbySharedFile="Assets/Oddity/DevMotion/Cat/Cat4/cat4_shared.glb";
@@ -4110,7 +4113,7 @@ namespace Oddity.RoomTest
             if(m==null)return;
             var all=m.GetComponentsInChildren<Renderer>(true);var hid=new List<string>();
             if(apt && Environment.GetEnvironmentVariable("ODDITY_SHOESOFF")=="1")foreach(var r in all){var n=r.name.ToLowerInvariant();if(ShoeWords.Any(w=>n.Contains(w))){r.enabled=false;hid.Add(r.name);}}
-            if(Solo)foreach(var r in all)r.enabled=false;
+            if(Solo && HideHarin)foreach(var r in all)r.enabled=false;
             Debug.Log("ROOMPLAY_SHOES model="+Path.GetFileNameWithoutExtension(modelPath??modelName??"")+" hidden="+(hid.Count==0?"none":string.Join("|",hid))+" renderers="+string.Join("|",all.Select(r=>r.name)));
         }
         // Shift+T: lie on the bed (the K pose, on her side, head on the pillow) and watch the TV on the east wall
