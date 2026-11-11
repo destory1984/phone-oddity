@@ -12,7 +12,7 @@ Shader "Oddity/ShellFur"
         _FurLength ("Length (m)", Float) = 0.015
         _Density ("Strands per UV unit", Float) = 900
         _Thickness ("Strand thickness", Float) = 1.1
-        _RootShade ("Shade at the root", Float) = 0.62
+        _RootShade ("Shade at the root", Float) = 0.86
         _Droop ("Droop (m at the tip)", Float) = 0.004
         _Comb ("Comb along the surface (m at the tip)", Float) = 0.004
     }

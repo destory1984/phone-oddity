@@ -15,11 +15,12 @@ namespace Oddity.RoomTest
         // the peeping camera across the street: x, eye height, z, aim, default lens (fov 30 -> 6 by zoom)
         public static readonly Vector3 PeepEye = new Vector3(1.5f, 2.4f, -9f), PeepAim = new Vector3(1.5f, .9f, 2.75f);
         public const float PeepFov = 16f;
-        // the TV cabinet's west face and the cat tower's footprint (south-east corner); platform tops 0.45, 0.90, 1.35 m, each 0.40 square, cats land on TowerLand
-        public const float TvCabX0 = 2.65f, TowerX0 = 2.35f, TowerX1 = 2.85f, TowerZ0 = .30f, TowerZ1 = .80f;
-        public static readonly float[] TowerTops = { .45f, .90f, 1.35f };
-        public static readonly Vector2[] TowerLand = { new Vector2(2.54f, .58f), new Vector2(2.66f, .52f), new Vector2(2.60f, .55f) };
-        public static readonly Vector2 TowerStand = new Vector2(2.08f, .55f);
+        // the TV cabinet's west face and the cat tower's footprint (south-east corner); platform tops 0.45, 0.90, 1.35, 1.80 m, each 0.40 square and set in a zigzag on the two sides of one floor-to-ceiling pole (west, east, west, east:
+        // a cat cannot jump up through a platform straight above it), cats land on TowerLand
+        public const float TvCabX0 = 2.65f, TowerX0 = 2.31f, TowerX1 = 2.99f, TowerZ0 = .30f, TowerZ1 = .80f;
+        public static readonly float[] TowerTops = { .45f, .90f, 1.35f, 1.80f };
+        public static readonly Vector2[] TowerLand = { new Vector2(2.465f, .58f), new Vector2(2.835f, .52f), new Vector2(2.465f, .55f), new Vector2(2.835f, .55f) };
+        public static readonly Vector2 TowerStand = new Vector2(2.05f, .55f);
         // where Q (coffee) stands: 0.62 m from the glass, to the east of the sill plant (x 1.50) and 0.3 m clear of the cat tower, facing south through the window
         public static readonly Vector2 CurtainSpot = new Vector2(1.5f, .40f); // mid-window, about 0.2 m from the curtain plane (CurtainPanel.PlaneZ)
         public static readonly Vector2 CoffeeSpot = new Vector2(1.85f, .62f);
@@ -109,15 +110,17 @@ namespace Oddity.RoomTest
                 // TV cabinet on the east wall where the sofa was (1.0 x 0.35 x 0.45 m, centred on z 1.5) with the 32 inch TV on a short neck; the TV itself is SofaTv (tvAt below)
                 f("tv_cabinet", TvCabX0, X1, 0, .45f, 1.0f, 2.0f, oak, true), f("tv_cabinet_top", TvCabX0 - .01f, X1, .45f, .47f, .99f, 2.01f, wood),
                 f("tv_foot", 2.78f, 2.92f, .47f, .60f, 1.40f, 1.60f, dark),
-                // cat tower (캣타워) in the south-east corner by the window: a 0.50 square base, sisal posts, three 0.40 platforms (tops at 0.45, 0.90, 1.35 m), a low rim round the top one
-                f("tower_base", TowerX0, TowerX1, 0, .06f, TowerZ0, TowerZ1, new Color(.70f, .62f, .50f), true),
-                f("tower_post1", 2.42f, 2.47f, .06f, 1.35f, .37f, .42f, sisal), f("tower_post2", 2.73f, 2.78f, .06f, 1.35f, .37f, .42f, sisal),
-                f("tower_post3", 2.42f, 2.47f, .06f, 1.35f, .68f, .73f, sisal), f("tower_post4", 2.73f, 2.78f, .06f, 1.35f, .68f, .73f, sisal),
-                f("tower_1", 2.40f, 2.80f, .40f, .45f, .35f, .75f, fabric, false, "tower1"), f("tower_2", 2.40f, 2.80f, .85f, .90f, .35f, .75f, fabric, false, "tower2"),
-                f("tower_3", 2.40f, 2.80f, 1.30f, 1.35f, .35f, .75f, fabric, false, "tower3"),
-                f("tower_rim_s", 2.40f, 2.80f, 1.35f, 1.43f, .35f, .38f, fabric), f("tower_rim_n", 2.40f, 2.80f, 1.35f, 1.43f, .72f, .75f, fabric),
-                f("tower_rim_w", 2.40f, 2.43f, 1.35f, 1.43f, .38f, .72f, fabric), f("tower_rim_e", 2.77f, 2.80f, 1.35f, 1.43f, .38f, .72f, fabric),
-                f("tower_post_cover", 2.42f, 2.78f, .06f, .09f, .37f, .73f, sisal, false, "tower"), // the lowest clickable part: a click on the tower's foot or posts sends a cat to the highest free level
+                // cat tower (캣타워) in the south-east corner by the window, after the user's reference (a floor-to-ceiling tension pole): one sisal pole from a 0.68 x 0.50
+                // floor mat to a cap on the ceiling, four 0.40 platforms (tops at 0.45, 0.90, 1.35, 1.80 m) on alternate sides of it: levels 1 and 3 on the west, 2 and 4 on
+                // the east, so no platform hangs over the one a cat jumps from. A low rim round the top one
+                f("tower_base", TowerX0, TowerX1, 0, .04f, TowerZ0, TowerZ1, new Color(.70f, .62f, .50f), true),
+                f("tower_pole", 2.61f, 2.69f, .04f, H - .04f, .51f, .59f, sisal), f("tower_cap", 2.56f, 2.74f, H - .04f, H, .46f, .64f, new Color(.70f, .62f, .50f)),
+                f("tower_foot", 2.54f, 2.76f, .04f, .08f, .44f, .66f, new Color(.70f, .62f, .50f)),
+                f("tower_1", 2.32f, 2.72f, .40f, .45f, .35f, .75f, fabric, false, "tower1"), f("tower_2", 2.58f, 2.98f, .85f, .90f, .35f, .75f, fabric, false, "tower2"),
+                f("tower_3", 2.32f, 2.72f, 1.30f, 1.35f, .35f, .75f, fabric, false, "tower3"), f("tower_4", 2.58f, 2.98f, 1.75f, 1.80f, .35f, .75f, fabric, false, "tower4"),
+                f("tower_rim_s", 2.58f, 2.98f, 1.80f, 1.88f, .35f, .38f, fabric), f("tower_rim_n", 2.58f, 2.98f, 1.80f, 1.88f, .72f, .75f, fabric),
+                f("tower_rim_e", 2.95f, 2.98f, 1.80f, 1.88f, .38f, .72f, fabric),
+                f("tower_post_cover", 2.60f, 2.70f, .08f, .40f, .50f, .60f, sisal, false, "tower"), // the lowest clickable part: a click on the tower's pole sends a cat to the highest free level
                 // the window sill inside (a thin board, a cat perch) and a little plant on it
                 f("sill", WinA, WinB, .30f, .40f, 0, .28f, new Color(.92f, .91f, .89f), true, "sill"),
             };

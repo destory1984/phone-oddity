@@ -34,6 +34,30 @@ namespace Oddity.RoomTest
             return b.Contains("pelvis") || b.Contains("spine") || b.Contains("chest");
         }
 
+        /// <summary>The coat lifted to neutral white: the body's material becomes a copy whose base map is a whitened copy of the model's own
+        /// (Hidden/Oddity/CoatWhiten; eyes, nose and inner ear untouched). ODDITY_WHITEN = gain (1.36; 0 leaves the model's warm grey). Call before Apply.</summary>
+        public static string Whiten(GameObject cat)
+        {
+            float gain = Env("ODDITY_WHITEN", 1.36f);
+            if (gain <= 0) return "off (ODDITY_WHITEN=0)";
+            var shader = Shader.Find("Hidden/Oddity/CoatWhiten");
+            if (shader == null || !shader.isSupported) return "no shader Hidden/Oddity/CoatWhiten";
+            var smr = cat.GetComponentsInChildren<SkinnedMeshRenderer>().OrderByDescending(r => r.sharedMesh != null ? r.sharedMesh.vertexCount : 0).FirstOrDefault();
+            var baseMat = smr != null ? smr.sharedMaterials.FirstOrDefault(m => m != null) : null;
+            if (baseMat == null) return "no material";
+            Texture map = baseMat.HasProperty("_BaseMap") ? baseMat.GetTexture("_BaseMap") : baseMat.mainTexture;
+            if (map == null) return "no base map";
+            int size = Mathf.Min(2048, Mathf.Max(map.width, map.height));
+            var rt = new RenderTexture(size, size, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB) { name = map.name + "_white", useMipMap = true, autoGenerateMips = true, filterMode = FilterMode.Trilinear, wrapMode = map.wrapMode };
+            var blit = new Material(shader); blit.SetFloat("_Gain", gain);
+            Graphics.Blit(map, rt, blit); UnityEngine.Object.Destroy(blit);
+            var mat = new Material(baseMat) { name = baseMat.name + "_white" };
+            if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", rt); else mat.mainTexture = rt;
+            var mats = smr.sharedMaterials; for (int i = 0; i < mats.Length; i++) if (mats[i] == baseMat) mats[i] = mat;
+            smr.sharedMaterials = mats;
+            return "gain=" + gain.ToString("0.00", CultureInfo.InvariantCulture) + " map=" + map.name + " " + map.width + "x" + map.height + " -> " + size;
+        }
+
         /// <summary>Returns a log line. scale: the cat's world scale (fur length is given in metres).</summary>
         public static string Apply(GameObject cat)
         {

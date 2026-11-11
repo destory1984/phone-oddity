@@ -606,7 +606,7 @@ namespace Oddity.RoomTest
                 p.walkSpd=.70f*scale*CatSpeedMul;p.runSpd=p.walkSpd*2f;p.aiSpd=p.walkSpd*.8f;
                 var mat=go.GetComponentsInChildren<Renderer>().SelectMany(r=>r.sharedMaterials).FirstOrDefault(m=>m!=null);
                 Debug.Log("ROOMPLAY_CATSPEED name=WHITE walk="+F(p.walkSpd)+" run="+F(p.runSpd)+" ai="+F(p.aiSpd));Debug.Log("ROOMPLAY_WHITE file="+Path.GetFileName(found)+" speed="+F(p.walkSpd)+" m/s run="+F(p.runSpd)+" ai="+F(p.aiSpd)+" clips="+string.Join(",",p.clips.Select(c=>c.name+":"+F(c.length)+(c.legacy?"L":"M")))+" renderers="+go.GetComponentsInChildren<Renderer>().Length+" material="+(mat!=null?mat.shader.name+" colour="+(mat.HasProperty("_BaseColor")?mat.GetColor("_BaseColor").ToString():"-")+" map="+(mat.HasProperty("_BaseMap") && mat.GetTexture("_BaseMap")!=null):"none"));
-                Debug.Log("ROOMPLAY_FUR who=WHITE "+CatFur.Apply(go)); // shell fur (trial): ODDITY_FUR=0 turns it off
+                Debug.Log("ROOMPLAY_FUR who=WHITE white="+CatFur.Whiten(go)+" fur="+CatFur.Apply(go)); // shell fur (trial): ODDITY_FUR=0 turns it off
                 pets.Add(p);
             }catch(Exception e){Debug.LogWarning("ROOMPLAY_WHITE failed: "+e.Message);}
         }
@@ -978,7 +978,7 @@ namespace Oddity.RoomTest
         }
         static int TowerLevel(string n)=>n.Length>5 && int.TryParse(n.Substring(5),out var v)?v:0;
         // the highest tower level nobody holds (clicking the tower's foot or posts)
-        string HighestFreeTower(Pet p){for(int i=3;i>=1;i--)if(perches.ContainsKey("tower"+i) && FreeSpot("tower"+i,p,PetXZ(p))!=null)return "tower"+i;return null;}
+        string HighestFreeTower(Pet p){for(int i=9;i>=1;i--)if(perches.ContainsKey("tower"+i) && FreeSpot("tower"+i,p,PetXZ(p))!=null)return "tower"+i;return null;}
         void ScriptClickTower(string key)
         {
             if(ctl==null){Notice("고양이를 Tab 으로 조종해야 함");return;}
@@ -1315,7 +1315,7 @@ namespace Oddity.RoomTest
         bool AiStart(Pet p,string act)
         {
             var cp=PetXZ(p);string place=act;Vector2 at=cp;bool travel=true;
-            if(act=="tower"){var lvs=Enumerable.Range(1,3).Select(i=>"tower"+i).Where(n=>perches.ContainsKey(n) && FreeSpot(n,p,cp,true)!=null).ToList();if(lvs.Count==0)return false;act=lvs[Rng().Next(lvs.Count)];} // the tower: one of its free levels
+            if(act=="tower"){var lvs=Enumerable.Range(1,9).Select(i=>"tower"+i).Where(n=>perches.ContainsKey(n) && FreeSpot(n,p,cp,true)!=null).ToList();if(lvs.Count==0)return false;act=lvs[Rng().Next(lvs.Count)];} // the tower: one of its free levels
             switch(act){
                 case "wander":case "rug":{
                     Func<Vector2> gen=apt?(act=="rug"?(Func<Vector2>)(()=>new Vector2(Rnd(Apartment.RugBox.xMin,Apartment.RugBox.xMax),Rnd(Apartment.RugBox.yMin,Apartment.RugBox.yMax))):(Func<Vector2>)AptWander):act=="rug"?(Func<Vector2>)(()=>new Vector2(Rnd(-1.25f,-.25f),Rnd(.4f,1.0f))):(()=>new Vector2(Rnd(-1.6f,1.6f),Rnd(-1.6f,1.2f)));
@@ -1377,7 +1377,7 @@ namespace Oddity.RoomTest
             if(p.somali && IsUp(p.sit))return false;
             switch(p.aiAct){
                 case "sofa":return p.onSofa;
-                case "sill":case "counter":case "table":case "fridge":case "teatable":case "tower1":case "tower2":case "tower3":return p.perch!=null && p.perch.name==p.aiAct;
+                case "sill":case "counter":case "table":case "fridge":case "teatable":case "tower1":case "tower2":case "tower3":case "tower4":case "tower5":return p.perch!=null && p.perch.name==p.aiAct;
                 default:return !p.moving && !p.onSofa && p.perch==null;
             }
         }

@@ -88,7 +88,7 @@ namespace Oddity.RoomTest.Tests
             Assert.IsTrue(fp.Free(start), "Harin starts on free floor");
             var goals = new[] {
                 (new Vector2(1.9f, 1.5f), "main"), (new Vector2(1.0f, 4.45f), "bath"), (new Vector2(2.0f, 5.0f), "entrance"),
-                (new Vector2(1.35f, 1.5f), "bed front"), (new Vector2(2.0f, 1.5f), "TV cabinet front"), (new Vector2(2.08f, .55f), "tower foot"), (new Vector2(2.1f, 3.4f), "counter front"), (new Vector2(1.5f, .62f), "window spot"),
+                (new Vector2(1.35f, 1.5f), "bed front"), (new Vector2(2.0f, 1.5f), "TV cabinet front"), (new Vector2(2.05f, .55f), "tower foot"), (new Vector2(2.1f, 3.4f), "counter front"), (new Vector2(1.5f, .62f), "window spot"),
             };
             foreach (var (g, name) in goals)
             {
@@ -169,24 +169,29 @@ namespace Oddity.RoomTest.Tests
         }
 
         [Test]
-        public void OneRoom_CatTowerIsInTheSouthEastCornerWithThreeLevelsAHopApartAndTheWalkGapsStayOpen()
+        public void OneRoom_CatTowerIsInTheSouthEastCornerWithFourZigzagLevelsAHopApartAndTheWalkGapsStayOpen()
         {
             var f = Apartment.Furniture().ToDictionary(q => q.name);
             Assert.IsTrue(Apartment.HasTower); var b = f["tower_base"];
-            Assert.AreEqual(.5f, b.x1 - b.x0, 1e-3f); Assert.AreEqual(.5f, b.z1 - b.z0, 1e-3f); Assert.IsTrue(b.block, "Harin cannot walk through it");
-            Assert.Greater(b.x0, 2.2f, "the east side"); Assert.Less(b.z1, 1.0f, "the south side, clear of the TV cabinet (z 1.0 -> 2.0)");
+            Assert.AreEqual(.68f, b.x1 - b.x0, 1e-3f); Assert.AreEqual(.5f, b.z1 - b.z0, 1e-3f); Assert.IsTrue(b.block, "Harin cannot walk through it");
+            Assert.GreaterOrEqual(b.x0, 2.2f, "the east side"); Assert.Less(b.z1, 1.0f, "the south side, clear of the TV cabinet (z 1.0 -> 2.0)");
             Assert.GreaterOrEqual(b.z0, f["sill"].z1 - 1e-3f, "behind the window sill, not on it");
-            for (int i = 1; i <= 3; i++)
+            for (int i = 1; i <= 4; i++)
             {
                 var p = f["tower_" + i]; Assert.AreEqual("tower" + i, p.perch); Assert.AreEqual(Apartment.TowerTops[i - 1], p.y1, 1e-3f); Assert.AreEqual(.4f, p.x1 - p.x0, 1e-3f); Assert.AreEqual(.4f, p.z1 - p.z0, 1e-3f);
                 Assert.IsTrue(Rect.MinMaxRect(b.x0, b.z0, b.x1, b.z1).Contains(new Vector2(p.x0, p.z0)) && Rect.MinMaxRect(b.x0, b.z0, b.x1, b.z1).Contains(new Vector2(p.x1, p.z1)), "platform " + i + " is over the base");
                 Assert.IsTrue(Rect.MinMaxRect(p.x0, p.z0, p.x1, p.z1).Contains(Apartment.TowerLand[i - 1]), "the landing spot is on platform " + i);
             }
-            CollectionAssert.AreEqual(new[] { .45f, .90f, 1.35f }, Apartment.TowerTops);
+            CollectionAssert.AreEqual(new[] { .45f, .90f, 1.35f, 1.80f }, Apartment.TowerTops);
+            // a zigzag: the platform straight above the next one would block the jump. Each level is shifted 0.26 m sideways from the one below (0.14 m of overlap, where the pole is),
+            // and over a cat's landing spot there is nothing for 0.8 m
+            for (int i = 1; i < 4; i++) { var lo = f["tower_" + i]; var hi = f["tower_" + (i + 1)]; Assert.GreaterOrEqual(Mathf.Abs((hi.x0 + hi.x1) / 2 - (lo.x0 + lo.x1) / 2), .25f, "level " + (i + 1) + " is beside level " + i); Assert.LessOrEqual(Mathf.Min(lo.x1, hi.x1) - Mathf.Max(lo.x0, hi.x0), .15f); }
+            for (int i = 1; i <= 4; i++) { var l = Apartment.TowerLand[i - 1]; foreach (var q in f.Values) if (q.name.StartsWith("tower_") && !q.name.Contains("pole") && !q.name.Contains("cap") && q.y0 > Apartment.TowerTops[i - 1] + .1f && q.y0 < Apartment.TowerTops[i - 1] + .8f) Assert.IsFalse(l.x > q.x0 && l.x < q.x1 && l.y > q.z0 && l.y < q.z1, q.name + " hangs over the landing spot of level " + i); }
             // the jump rule: floor -> 0.45 and each level -> the next is 0.45 m up, a short hop sideways (one arc of 0.4 - 0.5 s)
             Assert.LessOrEqual(Apartment.TowerTops[0], .5f);
-            for (int i = 1; i < 3; i++) { Assert.LessOrEqual(Apartment.TowerTops[i] - Apartment.TowerTops[i - 1], .5f); Assert.LessOrEqual(Vector2.Distance(Apartment.TowerLand[i], Apartment.TowerLand[i - 1]), .3f); }
-            Assert.IsTrue(f.ContainsKey("tower_rim_s") && f["tower_rim_s"].y0 >= 1.35f - 1e-3f, "a low rim on the top level");
+            for (int i = 1; i < 4; i++) { Assert.LessOrEqual(Apartment.TowerTops[i] - Apartment.TowerTops[i - 1], .5f); Assert.LessOrEqual(Vector2.Distance(Apartment.TowerLand[i], Apartment.TowerLand[i - 1]), .4f); }
+            Assert.IsTrue(f.ContainsKey("tower_rim_s") && f["tower_rim_s"].y0 >= 1.80f - 1e-3f, "a low rim on the top level");
+            Assert.IsTrue(f["tower_pole"].y1 > OneRoom.H - .1f && f["tower_pole"].x1 - f["tower_pole"].x0 < .12f, "one thin pole up to the ceiling");
             var fp = Flat();
             Assert.IsTrue(fp.Free(Apartment.TowerStand), "the foot spot is open floor"); Assert.NotNull(fp.Find(Apartment.HarinStart, Apartment.TowerStand, out var snapped)); Assert.IsFalse(snapped);
             float gap = Mathf.Min(f["tv_cabinet"].x0, b.x0) - f["bed_frame"].x1; Assert.GreaterOrEqual(gap, 1.2f, "bed to cabinet / tower: " + gap);
