@@ -190,6 +190,8 @@ def default_pose():
     for k in ('FLtoe', 'FRtoe', 'HLtoe', 'HRtoe'): P[k] = (0,)
     for k in ('FLyr', 'FRyr', 'HLyr', 'HRyr'): P[k] = (0, 0)     # paw yaw, roll (lying poses)
     P['oS2'] = (0, 0, 0); P['oCh'] = (0, 0, 0)                    # breathing offsets of Spine02 / Chest heads
+    P['oS1'] = (0, 0, 0)                                          # Spine01 head offset (the loin sags with the belly)
+    P['oSh'] = (0, 0, 0)                                          # shoulder joints slide on the ribcage (a cat's scapula is not fixed): lying upright, the chest sinks between the shoulders
     P['oNk'] = (0, 0, 0); P['oHd'] = (0, 0, 0)                    # Neck / Head head offsets (lying poses settle each trunk segment onto the floor)
     return P
 
@@ -219,6 +221,9 @@ def build_spec(P, ground=None):
         spec['aim']['Tail0%d' % (i + 1)] = V(P['A%d' % (i + 1)])
     spec['inc']['Tail07'] = euler(*P['A7'])
     spec['off'] = {'Spine02': V(P['oS2']), 'Chest': V(P['oCh']), 'Neck': V(P['oNk']), 'Head': V(P['oHd'])}
+    if 'oS1' in P and V(P['oS1']).length > 0: spec['off']['Spine01'] = V(P['oS1'])
+    if 'oSh' in P and V(P['oSh']).length > 0:
+        spec['off']['FrontUpperLeg.L'] = V(P['oSh']); spec['off']['FrontUpperLeg.R'] = V(P['oSh'])
     # pass 1: heads of shoulders and hips (they do not depend on the leg aims)
     _, posed0 = solve_chain(spec)
     for s in 'LR':
@@ -236,6 +241,7 @@ def build_spec(P, ground=None):
         hock = T - m * L3
         l1 = rlen['HindUpperLeg.' + s]; l2 = rlen['HindLowerLeg.' + s]
         K, d1, d2 = ik2(hp, l1, l2, hock, V(P['H' + s + 'p']))
+        if os.environ.get('IKDBG') and s == 'L': print('IKDBG hip %s hock %s pole %s l1 %.3f l2 %.3f K %s' % (tuple(round(c, 3) for c in hp), tuple(round(c, 3) for c in hock), tuple(P['H' + s + 'p']), l1, l2, tuple(round(c, 3) for c in K)))
         spec['aim']['HindUpperLeg.' + s] = d1; spec['aim']['HindLowerLeg.' + s] = d2
         spec['aim']['HindHock.' + s] = m
         spec['abs']['HindPaw.' + s] = euler(P['H' + s + 'pitch'][0], *P['H' + s + 'yr'])
@@ -769,6 +775,8 @@ def lie_fit(P, legs, iters=6, tail_margin=0.03, droop=True, settle_keys=None, le
                 c.z = 0; c.normalize(); P[k + 'p'] = (c.x, c.y, d['pole_in'] if d['pole_in'] is not True else 0.0)
             P[k + 'pitch'] = (d.get('pitch', 0),); P[k + 'yr'] = tuple(d.get('yr', (0, 0))); P[k + 'toe'] = (d.get('toe', 0),)
             if kind == 'H': P[k + 'm'] = tuple(d.get('m', (0, 1, -0.3)))
+            if kind == 'H' and d.get('m_to'):    # hock -> paw runs along the rim toward that bone (X-ray of a curled cat: the hind feet lie along the belly toward the nose)
+                o = H[d['m_to']] - H['Pelvis']; o.z = 0; P[k + 'm'] = tuple(o.normalized())
             if kind == 'H' and d.get('m_out'):   # hock -> paw runs on outward from the ring's middle
                 o = T - ring; o.z = 0; P[k + 'm'] = tuple(o.normalized())
         P = ground(P, iters=2, torso=True)
@@ -867,15 +875,19 @@ def make_donut(cover=False):
     # along the belly with the knees in the middle, the elbows too, and all four paws gather in the gap in front of the face; the tail wraps round outside
     P = sleep_base()
     P.update({'Spine01': (0, _e('XY1', 45), 0), 'Spine02': (0, _e('XY2', 55), 0), 'Chest': (0, _e('XY3', 55), 0), 'Neck': (-8, _e('XYN', 85), 0), 'Head': (-6, _e('XYH', -10), 0)})
-    P = world_tail(P, tail_heading([_e('XT', 1) * a for a in (5, 35, 70, 110, 150, 185)]))
+    P = world_tail(P, tail_heading([_e('XT', 1) * a for a in (_e('XT1', 30), _e('XT2', 80), _e('XT3', 115), _e('XT4', 125), _e('XT5', 125), _e('XT6', 125))]))
     # the ring is left a little open (155 deg over the trunk) and the hind paws lie in its middle: curled tighter, the hips touch the face, the thigh has nowhere
     # to go and the knee comes out through the rump. The knees bend toward the face, the elbows toward the hips
     lo, up = _e('XPLO', 0.2), _e('XPUP', -0.6)      # the floor-side elbow and knee a little up off the floor, the upper ones pressed down onto the body
+    # second X-ray (2026-11-12): knees AND elbows in the middle of the ring; the shanks run back out to the hocks on the rim between the hips and the head, the
+    # hind feet lie along the rim with the toes at the nose; the forearms come back from the middle to the chin; the tail follows the rim round to under the chin
+    ft, fu, ht, hu = _e('XFT', 0.0), _e('XFU', 0.05), _e('XHT', 0.05), _e('XHU', -0.2)
+    hm = os.environ.get('XHM', 'Head')
     legs = {
-        'FR': dict(mix=(_e('XFT', 0.30), _e('XFU', 0.25)), off=(0, 0, 0), floor=True, pole_to='Pelvis', pole_in=lo, pitch=48, yr=(0, -90)),
-        'FL': dict(mix=(_e('XFT', 0.30) + 0.08, _e('XFU', 0.25)), off=(0, 0, 0), floor=True, lift=_e('XLIFT', 0.045), pole_to='Pelvis', pole_in=up, pitch=48, yr=(0, -90)),
-        'HR': dict(mix=(_e('XHT', 0.3), _e('XHU', 0.6)), off=(0, 0, 0), floor=True, pole_to=os.environ.get('XHP', 'Head'), pole_in=lo, m_out=True, pitch=40, yr=(0, -90)),
-        'HL': dict(mix=(_e('XHT', 0.3) + 0.08, _e('XHU', 0.6)), off=(0, 0, 0), floor=True, lift=_e('XLIFT', 0.045), pole_to=os.environ.get('XHP', 'Head'), pole_in=up, m_out=True, pitch=40, yr=(0, -90))}
+        'FR': dict(mix=(ft, fu), off=(0, 0, 0), floor=True, pole_to=os.environ.get('XFP', 'Pelvis'), pole_in=lo, pitch=48, yr=(0, -90)),
+        'FL': dict(mix=(ft + 0.06, fu), off=(0, 0, 0), floor=True, lift=_e('XLIFT', 0.045), pole_to=os.environ.get('XFP', 'Pelvis'), pole_in=up, pitch=48, yr=(0, -90)),
+        'HR': dict(mix=(ht, hu), off=(0, 0, 0), floor=True, pole_to=os.environ.get('XHP', 'Chest'), pole_in=_e('XKLO', 0.8), m_to=hm, pitch=40, yr=(0, -90)),
+        'HL': dict(mix=(ht + 0.06, hu), off=(0, 0, 0), floor=True, lift=_e('XLIFT', 0.045), pole_to=os.environ.get('XHP', 'Chest'), pole_in=_e('XKUP', -0.2), m_to=hm, pitch=40, yr=(0, -90))}
     if cover:
         legs['FL'] = dict(ref='Head', off=(0.0, 0.05, 0.05), pole=(0.3, 1, 0.1), pitch=70, yr=(0, -90))
     return lie_fit(P, legs, head_pct=0.5, refloor=True, body_pct=_e('BPCT', 1))
@@ -902,33 +914,65 @@ def make_superman():
         'HR': dict(off=(-0.12, 0.30, 0), floor=True, pole=(-0.3, -0.3, 1), m=(-0.25, 0.97, 0), pitch=-135)}, level=True)
 
 def make_curlc(cover=False):
-    """Chart panel 'side curled': head resting on its cheek, upper foreleg bent with the paw by the chest (cover: laid over the eyes),
-    hind legs bent toward the belly, everything on the ground."""
+    """Lying on its side, after X-rays of a cat lying down (2026-11-12): the spine a gentle C, the head down on the floor-side forepaw, that foreleg's elbow back by
+    the ribs and its forearm forward under the chin, the upper foreleg folded with the paw by the chest (cover: laid over the eyes), both thighs FORWARD toward the
+    belly with the shanks running back and the feet forward again (a Z), the upper hind leg lying on the lower, the tail trailing with a hooked tip."""
     P = sleep_base()
-    P.update({'Spine01': (0, 20, 0), 'Spine02': (0, 25, 0), 'Chest': (0, 25, 0), 'Neck': (-8, 58, 0), 'Head': (float(os.environ.get('HP', 30)), -30, 0)})
-    P = world_tail(P, [(0.1, 1, 0.1), (0.4, 1, 0), (0.9, 1, 0), (1, 0.4, 0), (1, 0, 0), (1, -0.3, 0)])
+    P.update({'Spine01': (0, _e('CY1', 10), 0), 'Spine02': (0, _e('CY2', 12), 0), 'Chest': (0, _e('CY3', 12), 0),
+              'Neck': (_e('CNP', -6), _e('CNY', 48), 0), 'Head': (_e('CHP', -4), _e('CHY', 12), 0)})
+    P = world_tail(P, [(0.15, 1, 0.1), (0.3, 1, 0), (0.4, 1, 0), (0.3, 1, 0), (0.0, 1, 0), (-0.6, 0.6, 0)])
+    fp = (_e('CFPX', 0.5), 1, _e('CFPZ', 0.2)); hp = (_e('CHPX', 0.6), -1, _e('CHPZ', 0.2)); hm = (0.0, -1, 0.0)
     legs = {
-        'FR': dict(off=(0.12, -0.10, 0), floor=True, pole=(0.3, 1, 0.1), pitch=15, yr=(0, -90)),
-        'FL': dict(off=(0.14, -0.08, 0), floor=True, lift=0.045, pole=(0.3, 1, 0.3), pitch=15, yr=(0, -90)),
-        'HR': dict(off=(0.22, -0.12, 0), floor=True, pole=(0.4, -1, 0.2), m=(0.5, -0.7, -0.2), pitch=40, yr=(0, -90)),
-        'HL': dict(off=(0.22, -0.14, 0.04), pole=(0.4, -1, 0.2), m=(0.5, -0.7, -0.2), pitch=40, yr=(0, -90))}
+        'FR': dict(ref='Head', off=(_e('CFRX', 0.04), _e('CFRY', 0.0), 0), floor=True, pole=fp, pitch=55, yr=(0, -90)),
+        'FL': dict(off=(_e('CFLX', 0.13), _e('CFLY', -0.03), 0), floor=True, lift=0.045, pole=fp, pitch=55, yr=(0, -90)),
+        'HR': dict(off=(_e('CHRX', 0.17), _e('CHRY', -0.03), 0), floor=True, pole=hp, m=hm, pitch=50, yr=(0, -90)),
+        'HL': dict(off=(_e('CHLX', 0.19), _e('CHLY', 0.01), 0), floor=True, lift=0.045, pole=hp, m=hm, pitch=50, yr=(0, -90))}
     if cover:
         legs['FL'] = dict(ref='Head', off=(float(os.environ.get('CX', 0.07)), float(os.environ.get('CY', -0.02)), float(os.environ.get('CZ', 0.06))), pole=(0.3, 1, 0.3), pitch=70, yr=(0, -90))
-    return lie_fit(P, legs)
+    return lie_fit(P, legs, level=True, head_pct=0.5, refloor=True, body_pct=1)
 
+
+def sphinx_pose(spine, neck, head):
+    """Lying upright on the chest, after an X-ray of a cat in the sphinx pose (2026-11-12): the upper arms stand under the shoulders and the forearms lie
+    forward on the floor with the paws out as far as the head; the thighs lie FORWARD along the flanks (knees ahead of the hips), the shanks run back
+    down to the hocks and the feet lie forward under the knees; the back rises from the low hips to the shoulders; the tail lies forward along the body."""
+    P = copy.deepcopy(LOAF)
+    pp, s1, s2, ch = spine
+    P.update({'Pelvis': (pp, 0, 0), 'Spine01': (s1, 0, 0), 'Spine02': (s2, 0, 0), 'Chest': (ch, 0, 0), 'Neck': (neck, 0, 0), 'Head': (head, 0, 0)})
+    P['oSh'] = (0, _e('OSHY', 0.0), _e('OSH', 0.085))
+    P.update(tail_dirs([(35, -25), (80, -20), (125, -12), (160, -5), (175, 0), (180, 0)]))
+    fx, fy = _e('LFX', 0.0), _e('LFY', -0.15); hy = _e('LHY', -0.05)
+    fp = (_e('LFPX', 0.0), 1, _e('LFPZ', -0.3))
+    def build(hx):
+        hp = (_e('LHPX', 3.0), -1, _e('LHPZ', -2.0))       # knees low: the thighs lie forward along the floor and close the hollow in front of them
+        Q = lie_fit(P, {
+            'FL': dict(off=(fx, fy, 0), floor=True, pole=fp, pitch=_e('LFP', 48)),
+            'FR': dict(off=(-fx, fy, 0), floor=True, pole=(-fp[0], fp[1], fp[2]), pitch=_e('LFP', 48)),
+            'HL': dict(off=(hx, hy, 0), floor=True, pole=hp, m=(0.0, -1, -0.1), pitch=40),
+            'HR': dict(off=(-hx, hy, 0), floor=True, pole=(-hp[0], hp[1], hp[2]), m=(0.0, -1, -0.1), pitch=40)},
+            settle_keys=('pel',), refloor=True)
+        return Q, pose_basis(Q)[1]['HindLowerLeg.L'].translation.x
+    # the knees lie out at the width of the hips (seen from behind they frame the rump), not drawn in under the spine. This cat's shank is longer than its thigh,
+    # so the knee lies on the far side of the hip from the hock: a hock out at the flank throws the knee in under the spine. Search how far the feet go in
+    # under the haunches for the knee to come out to that width
+    kx = _e('LKX', 0.085); lo, hi = -0.06, 0.06
+    for _ in range(7):
+        mid = (lo + hi) / 2; Q, x = build(mid)
+        if x > kx: lo = mid
+        else: hi = mid
+    print('KNEE sphinx paw dx %+.3f knee x %+.3f (want %+.3f)' % (mid, x, kx))
+    # the belly sags to the floor (this model has no belly fur to hide the gap under the flank): the mid-trunk joint drops, the chest joint comes back up by as much
+    d = _e('LBELLY', 0.04); d1 = _e('LLOIN', 0.045)      # the loin joint (in front of the thighs) drops d1, the mid-trunk joint d in all
+    Q['oS1'] = (0, 0, -d1); x, y, z = Q['oS2']; Q['oS2'] = (x, y, z - (d - d1)); x, y, z = Q['oCh']; Q['oCh'] = (x, y, z + d)
+    return Q
 
 def make_doze():
-    """Chart panel 'loaf': a compact loaf. Trunk settled flat on the floor, haunch a round hump, forelegs folded under the chest,
-    hind legs folded tight beside the haunches, head low between the shoulders, tail laid forward along the body."""
-    P = copy.deepcopy(LOAF)
-    P.update({'Pelvis': (24, 0, 0), 'Spine01': (-12, 0, 0), 'Spine02': (-8, 0, 0), 'Chest': (-4, 0, 0), 'Neck': (-8, 0, 0), 'Head': (-2, 0, 0)})
-    P.update(tail_dirs([(35, -25), (80, -20), (125, -12), (160, -5), (175, 0), (180, 0)]))
-    return lie_fit(P, {
-        'FL': dict(off=(-0.05, 0.07, 0), floor=True, pole=(0.2, 1, 0.3), pitch=60),
-        'FR': dict(off=(0.05, 0.07, 0), floor=True, pole=(-0.2, 1, 0.3), pitch=60),
-        'HL': dict(off=(0.05, -0.15, 0), floor=True, pole=(0.35, -0.6, 0.3), m=(0.0, -1, -0.1), pitch=40),
-        'HR': dict(off=(-0.05, -0.15, 0), floor=True, pole=(-0.35, -0.6, 0.3), m=(0.0, -1, -0.1), pitch=40)},
-        settle_keys=SETTLE_ALL)
+    """Sphinx loaf (the user's chart): the sphinx pose with the head sunk between the shoulders; the Idle adds the dozing nod."""
+    return sphinx_pose((_e('LPP', 30), _e('LS1', -12), _e('LS2', -12), _e('LCH', -6)), _e('LNK', 22), _e('LHD', -30))
+
+# key 1 (LieDown / LyingIdle / GetUp): the alert sphinx, neck upright
+SPHINX = sphinx_pose((_e('SPP', 30), _e('SS1', -12), _e('SS2', -12), _e('SCH', -6)), _e('SNK', 48), _e('SHD', -50))
+POSES['Sphinx'] = SPHINX
 
 SLEEP_POSES = {'LoafDoze': make_doze, 'SideSprawl': make_sprawl, 'Donut': make_donut, 'PawCover': lambda: make_curlc(True),
                'BellyUp': make_belly_up, 'Superman': make_stretch, 'CurlC': make_curlc, }

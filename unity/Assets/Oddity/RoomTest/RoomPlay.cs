@@ -606,6 +606,7 @@ namespace Oddity.RoomTest
                 p.walkSpd=.70f*scale*CatSpeedMul;p.runSpd=p.walkSpd*2f;p.aiSpd=p.walkSpd*.8f;
                 var mat=go.GetComponentsInChildren<Renderer>().SelectMany(r=>r.sharedMaterials).FirstOrDefault(m=>m!=null);
                 Debug.Log("ROOMPLAY_CATSPEED name=WHITE walk="+F(p.walkSpd)+" run="+F(p.runSpd)+" ai="+F(p.aiSpd));Debug.Log("ROOMPLAY_WHITE file="+Path.GetFileName(found)+" speed="+F(p.walkSpd)+" m/s run="+F(p.runSpd)+" ai="+F(p.aiSpd)+" clips="+string.Join(",",p.clips.Select(c=>c.name+":"+F(c.length)+(c.legacy?"L":"M")))+" renderers="+go.GetComponentsInChildren<Renderer>().Length+" material="+(mat!=null?mat.shader.name+" colour="+(mat.HasProperty("_BaseColor")?mat.GetColor("_BaseColor").ToString():"-")+" map="+(mat.HasProperty("_BaseMap") && mat.GetTexture("_BaseMap")!=null):"none"));
+                Debug.Log("ROOMPLAY_FUR who=WHITE "+CatFur.Apply(go)); // shell fur (trial): ODDITY_FUR=0 turns it off
                 pets.Add(p);
             }catch(Exception e){Debug.LogWarning("ROOMPLAY_WHITE failed: "+e.Message);}
         }
