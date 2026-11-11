@@ -35,7 +35,7 @@
 ## 4. 커밋과 push
 
 - 커밋은 `ship` 으로만 한다. `check` 와 `test` 가 통과해야 하고, 작성자 주소가 noreply 인지, 개인 경로와 메일 주소가 없는지 본다.
-- 묶음마다 `ship --quick 시험1,시험2`, push 전에만 전체 `test` 를 돌린다.
+- 묶음마다 `ship --quick 시험1,시험2`, push 전에만 `test` 를 돌린다. 이름 없는 `test` 는 dotnet 시험과 방 시험(`Oddity.RoomTest`)만 돈다. 아래 표의 옛 메신저 게임 EditMode, PlayMode 시험은 `test --legacy` 일 때만 돈다 (2026-11-11 부터).
 - push 는 사용자에게 먼저 묻고, 마지막 push 로부터 1시간(60분) 지난 뒤에만 한다. `git reflog show origin/<브랜치> --date=iso -1` 로 시각을 본다.
 - 비밀값, 토큰, 개인 경로는 저장소에 넣지 않는다.
 

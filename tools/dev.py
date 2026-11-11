@@ -1,7 +1,8 @@
 """Dev harness for Oddity Phone (Unity 6 + dotnet rules harness).
 
     python tools/dev.py check                  dotnet build + Unity batchmode compile; fail on error CSxxxx
-    python tools/dev.py test [NAME,NAME]       dotnet tests, then Unity EditMode and PlayMode; exit code = failures
+    python tools/dev.py test [NAME,NAME]       dotnet tests, then the Unity room tests (EditMode, Oddity.RoomTest); with names: those in EditMode and PlayMode
+    python tools/dev.py test --legacy          also the shelved phone-messenger game's EditMode and PlayMode tests
     python tools/dev.py test --dotnet-only     skip the Unity half
     python tools/dev.py shot [SCENE ...]       screenshots into shots/SCENE.png (800px wide); default: all scenes
     python tools/dev.py scenes                 list shot scene names (unity/Assets/Oddity/Editor/ShotScenes.txt)
@@ -275,11 +276,17 @@ def unity_test(mode, names):
     return unity_results(xml_path)
 
 
-def test(names, dotnet_only=False):
+ROOM_FILTER = "Oddity.RoomTest"  # the room / cat / Harin motion tests (EditMode); everything else in Unity is the shelved phone-messenger game
+
+
+def test(names, dotnet_only=False, legacy=False):
     results = dotnet_test(names)
     if not dotnet_only:
-        for mode in ("EditMode", "PlayMode"):
-            results += unity_test(mode, names)
+        if names or legacy:
+            for mode in ("EditMode", "PlayMode"):
+                results += unity_test(mode, names)
+        else:  # default: skip the old messenger game's EditMode and PlayMode tests (they play the old scenes on screen)
+            results += unity_test("EditMode", [ROOM_FILTER])
     for name, ok, msg in results:
         print(f"TEST {name} {'PASS' if ok else 'FAIL'} {msg}".rstrip())
     failed = sum(1 for r in results if not r[1])
@@ -774,6 +781,7 @@ def main():
     ap.add_argument("--motion", action="store_true", help="previs: play the Mixamo motion of the cues (file names get _motion)")
     ap.add_argument("--pc", action="store_true", help="build: Windows exe (unity/Build/pc) instead of Android apk")
     ap.add_argument("--dotnet-only", action="store_true", help="test: skip the Unity EditMode and PlayMode runs")
+    ap.add_argument("--legacy", action="store_true", help="test: also run the shelved phone-messenger game's EditMode and PlayMode tests")
     a = ap.parse_args()
     names = [n for arg in a.names for n in arg.split(",") if n]
     if a.cmd == "kill":
@@ -785,7 +793,7 @@ def main():
         print("\n".join(scene_names()))
         return 0
     if a.cmd == "test":
-        return test(names, a.dotnet_only)
+        return test(names, a.dotnet_only, a.legacy)
     if a.cmd == "shot":
         return shot(names)
     if a.cmd == "baseline":

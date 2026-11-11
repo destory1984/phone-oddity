@@ -23,7 +23,8 @@
 | 명령 | 하는 일 |
 |---|---|
 | `check` | dotnet build, Unity batchmode 컴파일. `error CS` 가 있으면 실패 (약 20초) |
-| `test [이름,이름]` | dotnet 시험, Unity EditMode, PlayMode. 한 줄씩 `TEST 이름 PASS/FAIL`, 끝에 `TESTS n passed, m failed` |
+| `test [이름,이름]` | 이름 없이 돌리면 dotnet 시험과 방 시험(`Oddity.RoomTest`, EditMode)만 돈다. 이름을 주면 그 이름을 EditMode 와 PlayMode 에서 찾는다. 한 줄씩 `TEST 이름 PASS/FAIL`, 끝에 `TESTS n passed, m failed` |
+| `test --legacy` | 접어 둔 옛 폰 메신저 게임의 EditMode, PlayMode 시험까지 돈다. 옛 장면이 화면에 뜬다. 옛 게임 코드(`Assets/Oddity/Game/`, `packages/com.oddity.core/`)를 고쳤을 때만 쓴다 (2026-11-11 사용자가 기본에서 빼라고 했다) |
 | `test --dotnet-only` | Unity 없이 규칙 시험만 |
 | `shot [장면 ...]` | `shots/장면.png` (폭 800). baseline 이 있으면 `SHOT 장면 diff n.n%` |
 | `scenes`, `baseline`, `kill` | 장면 목록, 기준 그림 저장, 이 프로젝트의 Unity 닫기 |
@@ -51,7 +52,7 @@ Unity MCP(unity-mcp)는 감독이 열린 에디터를 잠깐 살필 때만 쓴�
 4. Unity는 한 번에 하나만 연다. `dev.py` 는 시작할 때 이 프로젝트의 에디터를 닫는다. 일꾼이 시험 중이면 감독은 에디터나 MCP를 쓰지 않는다.
 5. `ship` 은 폴더 전체를 커밋한다. 다음 일꾼은 `ship` 이 끝난 뒤에 보낸다.
 6. 묶음마다 `ship -m "..." --quick 시험1,시험2` 로 점검과 그 묶음의 시험만 돌린다.
-7. push 전에만 전체 `test` 를 돌린다. push 는 1시간 간격으로 한다.
+7. push 전에만 `test` (이름 없이: dotnet 과 방 시험)를 돌린다. 옛 메신저 게임 시험(`test --legacy`)은 돌리지 않는다. push 는 1시간 간격으로 한다.
 8. 이야기, 기획, 2D 그림은 GPT(`codex exec --sandbox read-only -C .`, 그림은 workspace-write 로 image_gen)와 먼저 의논하고 계획을 `shots/plans/` 에 둔다.
 9. 큰 일은 열 개 남짓 묶음으로 나눠 차례로 짓는다.
 
