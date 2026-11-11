@@ -801,13 +801,13 @@ def make_stretch():
 
 def make_donut(cover=False):
     P = sleep_base()
-    P.update({'Spine01': (0, 40, 0), 'Spine02': (0, 50, 0), 'Chest': (0, 52, 0), 'Neck': (-8, 100, 0), 'Head': (-6, -17, 0)})
+    P.update({'Spine01': (0, 50, 0), 'Spine02': (0, 60, 0), 'Chest': (0, 60, 0), 'Neck': (-8, 90, 0), 'Head': (-6, -17, 0)})
     P = world_tail(P, tail_heading([5, 35, 70, 110, 150, 185]))
     legs = {
-        'FR': dict(ref='Head', off=(0.0, 0.10, 0), floor=True, pole=(0.3, 1, 0.1), pitch=48, yr=(0, -90)),
-        'FL': dict(ref='Head', off=(0.02, 0.09, 0.06), pole=(0.3, 1, 0.1), pitch=48, yr=(0, -90)),
-        'HR': dict(off=(0.22, -0.10, 0), floor=True, pole=(0.4, -1, 0.2), m=(0.5, -0.7, -0.2), pitch=40, yr=(0, -90)),
-        'HL': dict(off=(0.22, -0.12, 0.04), pole=(0.4, -1, 0.2), m=(0.5, -0.7, -0.2), pitch=40, yr=(0, -90))}
+        'FR': dict(ref='Head', off=(-0.06, 0.02, 0), floor=True, pole=(0.3, 1, 0.1), pitch=48, yr=(0, -90)),
+        'FL': dict(ref='Head', off=(-0.05, 0.03, 0.05), pole=(0.3, 1, 0.1), pitch=48, yr=(0, -90)),
+        'HR': dict(off=(0.10, -0.06, 0), floor=True, pole=(0.4, -1, 0.2), m=(0.5, -0.7, -0.2), pitch=40, yr=(0, -90)),
+        'HL': dict(off=(0.10, -0.07, 0.04), pole=(0.4, -1, 0.2), m=(0.5, -0.7, -0.2), pitch=40, yr=(0, -90))}
     if cover:
         legs['FL'] = dict(ref='Head', off=(0.0, 0.05, 0.05), pole=(0.3, 1, 0.1), pitch=70, yr=(0, -90))
     return lie_fit(P, legs)
@@ -819,8 +819,8 @@ def make_belly_up():
     return lie_fit(P, {
         'FL': dict(off=(0.05, -0.12, 0.12), pole=(0.3, 1, 0.5), pitch=30, yr=(0, 160)),
         'FR': dict(off=(-0.05, -0.14, 0.12), pole=(-0.3, 1, 0.5), pitch=30, yr=(0, -160)),
-        'HL': dict(off=(0.20, -0.02, 0.16), pole=(0.5, -1, 0.3), m=(0.5, 0.3, 1), pitch=0, yr=(0, 180)),
-        'HR': dict(off=(-0.18, 0.0, 0.16), pole=(-0.5, -1, 0.3), m=(-0.5, 0.3, 1), pitch=0, yr=(0, 180))}, level=True)
+        'HL': dict(off=(-0.11, -0.05, 0.10), pole=(-0.5, -0.6, 0.2), m=(-0.2, 0.3, 1), pitch=0, yr=(0, 180)),
+        'HR': dict(off=(0.11, -0.05, 0.10), pole=(0.5, -0.6, 0.2), m=(0.2, 0.3, 1), pitch=0, yr=(0, 180))}, level=True)
 
 def make_superman():
     P = copy.deepcopy(STAND)
@@ -834,25 +834,33 @@ def make_superman():
         'HR': dict(off=(-0.12, 0.30, 0), floor=True, pole=(-0.3, -0.3, 1), m=(-0.25, 0.97, 0), pitch=-135)}, level=True)
 
 def make_curlc(cover=False):
+    """Chart panel 'side curled': head resting on its cheek, upper foreleg bent with the paw by the chest (cover: laid over the eyes),
+    hind legs bent toward the belly, everything on the ground."""
     P = sleep_base()
-    P.update({'Spine01': (0, 20, 0), 'Spine02': (0, 25, 0), 'Chest': (0, 25, 0), 'Neck': (-8, 58, 0), 'Head': (-6, -30, 0)})
+    P.update({'Spine01': (0, 20, 0), 'Spine02': (0, 25, 0), 'Chest': (0, 25, 0), 'Neck': (-8, 58, 0), 'Head': (float(os.environ.get('HP', 30)), -30, 0)})
     P = world_tail(P, [(0.1, 1, 0.1), (0.4, 1, 0), (0.9, 1, 0), (1, 0.4, 0), (1, 0, 0), (1, -0.3, 0)])
     legs = {
-        'FR': dict(off=(0.20, -0.08, 0), floor=True, pole=(0.3, 1, 0.1), pitch=48, yr=(0, -90)),
-        'FL': dict(off=(0.20, -0.10, 0.04), pole=(0.3, 1, 0.1), pitch=48, yr=(0, -90)),
+        'FR': dict(off=(0.12, -0.10, 0), floor=True, pole=(0.3, 1, 0.1), pitch=15, yr=(0, -90)),
+        'FL': dict(off=(0.14, -0.08, 0), floor=True, lift=0.045, pole=(0.3, 1, 0.3), pitch=15, yr=(0, -90)),
         'HR': dict(off=(0.22, -0.12, 0), floor=True, pole=(0.4, -1, 0.2), m=(0.5, -0.7, -0.2), pitch=40, yr=(0, -90)),
         'HL': dict(off=(0.22, -0.14, 0.04), pole=(0.4, -1, 0.2), m=(0.5, -0.7, -0.2), pitch=40, yr=(0, -90))}
     if cover:
-        legs['FL'] = dict(ref='Head', off=(0.0, 0.05, 0.05), pole=(0.3, 1, 0.1), pitch=70, yr=(0, -90))
+        legs['FL'] = dict(ref='Head', off=(float(os.environ.get('CX', 0.07)), float(os.environ.get('CY', -0.02)), float(os.environ.get('CZ', 0.06))), pole=(0.3, 1, 0.3), pitch=70, yr=(0, -90))
     return lie_fit(P, legs)
 
 
 def make_doze():
-    """The loaf of the existing LoafDown/LoafIdle clips, exactly (the doze clips start from it)."""
+    """Chart panel 'loaf': a compact loaf. Trunk settled flat on the floor, haunch a round hump, forelegs folded under the chest,
+    hind legs folded tight beside the haunches, head low between the shoulders, tail laid forward along the body."""
     P = copy.deepcopy(LOAF)
-    # chart panel 'loaf': the head sinks between the shoulders, a little forward and down, chest low, back a gentle arch
-    P.update({'Neck': (-14, 0, 0), 'Head': (8, 0, 0), 'Chest': (-12, 0, 0)})
-    return ground_all(P, iters=3)
+    P.update({'Pelvis': (24, 0, 0), 'Spine01': (-12, 0, 0), 'Spine02': (-8, 0, 0), 'Chest': (-4, 0, 0), 'Neck': (-8, 0, 0), 'Head': (-2, 0, 0)})
+    P.update(tail_dirs([(35, -25), (80, -20), (125, -12), (160, -5), (175, 0), (180, 0)]))
+    return lie_fit(P, {
+        'FL': dict(off=(-0.05, 0.07, 0), floor=True, pole=(0.2, 1, 0.3), pitch=60),
+        'FR': dict(off=(0.05, 0.07, 0), floor=True, pole=(-0.2, 1, 0.3), pitch=60),
+        'HL': dict(off=(0.05, -0.15, 0), floor=True, pole=(0.35, -0.6, 0.3), m=(0.0, -1, -0.1), pitch=40),
+        'HR': dict(off=(-0.05, -0.15, 0), floor=True, pole=(-0.35, -0.6, 0.3), m=(0.0, -1, -0.1), pitch=40)},
+        settle_keys=SETTLE_ALL)
 
 SLEEP_POSES = {'LoafDoze': make_doze, 'SideSprawl': make_sprawl, 'Donut': make_donut, 'PawCover': lambda: make_curlc(True),
                'BellyUp': make_belly_up, 'Superman': make_stretch, 'CurlC': make_curlc, }
@@ -999,8 +1007,9 @@ def render_static(names):
         v = verts()
         print("CONTACT pose %-8s body minz %+.4f paws minz %+.4f tail minz %+.4f ALL minz %+.4f reachover %d max %.3f" % (
             nm, v[M_BODYFLOOR][:, 2].min(), v[M_PAWS][:, 2].min(), v[M_TAIL][:, 2].min(), v[:, 2].min(), REACH['over'], REACH['max']))
-        print("HEADS %s " % nm + " ".join("%s=(%.2f,%.2f,%.2f)" % (b, *arm.pose.bones[b].head) for b in ('Pelvis', 'Head', 'Tail07', 'FrontPaw.L', 'FrontPaw.R')))
-        render_pose("pose_%s_f000" % nm, center=(0, 0, 0.2), scale=1.2)
+        print("HEADS %s " % nm + " ".join("%s=(%.2f,%.2f,%.2f)" % (b, *arm.pose.bones[b].head) for b in ('Pelvis', 'Spine01', 'Spine02', 'Chest', 'Neck', 'Head', 'Tail07', 'FrontUpperLeg.L', 'FrontUpperLeg.R', 'HindUpperLeg.L', 'HindUpperLeg.R', 'FrontPaw.L', 'FrontPaw.R')))
+        lo, hi = v.min(axis=0), v.max(axis=0); ctr = (lo + hi) / 2
+        render_pose("pose_%s_f000" % nm, center=(float(ctr[0]), float(ctr[1]), float(ctr[2])), scale=max(0.45, float((hi - lo).max()) * 1.2))
 
 if __name__ == "__main__":
     if arg("--pose"):

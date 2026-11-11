@@ -331,6 +331,10 @@ class Retarget:
                     if lw > 0: spec['abs'][b] = _slerp3(spec['abs'][b], (tpt[i + 1] - tpt[i]).rotation_difference(V(self.LP['tail'][min(i, 3)]).normalized()).to_matrix(), lw)
         # legs: pass 0 gives shoulder and hip heads
         _, posed0 = t.solve(spec)
+        if par.get('hdz'):
+            # settle step 3 (see settle): the head chain is moved up / down as a whole, so a head thicker than the source cat's rests on the floor like the trunk
+            hb = cfg['head'][0]; spec['loc'][hb] = posed0[hb].translation + V((0, 0, par['hdz']))
+            _, posed0 = t.solve(spec)
         if tl and ((str(self.clip).startswith('Sleep') and self.clip not in LOAF6) or lw > 0.85) and self.tail_r:
             # lying tail: keep each segment's heading, let it sink onto the floor (tail radius above it) and then lie flat
             head = posed0[tl[0]].translation.copy()
@@ -454,6 +458,22 @@ class Retarget:
             if w < 1e-3 or abs(gap) < 0.4 * m: break
             par['pz'] -= gap; moved -= gap
             basis, posed = t.solve(self.build_spec(fd, par)); t.apply(basis)
+        if not hasattr(self, 'M_head'):
+            hn = set(self.cfg['head']); self.M_head = np.array([d in hn or 'ear' in d.lower() for d in t.dom])
+        # 3. the head (and ears) rests on the floor like the belly: a lying cat4 / Somali head is rounder and thicker than the white cat's, so the copied pose leaves it 2-5 cm under
+        #    (or over) the belly's floor; the room then lands the cat on its lowest vertices (head and ears) and the belly hovers. The head chain is shifted (hdz) until the 1 % quantile
+        #    of its vertices is at the floor; a loaf keeps its head up (only lifted when it is under the floor). Capped, so the neck skin is not creased.
+        if self.M_head.sum() > 20:
+            cap = 0.12 * self.kb; loaf = str(self.clip).startswith(('Loaf', 'SleepLoaf'))
+            for _ in range(3):
+                z = t.verts()[:, 2]
+                d = w * ((fl - m) - float(np.percentile(z[self.M_head], 1)))
+                if loaf and d < 0: break
+                if abs(d) < 0.4 * m: break
+                nh = max(-cap, min(cap, par['hdz'] + d))
+                if abs(nh - par['hdz']) < 1e-6: break
+                par['hdz'] = nh
+                basis, posed = t.solve(self.build_spec(fd, par)); t.apply(basis)
         for _ in range(3):
             z = t.verts()[:, 2]
             under = float(np.percentile(z[t.M_body], 1)) - (fl - m)
@@ -466,7 +486,7 @@ class Retarget:
 
     def solve_frame(self, fd):
         t = self.t; ref = self.S.ref; kb = self.kb; fl = self.floor; rm = self.ref_m
-        par = {'sf': 1.0, 'sr': 1.0, 'pz': kb * (fd['H']['Pelvis'].z - ref['H']['Pelvis'].z), 'pawdz': {k: 0.0 for k in self.cfg['pawkeys']}}
+        par = {'sf': 1.0, 'sr': 1.0, 'pz': kb * (fd['H']['Pelvis'].z - ref['H']['Pelvis'].z), 'pawdz': {k: 0.0 for k in self.cfg['pawkeys']}, 'hdz': 0.0}
         wt = max(fl, rm['trunk'] + kb * (fd['torso'] - ref['torso']))
         wp = {k: (fl if fd['paw'][k] < 0.03 else max(fl, rm['paw'][k] + kb * (fd['paw'][k] - ref['paw'][k]))) for k in rm['paw']}   # a source paw within 0.03 of the floor is planted
         if str(self.clip).startswith(('Loaf', 'SleepLoaf')):
