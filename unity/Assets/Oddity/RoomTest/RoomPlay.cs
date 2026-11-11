@@ -137,7 +137,9 @@ namespace Oddity.RoomTest
                 BuildPerches();
                 SpawnPets();
                 if(apt){startYaw=Apartment.StartYaw;heading=yaw=targetYaw=turnStart=startYaw;turnTime=1;Select(9);} // she starts facing the house's first camera
-                var at=Environment.GetEnvironmentVariable("ODDITY_HARINAT"); // "x,z,yaw": where Harin starts and which way she faces (0 = north, 180 = south), for lighting tests
+                if(Solo && pets.Count>0){ctl=pets[0];AiPause(ctl);}
+                var at=Environment.GetEnvironmentVariable("ODDITY_HARINAT"); // "x,z,yaw"
+                if(Solo && one && string.IsNullOrWhiteSpace(at))at="0.7,4.8,0"; // the hidden Harin waits by the entrance, out of the cat's way: where Harin starts and which way she faces (0 = north, 180 = south), for lighting tests
                 if(!string.IsNullOrWhiteSpace(at)){var v=at.Split(',').Select(t=>float.Parse(t,CultureInfo.InvariantCulture)).ToArray();x=v[0];z=v[1];heading=yaw=targetYaw=turnStart=startYaw=v[2];Debug.Log("ROOMPLAY_HARINAT x="+F(x)+" z="+F(z)+" yaw="+F(yaw));}
                 var text=Environment.GetEnvironmentVariable("ODDITY_PLAYKEYS");scripted=!string.IsNullOrWhiteSpace(text);
                 if(scripted)foreach(var part in text.Split(',')){
@@ -398,10 +400,15 @@ namespace Oddity.RoomTest
         void SpawnPets()
         {
             if(!room || PetEnv("ODDITY_CAT")=="0" || (OrbitEnv && PetEnv("ODDITY_CAT")!="1"))return; // the orbit shot has no cats unless ODDITY_CAT=1
-            if(PetEnv("ODDITY_SOMALI")!="0")SpawnSomali();
+            if(Solo?PetEnv("ODDITY_SOMALI")=="1":PetEnv("ODDITY_SOMALI")!="0")SpawnSomali();
             if(PetEnv("ODDITY_WHITE")!="0")SpawnWhite();
-            if(PetEnv("ODDITY_TABBY")!="0")SpawnTabby();
+            if(Solo?PetEnv("ODDITY_TABBY")=="1":PetEnv("ODDITY_TABBY")!="0")SpawnTabby();
+            Debug.Log("ROOMPLAY_SOLO "+(Solo?1:0)+" pets="+string.Join("|",pets.Select(q=>q.tag)));
         }
+        // For now (2026-11-11, while the white cat's sleep poses are reworked one by one) a hand-played run shows the WHITE cat alone: the Somali and the tabby
+        // are not spawned (ODDITY_SOMALI=1 / ODDITY_TABBY=1 bring one back), Harin is invisible, parked by the entrance and does not live on her own, and the
+        // keys start on the cat. ODDITY_SOLO=0 turns this off, =1 forces it; script runs (ODDITY_PLAYKEYS) are untouched unless ODDITY_SOLO=1.
+        static bool Solo=>PetEnv("ODDITY_SOLO")=="1" || (PetEnv("ODDITY_SOLO")!="0" && string.IsNullOrWhiteSpace(PetEnv("ODDITY_PLAYKEYS")));
         // the third cat TABBY: the striped tabby "cat4" (CC BY 4.0, git-ignored), the same 14 shared clips; body length 0.44 m, ODDITY_TABBYLENGTH overrides, ODDITY_TABBY=0 leaves it out
         const string TabbySharedFile="Assets/Oddity/DevMotion/Cat/Cat4/cat4_shared.glb";
         static readonly float TabbyBodyLength=PetEnv("ODDITY_TABBYLENGTH")!=null?float.Parse(PetEnv("ODDITY_TABBYLENGTH"),CultureInfo.InvariantCulture):.44f;
@@ -779,11 +786,61 @@ namespace Oddity.RoomTest
         }
         // a pet's own keys while it is controlled: digits are clips (kept after release), space idle, C/V/K up onto the sofa, the rest have no pet meaning
         float labelPop=-10;
+        static readonly int[] SleepKeyPose={1,0,6,2}; // CatSleep pose index for Z X C V
+        // B while a cat is controlled: a guest cat (git-ignored DevMotion/Cat/Guest/an_animated_cat.glb, a sitting cat licking its paw, one 6 s clip) stands in for it on the same spot,
+        // scaled to GuestHeight and turned the way the cat faced; the cat itself is hidden meanwhile. B again, any other cat key, a walk or Tab brings the cat back
+        const string GuestFile="Assets/Oddity/DevMotion/Cat/Guest/an_animated_cat.glb";
+        static readonly float GuestHeight=PetEnv("ODDITY_GUESTHEIGHT")!=null?float.Parse(PetEnv("ODDITY_GUESTHEIGHT"),CultureInfo.InvariantCulture):.30f;
+        GameObject guest;PlayableGraph guestGraph;Pet guestOf;readonly List<Renderer> guestHid=new List<Renderer>();
+        void GuestEnd()
+        {
+            if(guest==null)return;
+            if(guestGraph.IsValid())guestGraph.Destroy();Destroy(guest);guest=null;
+            foreach(var r in guestHid)if(r!=null)r.enabled=true;guestHid.Clear();guestOf=null;
+            Debug.Log("ROOMPLAY_GUEST off");
+        }
+        void GuestTick(){if(guest!=null && (guestOf!=ctl || guestOf.root==null || guestOf.moving || guestOf.goal!=null || guestOf.job!=0))GuestEnd();}
+        void GuestToggle(Pet p)
+        {
+            if(guest!=null){GuestEnd();return;}
+            if(p.job!=0 || p.root==null)return;
+            try{
+                var prefab=AssetDatabase.LoadAssetAtPath<GameObject>(GuestFile);
+                if(prefab==null){AssetDatabase.ImportAsset(GuestFile,ImportAssetOptions.ForceSynchronousImport|ImportAssetOptions.ForceUpdate);prefab=AssetDatabase.LoadAssetAtPath<GameObject>(GuestFile);}
+                if(prefab==null){Notice("손님 고양이 파일이 없음");Debug.LogWarning("ROOMPLAY_GUEST missing "+GuestFile);return;}
+                var src=AssetDatabase.LoadAllAssetsAtPath(GuestFile).OfType<AnimationClip>().FirstOrDefault(c=>!c.name.StartsWith("__preview__"));
+                if(src==null){Notice("손님 고양이 동작이 없음");return;}
+                guest=new GameObject("GuestCat");var go=Instantiate(prefab,guest.transform);
+                foreach(var a in go.GetComponentsInChildren<Animation>())Destroy(a);
+                var smrs=go.GetComponentsInChildren<SkinnedMeshRenderer>();foreach(var r in smrs)r.updateWhenOffscreen=true;
+                var an=go.GetComponent<Animator>();if(an==null)an=go.AddComponent<Animator>();an.applyRootMotion=false;
+                guestGraph=PlayableGraph.Create("GUEST");guestGraph.SetTimeUpdateMode(DirectorUpdateMode.GameTime);
+                var outp=AnimationPlayableOutput.Create(guestGraph,"GUEST",an);var pl=AnimationClipPlayable.Create(guestGraph,PetClipCopy(src,true));pl.SetApplyFootIK(false);outp.SetSourcePlayable(pl);guestGraph.Play();guestGraph.Evaluate(0);
+                // measured on the posed skin at scale 1: height, lowest point, the middle of the footprint and the nose direction (hips -> head)
+                var lo=new Vector3(float.MaxValue,float.MaxValue,float.MaxValue);var hi=-lo;var bake=new Mesh();var vs=new List<Vector3>();int n=0;
+                foreach(var r in smrs){r.BakeMesh(bake,true);bake.GetVertices(vs);var m=r.transform.localToWorldMatrix;foreach(var v in vs){var w=m.MultiplyPoint3x4(v);lo=Vector3.Min(lo,w);hi=Vector3.Max(hi,w);n++;}}
+                Destroy(bake);
+                if(n==0){Notice("손님 고양이에 메시가 없음");GuestEnd();return;}
+                float scale=GuestHeight/Mathf.Max(1e-4f,hi.y-lo.y);
+                Transform Bone(string k)=>go.GetComponentsInChildren<Transform>().FirstOrDefault(t=>t.name.Contains(k));
+                var head=Bone("j_head");var hips=Bone("j_hips");float nose=0;
+                if(head!=null && hips!=null){var fw=Vector3.ProjectOnPlane(head.position-hips.position,Vector3.up);if(fw.sqrMagnitude>1e-8f)nose=Mathf.Atan2(fw.x,fw.z)*Mathf.Rad2Deg;}
+                float yaw=p.root.eulerAngles.y-nose;var rot=Quaternion.Euler(0,yaw,0);
+                var mid=rot*new Vector3((lo.x+hi.x)/2*scale,0,(lo.z+hi.z)/2*scale);var xz=PetXZ(p);
+                float floorY=p.surf; // the height of what the cat stands on
+                guest.transform.localScale=Vector3.one*scale;guest.transform.rotation=rot;guest.transform.position=new Vector3(xz.x-mid.x,floorY-lo.y*scale,xz.y-mid.z);
+                foreach(var r in p.root.GetComponentsInChildren<Renderer>())if(r.enabled){r.enabled=false;guestHid.Add(r);}
+                guestOf=p;Notice("손님 고양이: 앉아서 앞발 핥기 (B 다시 누르면 끝)");
+                Debug.Log("ROOMPLAY_GUEST on for="+p.tag+" clip="+src.name+":"+F(src.length)+" height="+F((hi.y-lo.y)*scale)+" scale="+F(scale)+" nose="+F(nose)+" at=("+F(xz.x)+","+F(xz.y)+") y="+F(guest.transform.position.y)+" vertices="+n);
+            }catch(Exception e){Debug.LogWarning("ROOMPLAY_GUEST failed: "+e.Message);GuestEnd();}
+        }
         const float CatJumpUpSeconds=.5f, CatJumpDownSeconds=.4f;
         void CatCommand(string key)
         {
             var p=ctl;
             if(key=="wait" || key=="up" || key=="down")return;
+            if(key=="b"){GuestToggle(p);return;} // B: the guest cat licks its paw in this cat's place
+            if(guest!=null)GuestEnd(); // any other cat key brings the cat itself back first
             if(key=="space"){
                 if(p.job==0){
                     if(p.somali && p.sit!=0){PetStand(p);return;} // sitting, lying or loafing: get up, then Idle
@@ -796,7 +853,9 @@ namespace Oddity.RoomTest
             if(key=="left"||key=="right"){if(p.job==0){p.heading+=key=="left"?45:-45;p.faceTo=float.NaN;}return;}
             if(key=="k"){CatSleepKey(p);return;} // K: sleep, each press the next pose
             if(key.StartsWith("catsleep") && int.TryParse(key.Substring(8),out var csn) && csn>=1 && csn<=CatSleep.Count){CatSleepKey(p,csn-1);return;} // script keys catsleep1..7: that pose
-            if(key=="c"||key=="v"){
+            // Z X C V: one sleep pose each, in the order of the reference chart (curl ball, loaf, side curl, side loose); full stretch, belly up and paw cover stay on K
+            {int zi=key.Length==1?"zxcv".IndexOf(key[0]):-1;if(zi>=0){CatSleepKey(p,SleepKeyPose[zi]);return;}}
+            if(key=="catsofa"){ // script key: up onto the nearest sofa seat (was C and V until 2026-11-11)
                 if(p.job!=0 || p.onSofa)return;
                 var cp=new Vector2(p.root.position.x,p.root.position.z);
                 if(!spotsOf.TryGetValue("sofa",out var sl) || sl.Count==0){Notice("소파가 없음");return;}
@@ -1419,7 +1478,7 @@ namespace Oddity.RoomTest
             p.purr.volume=Mathf.MoveTowards(p.purr.volume,p.purrTarget,rate*dt);
             if(!p.purrOn && p.purr.isPlaying && p.purr.volume<=0)p.purr.Stop();
         }
-        void PetsTick(float dt){foreach(var p in pets){PetAnimTick(p);PetAiTick(p,dt);PetRestTick(p,dt);PetSfxTick(p,dt);SpotLeakTick(p);}PetHissTick();PetOverlapTick();}
+        void PetsTick(float dt){foreach(var p in pets){PetAnimTick(p);PetAiTick(p,dt);PetRestTick(p,dt);PetSfxTick(p,dt);SpotLeakTick(p);}PetHissTick();PetOverlapTick();GuestTick();}
         // two cats that are not controlled come within 0.4 m of each other: the one that arrived later (still walking, or stopped last) hisses, at most once per 30 s, then walks off to a new place
         float lastHiss=-100;
         // ---- spots: a cat reserves a spot when it decides to go there and keeps it while it stands there; the reservation ends when it leaves (a new goal, keys, or it is found elsewhere)
@@ -3324,7 +3383,7 @@ namespace Oddity.RoomTest
             Part(PrimitiveType.Cylinder,shield.transform,Vector3.zero,new Vector3(.5f,.012f,.5f),new Color(.45f,.27f,.13f));
             Part(PrimitiveType.Cylinder,shield.transform,new Vector3(0,.015f,0),new Vector3(.12f,.012f,.12f),new Color(.78f,.8f,.84f));
         }
-        static readonly string[] CatCommonKeys={"space  멈추기 (앉았거나 누웠으면 일어서기)","W A S D  걷기, Shift  달리기 (2배)","← →  제자리 돌기","↑ ↓, 휠  줌, Ctrl+휠  카메라 높이","Shift+휠  카메라 좌우, Alt+휠  기울기","Shift+← →  카메라 좌우 돌기, Shift+↑ ↓  카메라 높이","C V  소파에 올라가 앉기, K  잠자기 (누를 때마다 다른 자세)","클릭  바닥, 소파, 식탁, 조리대, 냉장고, 창","M  다음 동작, R  다시 불러오기, L  카메라 보기","O  고양이 소리 켜고 끄기","I  방 안 카메라 (다시 누르면 밖)","Tab  하린으로"};
+        static readonly string[] CatCommonKeys={"space  멈추기 (앉았거나 누웠으면 일어서기)","W A S D  걷기, Shift  달리기 (2배)","← →  제자리 돌기","↑ ↓, 휠  줌, Ctrl+휠  카메라 높이","Shift+휠  카메라 좌우, Alt+휠  기울기","Shift+← →  카메라 좌우 돌기, Shift+↑ ↓  카메라 높이","Z 둥글게 말기, X 식빵 졸기, C 옆으로 말고 자기","V 느슨하게 뻗기, B 손님 고양이 (앉아서 앞발 핥기), K 잠자기 (누를 때마다 다음 자세)","클릭  바닥, 소파, 식탁, 조리대, 냉장고, 창","M  다음 동작, R  다시 불러오기, L  카메라 보기","O  고양이 소리 켜고 끄기","I  방 안 카메라 (다시 누르면 밖)","Tab  하린으로"};
         static string CatRow(Pet p,int i){const string keys="123456789";return i<ActionNames.Length?keys[i]+"  "+ActionNames[i]+(CanDo(p,i)?"":" (없음)"):CatCommonKeys[i-ActionNames.Length];}
         static readonly bool noHud=Environment.GetEnvironmentVariable("ODDITY_NOHUD")=="1" || Environment.GetEnvironmentVariable("ODDITY_ORBIT")=="1";
         // script-only still cameras (for the shots): cam1..cam9 take "ex,ey,ez,ax,ay,az,fov" from the environment ODDITY_CAM1..9; camphone / camface / camback are placed from the pose; camoff gives the normal camera back
@@ -4050,6 +4109,7 @@ namespace Oddity.RoomTest
             if(m==null)return;
             var all=m.GetComponentsInChildren<Renderer>(true);var hid=new List<string>();
             if(apt && Environment.GetEnvironmentVariable("ODDITY_SHOESOFF")=="1")foreach(var r in all){var n=r.name.ToLowerInvariant();if(ShoeWords.Any(w=>n.Contains(w))){r.enabled=false;hid.Add(r.name);}}
+            if(Solo)foreach(var r in all)r.enabled=false;
             Debug.Log("ROOMPLAY_SHOES model="+Path.GetFileNameWithoutExtension(modelPath??modelName??"")+" hidden="+(hid.Count==0?"none":string.Join("|",hid))+" renderers="+string.Join("|",all.Select(r=>r.name)));
         }
         // Shift+T: lie on the bed (the K pose, on her side, head on the pillow) and watch the TV on the east wall
@@ -4199,7 +4259,7 @@ namespace Oddity.RoomTest
         void LifeSetup()
         {
             lifeInit=true;var e=Environment.GetEnvironmentVariable("ODDITY_AUTOLIFE");
-            lifeEnabled=e=="0"?false:e=="1"?true:(one && !scripted);
+            lifeEnabled=e=="0"?false:e=="1"?true:(one && !scripted && !Solo);
             if(!lifeEnabled)return;
             float il=20f;if(!float.TryParse(Environment.GetEnvironmentVariable("ODDITY_LIFEIDLE"),NumberStyles.Float,CultureInfo.InvariantCulture,out il) || il<=0)il=20f;
             int seed;bool seeded=int.TryParse(Environment.GetEnvironmentVariable("ODDITY_LIFESEED"),out seed);lifeRng=seeded?new System.Random(seed):new System.Random();

@@ -327,6 +327,10 @@ def setup_render():
 def set_cam(co, view, center, scale):
     co.data.ortho_scale = scale
     c = Vector(center)
+    if view.startswith('az'):       # az<deg>[e<deg>]: a still from that compass direction (0 = from +X), elevation 15 unless given
+        az, _, el = view[2:].partition('e'); az = math.radians(float(az)); el = math.radians(float(el or 15))
+        co.location = c + Vector((math.cos(az) * math.cos(el), math.sin(az) * math.cos(el), math.sin(el))) * 20
+        co.rotation_euler = (c - co.location).normalized().to_track_quat('-Z', 'Y').to_euler(); return
     d = {'front34': Vector((2.2, -3.2, 1.7)), 'side': Vector((9, 0, 0.2)), 'top': Vector((0, 0.001, 9)),
          'back34': Vector((-2.2, 3.2, 1.7)), 'front': Vector((0.001, -9, 0.2))}[view].normalized() * 20
     co.location = c + d
@@ -338,10 +342,22 @@ def render_pose(tag, views=('front34', 'side', 'top'), center=(0, 0, 0.28), scal
     if _cam is None:
         _cam = setup_render()
     os.makedirs(SHOTS, exist_ok=True)
+    if os.environ.get('VIEWS'): views = tuple(os.environ['VIEWS'].split(','))     # e.g. VIEWS=back34,front (debug stills)
+    scene.display.shading.show_backface_culling = os.environ.get('CULL') == '1'       # CULL=1 shows skin turned inside out as holes, like the game does
     for v in views:
         set_cam(_cam, v, center, scale)
         scene.render.filepath = os.path.join(SHOTS, "%s_%s.png" % (tag, v))
         bpy.ops.render.render(write_still=True)
+        if os.environ.get('SKEL'):
+            # bone ends in image space (0..1, y down) so a skeleton can be drawn over the still
+            import json
+            from bpy_extras.object_utils import world_to_camera_view
+            bpy.context.view_layer.update()
+            def px(p):
+                q = world_to_camera_view(scene, _cam, arm.matrix_world @ p)
+                return [round(q.x, 4), round(1 - q.y, 4)]
+            with open(os.path.join(SHOTS, "%s_%s.json" % (tag, v)), 'w') as f:
+                json.dump({pb.name: px(pb.head) + px(pb.tail) + [pb.parent.name if pb.parent else ''] for pb in arm.pose.bones}, f)
 
 # ---------------------------------------------------------------- clips
 STAND = default_pose()
@@ -677,7 +693,7 @@ M_SEG = {'pel': mask(('Pelvis', 'Spine01')), 'oS2': mask(('Spine02',)), 'oCh': m
          'oHd': mask(('Head',)) & ~M_EAR}
 SETTLE_ALL = ('pel', 'oS2', 'oCh', 'oNk', 'oHd')
 OFFCAP = {'oS2': 0.03, 'oCh': 0.03, 'oNk': 0.05, 'oHd': 0.09}      # the most a segment may be moved: more would crease the skin
-def settle(P, keys=SETTLE_ALL, target=0.003, pct=2.0, passes=2, cap=0.12):
+def settle(P, keys=SETTLE_ALL, target=0.003, pct=2.0, passes=2, cap=0.12, head_pct=0.0):
     """A lying body spreads under its weight: lower each trunk segment (pelvis, mid, chest, neck, head) until the lowest 2 % of its
     vertices rest on the floor. Segment heights are free offsets of the bone heads; everything below a segment in the chain follows."""
     P = copy.deepcopy(P)
@@ -685,7 +701,7 @@ def settle(P, keys=SETTLE_ALL, target=0.003, pct=2.0, passes=2, cap=0.12):
         for key in SETTLE_ALL:
             if key not in keys: continue
             apply_basis(pose_basis(P)[0])
-            z = float(np.percentile(verts()[M_SEG[key]][:, 2], 0.0 if key == 'oHd' else pct))   # the head by its lowest vertex (ground_all lifts the whole body by it)
+            z = float(np.percentile(verts()[M_SEG[key]][:, 2], head_pct if key == 'oHd' else pct))   # the head by its lowest vertex (ground_all lifts the whole body by it)
             d = max(-cap, min(cap, target - z))
             x, y, zz = P[key]; P[key] = (x, y, max(-OFFCAP[key], min(OFFCAP[key], zz + d)) if key != 'pel' else zz + d)
     return P
@@ -725,7 +741,7 @@ def settle_pitch(P, keys=('Spine01', 'Spine02', 'Chest', 'Neck'), target=0.005, 
                 if c2 < best - 1e-9: best, P = c2, Q
     return P
 
-def lie_fit(P, legs, iters=6, tail_margin=0.03, droop=True, settle_keys=None, level=False):
+def lie_fit(P, legs, iters=6, tail_margin=0.03, droop=True, settle_keys=None, level=False, head_pct=0.0, refloor=False, body_pct=0.0):
     if settle_keys is None: settle_keys = tuple(os.environ.get('SETTLEKEYS', 'pel,oHd').split(',')) if os.environ.get('SETTLE', '1') == '1' else ()
     """Grounded lying pose. legs: {'FL': dict(ref=bone?, off=(dx,dy,dz), floor=True?, pole=, pitch=, yr=(yaw,roll), toe=, m=(hind))}.
     A paw target is the head of `ref` (default: that leg's shoulder/hip) plus off in world axes. A leg with floor=True instead
@@ -739,15 +755,25 @@ def lie_fit(P, legs, iters=6, tail_margin=0.03, droop=True, settle_keys=None, le
             kind, sd = k[0], k[1]
             ref = H[d.get('ref', ('FrontUpperLeg.' if kind == 'F' else 'HindUpperLeg.') + sd)]
             T = ref + V(d['off'])
+            ring = (H['Pelvis'] + H['Spine02'] + H['Chest'] + H['Head']) / 4          # the middle of a curled spine
+            if 'mix' in d:      # curled poses: the paw lies in the gap between the head and the hips (t along head -> pelvis), pulled u toward the ring's middle
+                t, u = d['mix']; T = H['Head'].lerp(H['Pelvis'], t); T = T.lerp(ring, u) + V(d['off'])
             if d.get('floor'):
                 if zc[k] is None: zc[k] = T.z
                 T.z = zc[k]
             P[k] = tuple(T); P[k + 'p'] = tuple(d.get('pole', (0, 0, 1)))
+            if d.get('pole_in'):    # elbow / knee toward the middle of the ring, as in a curled cat's skeleton (they lie against the belly, never outside the back)
+                ax = T - ref; ax.z = 0; c = H[d.get('pole_to', 'Spine02')] - (ref + T) / 2; c.z = 0
+                if ax.length > 1e-5: c -= ax.normalized() * c.dot(ax.normalized())       # only the part across the limb: a pole along the limb leaves the joint anywhere (it went out through the rump)
+                if c.length < 1e-4: c = ring - ref
+                c.z = 0; c.normalize(); P[k + 'p'] = (c.x, c.y, d['pole_in'] if d['pole_in'] is not True else 0.0)
             P[k + 'pitch'] = (d.get('pitch', 0),); P[k + 'yr'] = tuple(d.get('yr', (0, 0))); P[k + 'toe'] = (d.get('toe', 0),)
             if kind == 'H': P[k + 'm'] = tuple(d.get('m', (0, 1, -0.3)))
+            if kind == 'H' and d.get('m_out'):   # hock -> paw runs on outward from the ring's middle
+                o = T - ring; o.z = 0; P[k + 'm'] = tuple(o.normalized())
         P = ground(P, iters=2, torso=True)
         if level and it == 0: P = settle_pitch(P, sweeps=4)
-        if settle_keys: P = settle(P, settle_keys)
+        if settle_keys: P = settle(P, settle_keys, head_pct=head_pct)
         apply_basis(pose_basis(P)[0])
         v = verts()
         for k, d in legs.items():
@@ -756,20 +782,39 @@ def lie_fit(P, legs, iters=6, tail_margin=0.03, droop=True, settle_keys=None, le
         P = droop_tail(P, shoulders_hips(P), tail_margin) if droop else clamp_tail(P, shoulders_hips(P), tail_margin)
     for it in range(3):
         P = ground(P, iters=2, torso=True)
-        if settle_keys: P = settle(P, settle_keys)
-    return ground_all(P)
+        if settle_keys: P = settle(P, settle_keys, head_pct=head_pct)
+    P = ground_all(P, head_pct=head_pct, body_pct=body_pct)   # body_pct: the floor-side thigh and shoulder press into the floor like flesh does
+    if refloor:
+        # ground_all lifted the paw targets with the body (the floor-side thigh is what touches): lay the floor paws down again
+        for it in range(4):
+            apply_basis(pose_basis(P)[0]); v = verts()
+            for k, d in legs.items():
+                if d.get('floor'):
+                    x, y, z = P[k]; P[k] = (x, y, z + clear + d.get('lift', 0.0) - float(v[M_PAW[k]][:, 2].min()))
+    return P
 
-def ground_all(P, iters=4):
+M_HEADPART = mask(('Head',)) & ~M_EAR
+def ground_all(P, iters=4, head_pct=0.0, body_pct=0.0):
     """Lift the pose so that no vertex at all (ears and tail tip included) is below the floor."""
     P = copy.deepcopy(P)
     for it in range(iters):
         apply_basis(pose_basis(P)[0])
-        mz = float(verts()[:, 2].min())
+        vv = verts(); mz = float(vv[:, 2].min())
+        if head_pct > 0:      # whiskers on the floor side reach 5 cm below the head: they may pass through the floor
+            mz = min(float(np.percentile(vv[~M_HEADPART][:, 2], body_pct)), float(np.percentile(vv[M_HEADPART][:, 2], head_pct)))
+            if os.environ.get('GDEBUG'): print('GDEBUG nonhead pct 0/1/2/3/5/8', ' '.join('%+.3f' % np.percentile(vv[~M_HEADPART][:, 2], q) for q in (0, 1, 2, 3, 5, 8)))
+        if os.environ.get('GDEBUG'):
+            hz = vv[M_SEG['oHd']][:, 2]
+            print("GDEBUG it%d min %+.3f at %s; head pct0/0.5/2/5 %s; nonhead min %+.3f" % (it, mz, DOM[int(vv[:, 2].argmin())],
+                  " ".join("%+.3f" % np.percentile(hz, q) for q in (0, 0.5, 2, 5)), vv[~mask(('Head', 'Ear'))][:, 2].min()))
         if mz >= -0.0015: break
         px, py, pz = P['pel']; P['pel'] = (px, py, pz - mz)
         for k in ('FL', 'FR', 'HL', 'HR'):       # the paw targets are absolute: lift them with the body
             x, y, z = P[k]; P[k] = (x, y, z - mz)
     return P
+
+def _e(name, default):
+    return float(os.environ.get(name, default))
 
 def sleep_base(pel=(0, 0.0, 0.10)):
     P = copy.deepcopy(STAND)
@@ -780,13 +825,15 @@ def sleep_base(pel=(0, 0.0, 0.10)):
 def make_sprawl():
     """Chart panel 'side loose': on its side, spine nearly straight, head on the ground, forelegs lying forward a little bent (one over the other), hind legs lying back, tail trailing."""
     P = sleep_base()
-    P.update({'Spine01': (0, 3, 0), 'Spine02': (0, 3, 0), 'Neck': (-6, 50, 0), 'Head': (-4, -52, 0)})
+    P.update({'Spine01': (0, 3, 0), 'Spine02': (0, 3, 0), 'Neck': (_e('SNP', -6), _e('SNY', 15), 0), 'Head': (_e('SHP', -4), _e('SHY', -10), _e('SHR', 0))})
     P = world_tail(P, [(0.15, 1, 0.1), (0.35, 1, 0), (0.6, 1, 0), (0.8, 1, 0), (0.9, 1, 0), (1, 1, 0)])
+    fp = (_e('FPX', 0.35), _e('FPY', 1), _e('FPZ', 0.3)); hp = (_e('HPX', 0.7), _e('HPY', -1), _e('HPZ', 0.3))   # elbows and knees lie in the ground plane, not up
+    hm = (_e('HMX', 0.0), 0.97, _e('HMZ', -0.2))
     return lie_fit(P, {
-        'FR': dict(off=(0.10, -0.24, 0), floor=True, pole=(0, 0.3, 1), pitch=55, yr=(0, -90)),
-        'FL': dict(off=(0.16, -0.20, 0), floor=True, lift=0.045, pole=(0, 0.3, 1), pitch=55, yr=(0, -90)),
-        'HR': dict(off=(0.16, 0.18, 0), floor=True, pole=(0, -0.3, 1), m=(0.0, 0.97, -0.2), pitch=50, yr=(0, -90)),
-        'HL': dict(off=(0.20, 0.20, 0), floor=True, lift=0.045, pole=(0, -0.3, 1), m=(0.0, 0.97, -0.2), pitch=50, yr=(0, -90))}, level=True)
+        'FR': dict(off=(_e('FRX', 0.10), _e('FRY', -0.24), 0), floor=True, pole=fp, pitch=55, yr=(0, -90)),
+        'FL': dict(off=(_e('FLX', 0.16), _e('FLY', -0.20), 0), floor=True, lift=_e('LIFT', 0.045), pole=fp, pitch=55, yr=(0, -90)),
+        'HR': dict(off=(_e('HRX2', 0.16), _e('HRY2', 0.18), 0), floor=True, pole=hp, m=hm, pitch=50, yr=(0, -90)),
+        'HL': dict(off=(_e('HLX2', 0.20), _e('HLY2', 0.20), 0), floor=True, lift=_e('LIFT', 0.045), pole=hp, m=hm, pitch=50, yr=(0, -90))}, level=True, head_pct=_e('HPCT', 0.5), refloor=True, body_pct=_e('BPCT', 1))
 
 def make_stretch():
     """Chart panel 'full stretch': on its side fully elongated in one long line, forelegs reaching past the head, hind legs straight back, tail hooked up."""
@@ -800,17 +847,38 @@ def make_stretch():
         'HL': dict(off=(0.22, 0.42, 0), floor=True, lift=0.045, pole=(0, -0.3, 1), m=(0.0, 0.97, -0.2), pitch=15, yr=(0, -90))}, level=True)
 
 def make_donut(cover=False):
+    """Chart panel 'curl ball': belly down with the back up as one dome, the spine bent SIDEWAYS into a ring (not the fetal curl of a cat
+    on its side), head laid round at the hind paws, legs folded under the body, tail wrapped along the ground round the front."""
+    if os.environ.get('DONUT', 'side') == 'up':      # the belly-down ring of 2026-11-11 (kept for comparison)
+        y1, y2, y3, yn, yh = _e('DY1', 55), _e('DY2', 65), _e('DY3', 60), _e('DYN', 50), _e('DYH', 40)
+        P = copy.deepcopy(LOAF)
+        P.update({'Pelvis': (_e('DPP', 28), 0, _e('DROLL', 0)), 'Spine01': (-8, y1, 0), 'Spine02': (-8, y2, 0), 'Chest': (-4, y3, 0),
+                  'Neck': (_e('DNP', 30), yn, 0), 'Head': (_e('DHP', -20), yh, _e('DHR', 0))})
+        P = world_tail(P, tail_heading([_e('DT', 1) * a for a in (20, 55, 95, 130, 160, 185)]))
+        h = math.radians(y1 + y2 + y3)                      # the chest's heading: the forelegs fold back under it
+        def rot(x, y): return (x * math.cos(h) - y * math.sin(h) * _e('DS', 1), (x * math.sin(h) * _e('DS', 1) + y * math.cos(h)), 0)
+        return lie_fit(P, {
+            'FL': dict(off=rot(-0.05, 0.07), floor=True, pole=(0.2, 1, 0.3), pitch=60),
+            'FR': dict(off=rot(0.05, 0.07), floor=True, pole=(-0.2, 1, 0.3), pitch=60),
+            'HL': dict(off=(_e('HLX', 0.08), _e('HLY', -0.12), 0), floor=True, pole=(0.35, -0.6, 0.3), m=(0.0, -1, -0.1), pitch=40),
+            'HR': dict(off=(_e('HRX', 0.03), _e('HRY', -0.12), 0), floor=True, pole=(-0.35, -0.6, 0.3), m=(0.0, -1, -0.1), pitch=40)},
+            settle_keys=SETTLE_ALL)
+    # on its side, after an X-ray of a curled cat: the spine is one C from the pelvis to the skull (the skull points back at the hips), the thighs lie forward
+    # along the belly with the knees in the middle, the elbows too, and all four paws gather in the gap in front of the face; the tail wraps round outside
     P = sleep_base()
-    P.update({'Spine01': (0, 50, 0), 'Spine02': (0, 60, 0), 'Chest': (0, 60, 0), 'Neck': (-8, 90, 0), 'Head': (-6, -17, 0)})
-    P = world_tail(P, tail_heading([5, 35, 70, 110, 150, 185]))
+    P.update({'Spine01': (0, _e('XY1', 45), 0), 'Spine02': (0, _e('XY2', 55), 0), 'Chest': (0, _e('XY3', 55), 0), 'Neck': (-8, _e('XYN', 85), 0), 'Head': (-6, _e('XYH', -10), 0)})
+    P = world_tail(P, tail_heading([_e('XT', 1) * a for a in (5, 35, 70, 110, 150, 185)]))
+    # the ring is left a little open (155 deg over the trunk) and the hind paws lie in its middle: curled tighter, the hips touch the face, the thigh has nowhere
+    # to go and the knee comes out through the rump. The knees bend toward the face, the elbows toward the hips
+    lo, up = _e('XPLO', 0.2), _e('XPUP', -0.6)      # the floor-side elbow and knee a little up off the floor, the upper ones pressed down onto the body
     legs = {
-        'FR': dict(ref='Head', off=(-0.06, 0.02, 0), floor=True, pole=(0.3, 1, 0.1), pitch=48, yr=(0, -90)),
-        'FL': dict(ref='Head', off=(-0.05, 0.03, 0.05), pole=(0.3, 1, 0.1), pitch=48, yr=(0, -90)),
-        'HR': dict(off=(0.10, -0.06, 0), floor=True, pole=(0.4, -1, 0.2), m=(0.5, -0.7, -0.2), pitch=40, yr=(0, -90)),
-        'HL': dict(off=(0.10, -0.07, 0.04), pole=(0.4, -1, 0.2), m=(0.5, -0.7, -0.2), pitch=40, yr=(0, -90))}
+        'FR': dict(mix=(_e('XFT', 0.30), _e('XFU', 0.25)), off=(0, 0, 0), floor=True, pole_to='Pelvis', pole_in=lo, pitch=48, yr=(0, -90)),
+        'FL': dict(mix=(_e('XFT', 0.30) + 0.08, _e('XFU', 0.25)), off=(0, 0, 0), floor=True, lift=_e('XLIFT', 0.045), pole_to='Pelvis', pole_in=up, pitch=48, yr=(0, -90)),
+        'HR': dict(mix=(_e('XHT', 0.3), _e('XHU', 0.6)), off=(0, 0, 0), floor=True, pole_to=os.environ.get('XHP', 'Head'), pole_in=lo, m_out=True, pitch=40, yr=(0, -90)),
+        'HL': dict(mix=(_e('XHT', 0.3) + 0.08, _e('XHU', 0.6)), off=(0, 0, 0), floor=True, lift=_e('XLIFT', 0.045), pole_to=os.environ.get('XHP', 'Head'), pole_in=up, m_out=True, pitch=40, yr=(0, -90))}
     if cover:
         legs['FL'] = dict(ref='Head', off=(0.0, 0.05, 0.05), pole=(0.3, 1, 0.1), pitch=70, yr=(0, -90))
-    return lie_fit(P, legs)
+    return lie_fit(P, legs, head_pct=0.5, refloor=True, body_pct=_e('BPCT', 1))
 
 def make_belly_up():
     P = sleep_base(pel=(0, 0, 0.1))
@@ -1007,6 +1075,7 @@ def render_static(names):
         v = verts()
         print("CONTACT pose %-8s body minz %+.4f paws minz %+.4f tail minz %+.4f ALL minz %+.4f reachover %d max %.3f" % (
             nm, v[M_BODYFLOOR][:, 2].min(), v[M_PAWS][:, 2].min(), v[M_TAIL][:, 2].min(), v[:, 2].min(), REACH['over'], REACH['max']))
+        print("CONTACT paws %s " % nm + " ".join("%s=%+.3f" % (k, v[M_PAW[k]][:, 2].min()) for k in ('FL', 'FR', 'HL', 'HR')) + " head=%+.3f" % v[M_SEG['oHd']][:, 2].min() + " off " + " ".join("%s=%+.3f" % (k, POSES[nm][k][2]) for k in SETTLE_ALL if k in POSES[nm]))
         print("HEADS %s " % nm + " ".join("%s=(%.2f,%.2f,%.2f)" % (b, *arm.pose.bones[b].head) for b in ('Pelvis', 'Spine01', 'Spine02', 'Chest', 'Neck', 'Head', 'Tail07', 'FrontUpperLeg.L', 'FrontUpperLeg.R', 'HindUpperLeg.L', 'HindUpperLeg.R', 'FrontPaw.L', 'FrontPaw.R')))
         lo, hi = v.min(axis=0), v.max(axis=0); ctr = (lo + hi) / 2
         render_pose("pose_%s_f000" % nm, center=(float(ctr[0]), float(ctr[1]), float(ctr[2])), scale=max(0.45, float((hi - lo).max()) * 1.2))
