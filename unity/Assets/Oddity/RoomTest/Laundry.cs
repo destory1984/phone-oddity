@@ -65,19 +65,21 @@ namespace Oddity.RoomTest
         public const float ThighRadius = .07f, ThighGap = .01f; // The thigh top is the hips -> knee line plus this; the cloth keeps ThighGap above it.
         public const float LapNearMin = .12f, BellyRadius = .09f, BellyMargin = .03f, KneeHang = .10f; // Lap cloth: near edge in front of hips and belly, at most KneeHang past the knees.
         public const float CsMin = .65f, ReachFraction = .95f; // Smallest cloth scale; share of the arm length a wrist target may use.
-        public const float ShakeUp = -.15f, HangPast = .16f; // Held top edge relative to the shoulders; hanging cloth this far beyond the knees (clear of the shins).
+        public const float ShakeUp = -.21f, HangPast = .30f; // Held top edge relative to the shoulders; hanging cloth this far beyond the knees (clear of the shins).
+        public const float HangMargin = .07f; // Reach kept in reserve for the hanging cloth's top edge, metres (was .07: the hands sat under her chin).
         public const float TorsoHalf = .14f, GatingSoft = .06f; // Torso half width for the clearance push; soft edge of every clearance gate.
         public const float SnapRise = .065f, SnapDrop = .055f, SnapPeak = .35f, SnapBottom = .65f; // One raised beat and downward snap.
         public const float TravelArc = .08f, PlaceArc = .12f, ReturnArc = .05f; // Metres above the pickup/deposit, the stack run and the hand return paths.
         public const float FoldPeak = .5f, LeftHoldAlong = .7f, LeftHoldSeconds = .3f; // Flap lift height as a share of its radius; where the left hand holds the left edge; its slide time share.
         public const float WristGap = .045f, WristLift = .018f; // Wrist behind contact and above fabric, metres.
-        public const float ElbowSide = .16f, ElbowAhead = .20f, ElbowDown = .20f; // Pole relative to shoulder, metres (working).
+        public const float ElbowSide = .16f, ElbowAhead = .20f, ElbowDown = .20f, HangElbowSide = .24f; // Pole relative to shoulder, metres (working); while the cloth hangs the elbows open out to HangElbowSide.
         public const float RestElbowSide = .12f, RestElbowAhead = .10f, RestElbowDown = .28f, RestAhead = .05f; // Relaxed hands on the thighs, elbows near the ribs.
         public const float SpineBow = 12f, ChestBow = 5f, HeadBow = 10f, NeckBow = 4f, SideLean = 12f; // Degrees, additive upper-body offsets (head 22 -> 10, neck 8 -> 4, chest 8 -> 5: the old 50 deg buried the chin in the chest).
         public const float EdgeSwitchSeconds = .4f; // The hands slide to the folded cloth's far corners over this long when FoldWidth turns into Place.
         public const float BreathDegrees = .6f, BreathSeconds = 4.2f; // Small chest breathing.
         public const float CurlProximal = 22f, CurlMiddle = 28f, CurlDistal = 14f, ThumbCurl = 14f; // Pinch curl degrees.
-        public const float OpenCurl = .15f, GripCurl = .75f; // Finger curl fractions for release and grasp.
+        public const float OpenCurl = .15f, GripCurl = 1.6f, HoldGrip = 1.6f; // Finger curl fractions for release and for holding the cloth (a closed pinch; .75 left the fingers splayed).
+        public const float AdductAmount = .9f; // How far the four fingers are brought together (0 = neutral spread, 1 = parallel). // Finger curl fractions for release and grasp.
         public const float PatHeight = .045f, PatDepth = .008f; // Single pat above the finished stack, metres.
         public const float WorkingSmile = .12f, DoneSmile = .48f, PatEyes = .35f; // Face channel amplitudes.
         public const float BlinkPeriod = 3.7f, BlinkSeconds = .16f; // Quiet periodic blink.
@@ -119,6 +121,7 @@ namespace Oddity.RoomTest
         readonly Transform[] legUpper = new Transform[2], legLower = new Transform[2];
         readonly Transform[,,] fingers = new Transform[2, 4, 3];
         readonly Transform[,] thumbs = new Transform[2, 3];
+        readonly Transform[][] proximals = { new Transform[4], new Transform[4] }, intermediates = { new Transform[4], new Transform[4] };
         readonly Quaternion[] handFrame = new Quaternion[2];
         readonly List<Transform> controlled = new List<Transform>();
         readonly Transform[] pieces = new Transform[LaundryTimeline.PieceCount];
@@ -154,6 +157,7 @@ namespace Oddity.RoomTest
         public Vector3 RightContact { get; private set; }
         public Vector3 LeftWristTarget { get; private set; }
         public Vector3 RightWristTarget { get; private set; }
+        public float GripCurlNow { get; private set; } // Finger curl fraction applied this frame (OpenCurl .. HoldGrip).
         public Transform Piece(int index) => pieces[index];
 
         static Vector3[] BuildSamples()
@@ -188,6 +192,7 @@ namespace Oddity.RoomTest
                 if (palm.sqrMagnitude < AxisEpsilon) palm = Vector3.ProjectOnPlane(anim.transform.forward, direction).normalized;
                 handFrame[s] = Quaternion.Inverse(hands[s].rotation) * Quaternion.LookRotation(direction, palm);
             }
+            for (int s = 0; s < 2; s++) for (int f = 0; f < 4; f++) { proximals[s][f] = fingers[s, f, 0]; intermediates[s][f] = fingers[s, f, 1]; }
             before = new Quaternion[controlled.Count]; written = new Quaternion[controlled.Count];
             var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
             if (shader == null) throw new InvalidOperationException("No laundry material shader found.");
@@ -389,7 +394,7 @@ namespace Oddity.RoomTest
             var folded = new Vector3(cw * Half, th * 4, cl * Half);
             // Hanging: top edge a little below the shoulders, beyond the knees where the shins and thighs are out of the way, within reach.
             float dyHang = ShakeUp - WristGap, dzHang = Mathf.Abs(cw * Half - shLat);
-            float hangMax = shF + Mathf.Sqrt(Mathf.Max(0, arm * arm - dyHang * dyHang - dzHang * dzHang)) - .07f;
+            float hangMax = shF + Mathf.Sqrt(Mathf.Max(0, arm * arm - dyHang * dyHang - dzHang * dzHang)) - HangMargin;
             float hangX = Mathf.Clamp(Mathf.Min(g.dk + HangPast, hangMax), near + .15f, g.dk + HangPast);
             var raisedEdge = hp + forward * hangX + up * (shUp + ShakeUp);
             var raised = raisedEdge - up * (cl * Half);
@@ -482,7 +487,7 @@ namespace Oddity.RoomTest
                 float k = Ease(switchTime);
                 contactL = Vector3.Lerp(switchFromL, contactL, k); contactR = Vector3.Lerp(switchFromR, contactR, k);
             }
-            lastPhase = phase;
+            lastPhase = phase; GripCurlNow = grip;
             LeftContact = contactL; RightContact = contactR;
             float heldVertical = phase == "Lift" ? e : phase == "Shake" ? 1 : phase == "Lower" ? 1 - e : 0;
             // Fingers point forward, palms down, on the lap and on the thighs; up and toward her while the cloth hangs.
@@ -497,9 +502,10 @@ namespace Oddity.RoomTest
                 float side = s == 0 ? -1 : 1;
                 var pole = resting
                     ? upper[s].position + right * (side * RestElbowSide) + forward * RestElbowAhead - up * RestElbowDown
-                    : upper[s].position + right * (side * ElbowSide) + forward * ElbowAhead - up * ElbowDown;
+                    : upper[s].position + right * (side * Mathf.Lerp(ElbowSide, HangElbowSide, heldVertical)) + forward * ElbowAhead - up * ElbowDown;
                 SofaRig.TwoBone(upper[s], lower[s], hands[s], target, pole, w);
                 hands[s].rotation = Quaternion.Slerp(hands[s].rotation, Quaternion.LookRotation(fingersDirection, palm) * Quaternion.Inverse(handFrame[s]), w);
+                HandPose.Adduct(proximals[s], intermediates[s], hands[s].rotation * handFrame[s] * Vector3.up, AdductAmount * w);
                 var curlAxis = Vector3.Cross(fingersDirection, palm).normalized;
                 for (int f = 0; f < 4; f++) for (int j = 0; j < 3; j++)
                     Turn(fingers[s, f, j], curlAxis, (j == 0 ? CurlProximal : j == 1 ? CurlMiddle : CurlDistal) * grip * w);

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace Oddity.RoomTest
@@ -44,6 +45,7 @@ namespace Oddity.RoomTest
         const float PotWall = .008f, PotBase = .008f, RimHeight = .012f; // Metres: primitive pot shell.
         const int RimSegments = 16; // Boxes approximate the open cylindrical wall.
         const float HandleLength = .14f, HandleWidth = .025f, HandleY = .065f; // West-facing grip in metres.
+        const float CarryWristAlign = .65f; // Share of the way the carrying hand turns from 'fingers forward' to the forearm's own direction.
         const float HandleReach = .15f, CarryLift = .04f; // Wrist offset from pot centre and transfer arc.
         const float WristHover = .07f, RestSide = .15f, RestAhead = .22f; // Counter hand positions in body frame.
         const float TapHeight = .004f, TapHz = 2.3f, TapCurl = 10f; // Waiting finger motion in metres, Hz, degrees.
@@ -74,7 +76,11 @@ namespace Oddity.RoomTest
         const float TapX = 2.55f, TapY = 1.02f, TapZ = 3.88f; // Near-edge tap lever contact metres.
         static readonly Color MetalColor = new Color(.55f, .58f, .61f); // Steel pot surface.
         static readonly Color DarkColor = new Color(.06f, .06f, .07f); // Handle and phone shell.
-        static readonly Color PacketColor = new Color(.85f, .18f, .08f); // Red wrapper.
+        static readonly Color PacketColor = new Color(1f, .30f, .04f); // Red-orange wrapper.
+        static readonly Color SealColor = new Color(.72f, .12f, .03f), RidgeColor = new Color(1f, .62f, .30f), LabelColor = new Color(1f, .93f, .70f); // Darker seal band, lighter crimp ridges, cream label.
+        public const float SealHeight = .009f, LabelWidth = .07f, LabelHeight = .055f; // Seal strip height at each short end, label patch size, metres.
+        const int RidgeCount = 9; // Crimp ridges across each seal.
+        const float PacketSmoothness = .08f; // Matte plastic film: a glossy surface mirrored the cool top light and turned the red purple.
         static readonly Color WoodColor = new Color(.66f, .43f, .20f); // Wooden chopsticks.
         static readonly Color NoodleColor = new Color(.95f, .78f, .38f); // Dry noodle block.
         static readonly Color WaterColor = new Color(.55f, .68f, .72f); // Opaque stylized water and phone screen.
@@ -85,6 +91,7 @@ namespace Oddity.RoomTest
         public Vector3 TapControl = new Vector3(TapX, TapY, TapZ); // Requires a near-edge tap lever.
         public readonly Transform Props, Pot, Chopsticks, Packet, Phone;
         readonly Transform strip, noodles, water;
+        readonly Material packetBody, packetLabel;
         public static float PacketThumb = PacketThumbDefault; // thumb closing angle while pinching, degrees
         readonly Transform[,] thumb = new Transform[2, 3];
         readonly Vector3[] pinchInHand = new Vector3[2]; // pinch point (thumb tip and index tip midpoint) relative to the wrist in the hand's own rotation frame
@@ -152,7 +159,7 @@ namespace Oddity.RoomTest
             before = new Quaternion[controlled.Count]; written = new Quaternion[controlled.Count];
             Props = new GameObject("RamenProps").transform;
             var metal = Mat(MetalColor); var dark = Mat(DarkColor);
-            var red = Mat(PacketColor); var wood = Mat(WoodColor);
+            var red = Mat(PacketColor, PacketSmoothness); var wood = Mat(WoodColor);
             var yellow = Mat(NoodleColor); var liquid = Mat(WaterColor);
             Pot = Root("Pot");
             Part(Pot, "base", PrimitiveType.Cylinder, Vector3.up * (PotBase / 2), new Vector3(PotDiameter, PotBase / 2, PotDiameter), metal);
@@ -166,6 +173,16 @@ namespace Oddity.RoomTest
             Part(Pot, "handle", PrimitiveType.Cube, new Vector3(0, HandleY, -PotDiameter / 2 - HandleLength / 2), new Vector3(HandleWidth, HandleWidth, HandleLength), dark);
             water = Part(Pot, "water", PrimitiveType.Cylinder, Vector3.up * WaterY, new Vector3(PotDiameter - LiquidInset, RimHeight / 2, PotDiameter - LiquidInset), liquid);
             Packet = Root("Packet"); MeshPart(Packet, "wrapper", BagMesh(), red);
+            packetBody = red;
+            var seal = Mat(SealColor, PacketSmoothness); var ridge = Mat(RidgeColor, PacketSmoothness); var label = Mat(LabelColor, PacketSmoothness); packetLabel = label;
+            for (int end = -1; end <= 1; end += 2)
+            {
+                float y = end * (PacketH / 2 - SealHeight / 2);
+                Part(Packet, "seal", PrimitiveType.Cube, new Vector3(0, y, 0), new Vector3(PacketW, SealHeight, PacketEdge + .0012f), seal);
+                for (int k = 0; k < RidgeCount; k++)
+                    Part(Packet, "ridge", PrimitiveType.Cube, new Vector3((k - (RidgeCount - 1) / 2f) * PacketW / (RidgeCount + 1), y, 0), new Vector3(.0018f, SealHeight * .8f, PacketEdge + .0020f), ridge);
+            }
+            Part(Packet, "label", PrimitiveType.Cube, Vector3.zero, new Vector3(LabelWidth, LabelHeight, PacketMid + .0012f), label);
             strip = Root("TornEdge"); Part(strip, "edge", PrimitiveType.Cube, Vector3.zero, new Vector3(StripLength, StripWidth, PacketEdge), red);
             noodles = Root("Noodles"); Part(noodles, "block", PrimitiveType.Cube, Vector3.zero, new Vector3(NoodleSize, NoodleThickness, NoodleSize), yellow);
             Chopsticks = Root("Chopsticks");
@@ -228,15 +245,30 @@ namespace Oddity.RoomTest
             g.AddComponent<MeshFilter>().sharedMesh = mesh; g.AddComponent<MeshRenderer>().sharedMaterial = material;
         }
         public float PacketThickness => Packet.GetComponentInChildren<MeshFilter>().sharedMesh.bounds.size.z;
+        public Color PacketBodyColour => packetBody.color;
+        public Color PacketLabelColour => packetLabel.color;
+        public int PacketSealBands => Packet.Find("seal") == null ? 0 : Packet.GetComponentsInChildren<Transform>(true).Count(t => t.name == "seal");
+        public IEnumerable<Transform> PacketSeals => Packet.GetComponentsInChildren<Transform>(true).Where(t => t.name == "seal");
+        public Transform PacketLabelPatch => Packet.Find("label");
         public bool PacketHeld => Packet.parent != Props;
         public Vector3 LeftPinch => PinchPoint(0);
         Transform Bone(HumanBodyBones id) => anim.GetBoneTransform(id);
         void Track(Transform t) { if (t != null && !controlled.Contains(t)) controlled.Add(t); }
         Transform Root(string name) { var t = new GameObject(name).transform; t.SetParent(Props, false); return t; }
-        Material Mat(Color color)
+        Material Mat(Color color, float smoothness = -1)
         {
             var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            var m = new Material(shader); m.color = color; if (m.HasProperty("_Cull")) m.SetFloat("_Cull", 0); materials.Add(m); return m;
+            var m = new Material(shader); m.color = color; if (m.HasProperty("_Cull")) m.SetFloat("_Cull", 0);
+            if (smoothness >= 0)
+            {
+                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", smoothness);
+                if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0);
+                if (m.HasProperty("_SpecularHighlights")) m.SetFloat("_SpecularHighlights", 0);
+                if (m.HasProperty("_EnvironmentReflections")) m.SetFloat("_EnvironmentReflections", 0);
+                // a quarter of its own colour as emission keeps the wrapper bright under the dim kitchen light instead of going muddy
+                if (m.HasProperty("_EmissionColor")) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", color * .3f); }
+                m.EnableKeyword("_SPECULARHIGHLIGHTS_OFF"); m.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
+            } materials.Add(m); return m;
         }
         static Transform Part(Transform parent, string name, PrimitiveType type, Vector3 p, Vector3 size, Material material)
         {
@@ -385,6 +417,8 @@ namespace Oddity.RoomTest
                     float stirW = Ease((t - clock.BeatStart) / TransitionSeconds) * Ease((stirEnd - t) / TransitionSeconds);
                     rotation = Quaternion.AngleAxis(StirTilt * stirW, Right) * rotation;
                 }
+                // carrying the pot by its handle: the hand follows the forearm's line (a straight wrist) instead of keeping the fingers square to the counter
+                if (s == 0 && CarryingPot) rotation = Quaternion.LookRotation(Vector3.Slerp(Forward, (hand[0].position - lower[0].position).normalized, CarryWristAlign), Vector3.down) * Quaternion.Inverse(handFrame[s]);
                 if (s == 1 && (clock.Beat == 2 || clock.Beat == 9)) rotation = Quaternion.AngleAxis(KnobTurn * Mathf.Sin(Mathf.PI * (t - clock.BeatStart) / clock.BeatDuration), Forward) * rotation;
                 hand[s].rotation = Quaternion.Slerp(hand[s].rotation, rotation, w);
                 Curl(s, clock.Beat == 3 || clock.Beat == 4 ? SmileDone : 1, w);

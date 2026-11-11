@@ -216,6 +216,36 @@ namespace Oddity.RoomTest.Tests
             }
             finally { rig?.Dispose(); Object.DestroyImmediate(model); }
         }
+
+        // polish item 4: relaxed hands keep the four fingers together (no splayed claw) and a slight natural curl
+        [Test]
+        public void FloorMeal_RelaxedAndChopstickHandsKeepTheFingersTogether()
+        {
+            var model = LoadModel(); FloorMealRig rig = null;
+            try
+            {
+                var anim = model.GetComponent<Animator>();
+                rig = new FloorMealRig(anim, 104);
+                model.transform.rotation = rig.Props.rotation;
+                rig.Start();
+                float leftRest = 0, leftCup = 0, right = 0; int nRest = 0, nCup = 0, nRight = 0;
+                for (int i = 0; i < 7200; i++)
+                {
+                    rig.Tick(1f / 60);
+                    if (rig.Weight < 1) continue;
+                    rig.Apply(0);
+                    bool up = rig.Bowl.position.y - rig.Props.position.y > FloorMealRig.TableHeight + FloorMealRig.BowlHeight / 2 + .03f;
+                    if (!up && (rig.Phase == "Phone" || rig.Phase == "Laughing" || rig.Phase == "Returning")) { leftRest = Mathf.Max(leftRest, rig.FingerSpreadDegrees(0)); nRest++; }
+                    if (up && (rig.Phase == "Slurping" || rig.Phase == "Chewing")) { leftCup = Mathf.Max(leftCup, rig.FingerSpreadDegrees(0)); nCup++; }
+                    if (rig.Phase == "Gathering" || rig.Phase == "Lifting") { right = Mathf.Max(right, rig.FingerSpreadDegrees(1)); nRight++; }
+                }
+                Debug.Log("FLOORMEAL_SPREAD resting left " + leftRest.ToString("0.0") + " cupping left " + leftCup.ToString("0.0") + " chopstick right " + right.ToString("0.0") + " deg (frames " + nRest + "/" + nCup + "/" + nRight + ")");
+                Assert.That(nRest, Is.GreaterThan(60)); Assert.That(nRight, Is.GreaterThan(60));
+                Assert.That(leftRest, Is.LessThanOrEqualTo(8f), "resting left hand: fingers together");
+                Assert.That(right, Is.LessThanOrEqualTo(10f), "chopstick hand: fingers together");
+            }
+            finally { rig?.Dispose(); Object.DestroyImmediate(model); }
+        }
     }
 }
 #endif

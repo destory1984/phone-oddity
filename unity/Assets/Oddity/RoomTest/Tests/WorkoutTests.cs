@@ -153,5 +153,34 @@ namespace Oddity.RoomTest.Tests
             }
             finally { rig?.Dispose(); UnityEngine.Object.DestroyImmediate(model); }
         }
+
+        // polish item 5: at the bottom of every squat the nose points at the TV (within 15 degrees), not down at her own torso
+        [Test]
+        public void Workout_SquatBottomNoseStaysWithin15DegreesOfTheTv()
+        {
+            var model = Model(); WorkoutRig rig = null;
+            try
+            {
+                model.transform.SetPositionAndRotation(new Vector3(OneRoom.WorkoutSpot.x, 0f, OneRoom.WorkoutSpot.y), Quaternion.Euler(0f, OneRoom.WorkoutYaw, 0f));
+                var anim = model.GetComponent<Animator>(); rig = new WorkoutRig(anim, 17);
+                var tv = new Vector3(2.81f, .80f, 1.5f); rig.GazeTarget = tv;
+                rig.Start(); float elapsed = 0f, worst = 0f, noseDown = 0f; int bottoms = 0;
+                for (int i = 0; i < 1200; i++)
+                {
+                    rig.Tick(.02f); elapsed += .02f; rig.Apply(.02f);
+                    float t = elapsed % WorkoutRig.LoopSeconds - WorkoutRig.StretchTotal;
+                    if (rig.Phase != "Squat" || rig.GazeBlend < .99f) continue;
+                    float within = t % WorkoutRig.SquatSeconds;
+                    if (Mathf.Abs(within - WorkoutRig.SquatSeconds / 2f) > .15f) continue;
+                    bottoms++;
+                    float angle = Vector3.Angle(rig.NoseWorld, tv - rig.HeadPosition); worst = Mathf.Max(worst, angle);
+                    noseDown = Mathf.Max(noseDown, -Mathf.Asin(Mathf.Clamp(rig.NoseWorld.normalized.y, -1f, 1f)) * Mathf.Rad2Deg);
+                }
+                Debug.Log("WORKOUT_SQUAT bottoms=" + bottoms + " worst nose-to-TV " + worst.ToString("0.0") + " deg, nose pitched down at most " + noseDown.ToString("0.0") + " deg");
+                Assert.That(bottoms, Is.GreaterThan(20));
+                Assert.That(worst, Is.LessThanOrEqualTo(15f), "nose within 15 deg of the TV at the squat bottom");
+            }
+            finally { rig?.Dispose(); UnityEngine.Object.DestroyImmediate(model); }
+        }
     }
 }

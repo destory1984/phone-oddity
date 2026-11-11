@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace Oddity.RoomTest
@@ -13,7 +14,9 @@ namespace Oddity.RoomTest
         public const float SmileEnd = 22f, SquintEnd = 23f; // Return occupies the final two seconds.
         public const float MirrorDiameter = .12f; // Outside diameter, metres.
         const float DiscThickness = .006f, FaceInset = .008f, FaceGap = .0005f; // Rim thickness, inset and surface separation, metres.
-        const float HandleLength = .085f, HandleWidth = .016f, GripToCentre = .115f, GripDepth = .015f; // Mirror grip geometry, metres.
+        const float HandleLength = .085f, HandleWidth = .016f; // Mirror handle geometry, metres.
+        const float HandleSlant = -90f; // The handle centre sits on the closed finger pads (see FistCentre); this is the handle's angle from the finger direction about the palm normal (degrees, negative = disc toward the thumb side): a hammer-like grip with the handle across the palm.
+        const float WrapReach = .004f, WrapProximal = 75f, WrapIntermediate = 95f, WrapDistal = 55f, WrapThumb = 40f, AdductAmount = .9f; // Fist wrap: tip-to-handle-surface gap to stop at (metres), maximum joint angles, finger closing (degrees).
         const float TintLength = .060f, TintDiameter = .012f, TintExposed = .015f; // Uncapped solid tint geometry, metres.
         const float TintGripHeight = .025f, TintGripDepth = .012f; // Tint bottom relative to right wrist, metres.
         const float MirrorSide = .08f, MirrorAhead = .23f, MirrorBelow = .08f; // Disc centre relative to the resting eye midpoint: to her left, ahead, below, metres (about 0.25 m from the eyes).
@@ -50,6 +53,9 @@ namespace Oddity.RoomTest
         readonly System.Random rng;
         readonly float fringeReach;
         readonly Quaternion[] before, written;
+        readonly Transform[] leftProximal = new Transform[4], leftIntermediate = new Transform[4];
+        readonly Quaternion gripRotation; // hand frame -> mirror frame
+        readonly Vector3 gripOrigin; // disc centre in the left hand frame, metres
         bool wanted, disposed, hasWritten;
         float time, variation, tintBlend, fringeBlend;
 
@@ -101,6 +107,11 @@ namespace Oddity.RoomTest
                 if (palm.sqrMagnitude < Epsilon) palm = Vector3.ProjectOnPlane(anim.transform.forward, direction).normalized;
                 handFrame[s] = Quaternion.LookRotation(Quaternion.Inverse(hand[s].rotation) * direction.normalized, Quaternion.Inverse(hand[s].rotation) * palm);
             }
+            for (int f = 0; f < 4; f++) { leftProximal[f] = finger[0, f, 0]; leftIntermediate[f] = finger[0, f, 1]; }
+            float slant = HandleSlant * Mathf.Deg2Rad;
+            gripRotation = Quaternion.AngleAxis(HandleSlant, Vector3.up) * Quaternion.Euler(90, 0, 0);
+            var palmPoint = FistCentre();
+            gripOrigin = palmPoint + (MirrorDiameter / 2 + HandleLength / 2) * new Vector3(Mathf.Sin(slant), 0, Mathf.Cos(slant));
             var tip = finger[1, 0, 2];
             fringeReach = tip != null ? Vector3.Distance(hand[1].position, tip.position) + FingerTipLength : FingerReachFallback;
             before = new Quaternion[controlled.Count]; written = new Quaternion[controlled.Count];
@@ -111,7 +122,7 @@ namespace Oddity.RoomTest
             glass.SetFloat("_Smoothness", Smoothness); glass.SetFloat("_Metallic", Metallic);
             var casing = Material(shader, new Color(CaseShade, CaseShade, CaseShade));
             var tint = Material(shader, new Color(TintR, TintG, TintB));
-            Mirror = Prop("MirrorHandMirror", 0, new Vector3(0, -GripDepth, GripToCentre), Quaternion.Euler(90, 0, 0));
+            Mirror = Prop("MirrorHandMirror", 0, gripOrigin, gripRotation);
             Part(Mirror, "rim", Vector3.zero, new Vector3(MirrorDiameter, DiscThickness / 2, MirrorDiameter), Quaternion.Euler(90, 0, 0), rim);
             Part(Mirror, "silver", new Vector3(0, 0, -DiscThickness / 2 - FaceGap), new Vector3(MirrorDiameter - FaceInset, FaceGap / 2, MirrorDiameter - FaceInset), Quaternion.Euler(90, 0, 0), glass);
             Part(Mirror, "handle", Vector3.down * (MirrorDiameter / 2 + HandleLength / 2), new Vector3(HandleWidth, HandleLength / 2, HandleWidth), Quaternion.identity, rim);
@@ -120,6 +131,25 @@ namespace Oddity.RoomTest
             Part(Tint, "colour", Vector3.up * (TintLength + TintExposed / 2), new Vector3(TintDiameter, TintExposed / 2, TintDiameter), Quaternion.identity, tint);
         }
 
+        // Where the four finger pads land in the left hand frame (metres) when the hand is fully closed in the neutral pose, lifted off the palm by the handle's radius:
+        // the handle axis passes through it. Bones are put back afterwards.
+        Vector3 FistCentre()
+        {
+            var saved = new List<(Transform t, Quaternion q)>();
+            foreach (var t in new[] { hand[0] }.Concat(Enumerable.Range(0, 4).SelectMany(f => Enumerable.Range(0, 3).Select(j => finger[0, f, j])))) saved.Add((t, t.localRotation));
+            var frame = hand[0].rotation * handFrame[0];
+            var axis = Vector3.Cross(frame * Vector3.forward, frame * Vector3.up).normalized;
+            HandPose.Adduct(leftProximal, leftIntermediate, frame * Vector3.up, AdductAmount);
+            var sum = Vector3.zero;
+            for (int f = 0; f < 4; f++)
+            {
+                Rotate(finger[0, f, 0], axis, WrapProximal); Rotate(finger[0, f, 1], axis, WrapIntermediate); Rotate(finger[0, f, 2], axis, WrapDistal);
+                sum += Quaternion.Inverse(handFrame[0]) * hand[0].InverseTransformPoint(HandPose.Tip(finger[0, f, 0], finger[0, f, 1], finger[0, f, 2], FingerTipLength));
+            }
+            foreach (var (t, q) in saved) t.localRotation = q;
+            var centre = sum / 4;
+            return new Vector3(centre.x, centre.y + HandleWidth / 2 + WrapReach, centre.z);
+        }
         Transform Bone(HumanBodyBones id)
         {
             var b = anim.GetBoneTransform(id);
@@ -211,7 +241,9 @@ namespace Oddity.RoomTest
                 var up = Vector3.ProjectOnPlane(u, n); up = up.sqrMagnitude < Epsilon ? f : up.normalized;
                 var leftFrame = Quaternion.LookRotation(up, n);
                 var pole0 = upper[0].position - r * ElbowIn - u * ElbowDrop - f * ElbowBack;
-                PoseArm(0, centre - up * GripToCentre + n * GripDepth, leftFrame, r, u, f, w, pole0);
+                var mirrorWorld = leftFrame * Quaternion.Euler(90, 0, 0);
+                var gripFrame = mirrorWorld * Quaternion.Inverse(gripRotation); // hand frame that puts the handle across the palm
+                PoseArm(0, centre - gripFrame * gripOrigin, gripFrame, r, u, f, w, pole0);
 
                 var rest = hips.position + r * LapRight + u * LapUp + f * LapAhead;
                 var restFrame = Quaternion.LookRotation(f, u);
@@ -228,7 +260,7 @@ namespace Oddity.RoomTest
                 var target = Vector3.Lerp(Vector3.Lerp(rest, tintWrist, tintBlend), fringeWrist, fringeBlend);
                 var frame = Quaternion.Slerp(Quaternion.Slerp(restFrame, tintFrame, tintBlend), fringeFrame, fringeBlend);
                 PoseArm(1, target, frame, r, u, f, w);
-                Curl(0, w, 0); Curl(1, w, fringeBlend);
+                GripHandle(w); Curl(1, w, fringeBlend);
             }
             for (int i = 0; i < controlled.Count; i++) written[i] = controlled[i].localRotation;
             hasWritten = true;
@@ -238,6 +270,37 @@ namespace Oddity.RoomTest
             var pole = elbow ?? upper[side].position + r * (side == 0 ? -PoleOut : PoleOut) - u * PoleDown + f * PoleAhead;
             SofaRig.TwoBone(upper[side], lower[side], hand[side], target, pole, w);
             hand[side].rotation = Quaternion.Slerp(hand[side].rotation, frame * Quaternion.Inverse(handFrame[side]), w);
+        }
+        // Handle axis end points, world.
+        public Vector3 HandleTop => Mirror.TransformPoint(Vector3.down * (MirrorDiameter / 2));
+        public Vector3 HandleBottom => Mirror.TransformPoint(Vector3.down * (MirrorDiameter / 2 + HandleLength));
+        // Distance from a world point to the handle's outer surface (negative = inside the handle).
+        public float HandleSurfaceDistance(Vector3 world)
+        {
+            var l = Mirror.InverseTransformPoint(world);
+            float y = Mathf.Clamp(l.y, -(MirrorDiameter / 2 + HandleLength), -MirrorDiameter / 2);
+            return Vector3.Distance(l, new Vector3(0, y, 0)) - HandleWidth / 2;
+        }
+        // Signed distance from a world point to the disc solid (negative = inside).
+        public float DiscSurfaceDistance(Vector3 world)
+        {
+            var l = Mirror.InverseTransformPoint(world);
+            float radial = new Vector2(l.x, l.y).magnitude - MirrorDiameter / 2, vertical = Mathf.Abs(l.z) - DiscThickness / 2;
+            return radial > 0 && vertical > 0 ? Mathf.Sqrt(radial * radial + vertical * vertical) : Mathf.Max(radial, vertical);
+        }
+        // Left finger pad (0 = index .. 3 = little) and thumb tip, world; valid after Apply.
+        public Vector3 LeftFingerTip(int index) => HandPose.Tip(finger[0, index, 0], finger[0, index, 1], finger[0, index, 2], FingerTipLength);
+        public Vector3 LeftThumbTip => HandPose.Tip(thumb[0, 0], thumb[0, 1], thumb[0, 2], FingerTipLength);
+
+        // Closed grip: the four fingers close up, then each wraps round the handle until its pad is WrapReach from the surface; the thumb closes on the other side.
+        void GripHandle(float w)
+        {
+            var frame = hand[0].rotation * handFrame[0];
+            var axis = Vector3.Cross(frame * Vector3.forward, frame * Vector3.up).normalized;
+            HandPose.Adduct(leftProximal, leftIntermediate, frame * Vector3.up, AdductAmount * w);
+            for (int f = 0; f < 4; f++)
+                HandPose.Wrap(finger[0, f, 0], finger[0, f, 1], finger[0, f, 2], axis, WrapProximal * w, WrapIntermediate * w, WrapDistal * w, FingerTipLength, HandleSurfaceDistance, WrapReach);
+            HandPose.Wrap(thumb[0, 0], thumb[0, 1], thumb[0, 2], axis, WrapThumb * w, WrapThumb * w, WrapThumb * w, FingerTipLength, HandleSurfaceDistance, WrapReach);
         }
         void Curl(int side, float w, float fringe)
         {

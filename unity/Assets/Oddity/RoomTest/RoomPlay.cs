@@ -3340,6 +3340,24 @@ namespace Oddity.RoomTest
                     else if(stillCam=="camface"){eye=hd2+f2*.9f+Vector3.up*.05f;aim=hd2+Vector3.up*.02f;fov=28;}
                     else{eye=hd2+r2*1.1f+f2*.1f+Vector3.up*.08f;aim=hd2;fov=28;}
                     cameraView.fieldOfView=fov;cameraView.transform.SetPositionAndRotation(eye,Quaternion.LookRotation(aim-eye,Vector3.up));return;}
+                if(laundryRig!=null && laundryRig.Weight>.01f){ // the laundry: all three close on her hands and the cloth (camphone from in front and to her right, camface from her right side, camback from above)
+                    var f5=Vector3.ProjectOnPlane(anim.transform.forward,Vector3.up).normalized;var r5=Vector3.Cross(Vector3.up,f5).normalized;var mid5=(laundryRig.LeftContact+laundryRig.RightContact)/2;
+                    if(stillCam=="camphone")eye=mid5+f5*.9f+r5*.3f+Vector3.up*.1f;
+                    else if(stillCam=="camface")eye=mid5+r5*1.0f+Vector3.up*.1f;
+                    else eye=mid5+Vector3.up*.9f+f5*.15f;
+                    aim=mid5;cameraView.fieldOfView=32;cameraView.transform.SetPositionAndRotation(eye,Quaternion.LookRotation(aim-eye,Vector3.up));return;}
+                if(mealRig!=null && mealRig.Weight>.01f){ // the floor meal: camphone from her left and a little in front (low), camface from the far side of the table just above the table top, camback from her left-behind and above
+                    var bw=mealRig.Bowl.position;var mf=mealRig.Props.forward;var mr=mealRig.Props.right;
+                    if(stillCam=="camphone")eye=bw-mr*.5f+mf*.3f-Vector3.up*.02f;
+                    else if(stillCam=="camface")eye=bw+mf*.9f-Vector3.up*.1f;
+                    else eye=bw-mr*.45f-mf*.35f+Vector3.up*.2f;
+                    aim=bw;cameraView.fieldOfView=30;cameraView.transform.SetPositionAndRotation(eye,Quaternion.LookRotation(aim-eye,Vector3.up));return;}
+                if(mirrorRig!=null && mirrorRig.Weight>.01f){ // the hand mirror: all three close on her left hand holding the handle (camphone from her side of the mirror, camface from her left, camback from behind the mirror)
+                    var f4=Vector3.ProjectOnPlane(anim.transform.forward,Vector3.up).normalized;var r4=Vector3.Cross(Vector3.up,f4).normalized;var hp4=mirrorRig.Mirror.TransformPoint(Vector3.down*.1f);var n4=mirrorRig.MirrorNormal;
+                    if(stillCam=="camphone")eye=hp4+n4*.15f-r4*.3f+Vector3.up*.12f;
+                    else if(stillCam=="camface")eye=hp4-r4*.4f+f4*.1f+Vector3.up*.1f;
+                    else eye=hp4-n4*.4f+Vector3.up*.1f;
+                    aim=hp4;cameraView.fieldOfView=22;cameraView.transform.SetPositionAndRotation(eye,Quaternion.LookRotation(aim-eye,Vector3.up));return;}
                 if(sofaRig==null)return;
                 var f=sofaRig.BodyForward;var r=Vector3.Cross(Vector3.up,f).normalized;var c=sofaRig.PhoneCentre;var hd=anim.GetBoneTransform(HumanBodyBones.Head).position;
                 bool tvLook=sofaOn==SofaMode.Tv;

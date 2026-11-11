@@ -364,6 +364,46 @@ namespace Oddity.RoomTest.Tests
             Assert.That(worstElbow, Is.GreaterThanOrEqualTo(-.05f));
             Assert.That(worstReach, Is.LessThan(.04f), reachAt);
         }
+
+        // polish item 6: during Lift/Shake the hands hold the cloth well in front (not under her chin), a little below the shoulders, elbows opened from the ribs;
+        // the fingers stay closed on the cloth until it lies on the lap (Lower)
+        [Test]
+        public void Laundry_ShakeHandsAreForwardAndLowElbowsOpenAndTheGripStaysClosedUntilTheLap()
+        {
+            float fwdMin = 9, fwdMax = -9, belowChinMin = 9, belowChinMax = -9, openMin = 999; float gripLowerMin = 9, gripOpenMax = 0; int shakes = 0, lowers = 0;
+            Drive((rig, anim, model, i) =>
+            {
+                if (rig.Weight < 1 || rig.Completed >= 5) return;
+                var fwd = model.transform.forward; fwd.y = 0; fwd.Normalize();
+                var head = anim.GetBoneTransform(HumanBodyBones.Head).position;
+                var shL = anim.GetBoneTransform(HumanBodyBones.LeftUpperArm).position; var shR = anim.GetBoneTransform(HumanBodyBones.RightUpperArm).position;
+                if (rig.Phase == "Shake")
+                {
+                    shakes++;
+                    var hands = (anim.GetBoneTransform(HumanBodyBones.LeftHand).position + anim.GetBoneTransform(HumanBodyBones.RightHand).position) / 2;
+                    float f = Vector3.Dot(hands - head, fwd), b = head.y - hands.y;
+                    fwdMin = Mathf.Min(fwdMin, f); fwdMax = Mathf.Max(fwdMax, f); belowChinMin = Mathf.Min(belowChinMin, b); belowChinMax = Mathf.Max(belowChinMax, b);
+                    // elbow opening: angle between the upper arm and the body's forward-down line in the frontal plane, per side, smaller = pinned to the ribs
+                    for (int s = 0; s < 2; s++)
+                    {
+                        var u = anim.GetBoneTransform(s == 0 ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm).position;
+                        var l = anim.GetBoneTransform(s == 0 ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm).position;
+                        var right = Vector3.Cross(Vector3.up, fwd); float side = s == 0 ? -1 : 1;
+                        var d = l - u; float open = Mathf.Atan2(Vector3.Dot(d, right) * side, -d.y) * Mathf.Rad2Deg; // 0 = hanging straight down, positive = elbow out to the side
+                        openMin = Mathf.Min(openMin, open);
+                    }
+                }
+                if (rig.Phase == "Lower" && rig.PhaseProgress < .9f) { lowers++; gripLowerMin = Mathf.Min(gripLowerMin, rig.GripCurlNow); }
+                if (rig.Phase == "Return") gripOpenMax = Mathf.Max(gripOpenMax, rig.GripCurlNow);
+            });
+            Debug.Log("LAUNDRY_SHAKE hands " + fwdMin.ToString("0.000") + " - " + fwdMax.ToString("0.000") + " m in front of the head, " + belowChinMin.ToString("0.000") + " - " + belowChinMax.ToString("0.000") + " m below it, elbow out " + openMin.ToString("0") + " deg at least, grip during Lower " + gripLowerMin.ToString("0.00") + " (Return " + gripOpenMax.ToString("0.00") + "), frames " + shakes + "/" + lowers);
+            Assert.That(shakes, Is.GreaterThan(20)); Assert.That(lowers, Is.GreaterThan(20));
+            Assert.That(fwdMin, Is.GreaterThanOrEqualTo(.24f), "hands in front of the head (the arm length caps this near 0.27 m at the current bow)");
+            Assert.That(belowChinMin, Is.GreaterThanOrEqualTo(.19f), "hands at upper-chest height or lower (0.19 - 0.30 below the head)"); Assert.That(belowChinMax, Is.LessThanOrEqualTo(.45f));
+            Assert.That(openMin, Is.GreaterThanOrEqualTo(20f), "elbows opened at least 20 degrees from the ribs while the cloth hangs");
+            Assert.That(gripLowerMin, Is.GreaterThanOrEqualTo(LaundryRig.HoldGrip - .01f), "the pinch stays closed while the cloth is lowered");
+            Assert.That(gripOpenMax, Is.LessThanOrEqualTo(LaundryRig.OpenCurl + .01f));
+        }
     }
 }
 #endif

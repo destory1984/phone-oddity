@@ -154,6 +154,42 @@ namespace Oddity.RoomTest.Tests
             }
             finally { Object.DestroyImmediate(m); }
         }
+
+        [Test]
+        public void Mirror_LeftHandIsAClosedGripFingerPadsOnTheHandleNeverInTheDisc()
+        {
+            var m = Model();
+            try
+            {
+                var a = m.GetComponent<Animator>();
+                using (var rig = new MirrorRig(a, 71))
+                {
+                    m.transform.rotation = Quaternion.Euler(0, 90, 0);
+                    float gapMax = 0, gapMin = 9, discMin = 9, thumbMin = 9; int frames = 0; var perFinger = new float[4];
+                    rig.Start();
+                    for (int i = 0; i < 100; i++)
+                    {
+                        rig.Tick(.25f); rig.Apply(0);
+                        if (rig.Weight < 1) continue;
+                        frames++;
+                        for (int f = 0; f < 4; f++)
+                        {
+                            var tip = rig.LeftFingerTip(f);
+                            float gap = rig.HandleSurfaceDistance(tip);
+                            perFinger[f] = Mathf.Max(perFinger[f], gap); gapMax = Mathf.Max(gapMax, gap); gapMin = Mathf.Min(gapMin, gap);
+                            discMin = Mathf.Min(discMin, rig.DiscSurfaceDistance(tip));
+                        }
+                        thumbMin = Mathf.Min(thumbMin, rig.HandleSurfaceDistance(rig.LeftThumbTip));
+                    }
+                    Debug.Log("MIRROR_GRIP frames=" + frames + " finger pad to handle surface " + gapMin.ToString("0.000") + " - " + gapMax.ToString("0.000") + " m, nearest to the disc " + discMin.ToString("0.000") + " m, worst per finger " + string.Join("/", perFinger.Select(x => x.ToString("0.000"))) + ", thumb tip to handle " + thumbMin.ToString("0.000") + " m");
+                    Assert.That(frames, Is.GreaterThan(60));
+                    Assert.That(gapMax, Is.LessThanOrEqualTo(.01f), "every finger pad within 1 cm of the handle");
+                    Assert.That(gapMin, Is.GreaterThanOrEqualTo(-.004f), "no finger pad buried in the handle");
+                    Assert.That(discMin, Is.GreaterThanOrEqualTo(0f), "no finger pad through the disc");
+                }
+            }
+            finally { Object.DestroyImmediate(m); }
+        }
     }
 }
 #endif

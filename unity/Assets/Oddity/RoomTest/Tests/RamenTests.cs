@@ -134,17 +134,23 @@ namespace Oddity.RoomTest.Tests
                 Action reset = () => { for (int i = 0; i < bones.Length; i++) { bones[i].localRotation = rest[i]; bones[i].localPosition = pos[i]; } };
                 var lhand = anim.GetBoneTransform(HumanBodyBones.LeftHand); var rhand = anim.GetBoneTransform(HumanBodyBones.RightHand);
                 rig.Start(); reset(); rig.Tick(RamenClock.FillEnd + 1.0f); rig.Apply(0);
-                float worstPot = 0; int carry = 0;
+                float worstPot = 0, lowest = 9, highest = -9, bend = 0; int carry = 0;
+                var lforearm = anim.GetBoneTransform(HumanBodyBones.LeftLowerArm); var lknuckle = anim.GetBoneTransform(HumanBodyBones.LeftMiddleProximal);
                 for (int i = 0; i < 20; i++)
                 {
                     reset(); rig.Tick(.05f); rig.Apply(0);
                     if (rig.Phase != "Carry") continue;
                     carry++;
                     worstPot = Mathf.Max(worstPot, Vector3.Distance(lhand.position, rig.PotHandlePoint));
+                    float above = lhand.position.y - rig.Burner.y; lowest = Mathf.Min(lowest, above); highest = Mathf.Max(highest, above);
+                    if (lknuckle != null) bend = Mathf.Max(bend, Vector3.Angle(lhand.position - lforearm.position, lknuckle.position - lhand.position));
                 }
                 Debug.Log("RAMEN_POT carry frames=" + carry + " worst hand-to-handle " + worstPot.ToString("0.0000") + " m");
                 Assert.That(carry, Is.GreaterThan(5));
+                Debug.Log("RAMEN_CARRY wrist " + lowest.ToString("0.000") + " - " + highest.ToString("0.000") + " m above the counter, wrist bend up to " + bend.ToString("0") + " deg");
                 Assert.That(worstPot, Is.LessThan(.005f), "pot on its handle under 5 mm");
+                Assert.That(lowest, Is.GreaterThanOrEqualTo(.03f), "wrist not dragged onto the counter"); Assert.That(highest, Is.LessThanOrEqualTo(.25f), "carried about counter height");
+                Assert.That(bend, Is.LessThanOrEqualTo(40f), "wrist roughly straight while carrying");
 
                 // the packet: its place in the left hand's frame does not move while the wrist turns (Packet / Tear beats, before the pour tilt)
                 reset(); rig.Tick(RamenClock.PhoneEnd + 1.8f - (RamenClock.FillEnd + 2.0f)); rig.Apply(0); // forward to the packet beat, after the reach, pickup and turn upright
@@ -226,6 +232,34 @@ namespace Oddity.RoomTest.Tests
                 Debug.Log("RAMEN_STIR frames in stir " + stir + ", worst right-hand turn in one 0.02 s step " + worst.ToString("0.0") + " deg");
                 Assert.That(stir, Is.GreaterThan(40));
                 Assert.That(worst, Is.LessThan(8f), "no snap at the start of the stir");
+            }
+            finally { rig?.Dispose(); Object.DestroyImmediate(model); }
+        }
+
+        [Test]
+        public void Ramen_PacketReadsAsAnInstantNoodleBagRedOrangeWithSealStripsAndALabel()
+        {
+            var model = LoadModel(); RamenRig rig = null;
+            try
+            {
+                rig = new RamenRig(model.GetComponent<Animator>(), 17);
+                Color.RGBToHSV(rig.PacketBodyColour, out float h, out float sat, out float v);
+                Assert.That(h < .09f || h > .97f, "body hue " + h + " is red/orange");
+                Assert.That(sat, Is.GreaterThanOrEqualTo(.6f)); Assert.That(v, Is.GreaterThanOrEqualTo(.6f));
+                var seals = rig.PacketSeals.ToArray();
+                Assert.That(seals.Length, Is.EqualTo(2), "one seal strip at each short end");
+                foreach (var seal in seals)
+                {
+                    Assert.That(seal.localScale.y, Is.InRange(.008f, .010f), "seal strip 8-10 mm");
+                    Assert.That(Mathf.Abs(seal.localPosition.y), Is.GreaterThan(.06f), "at a short end");
+                    Assert.That(seal.localScale.x, Is.GreaterThanOrEqualTo(.11f), "across the whole width");
+                }
+                Assert.That(Mathf.Sign(seals[0].localPosition.y), Is.Not.EqualTo(Mathf.Sign(seals[1].localPosition.y)));
+                Color.RGBToHSV(rig.PacketLabelColour, out _, out float ls, out float lv);
+                Assert.That(lv, Is.GreaterThanOrEqualTo(v - .01f)); Assert.That(ls, Is.LessThan(sat - .3f), "label paler (less saturated) than the body");
+                var label = rig.PacketLabelPatch; Assert.IsNotNull(label);
+                Assert.That(Mathf.Abs(label.localPosition.y), Is.LessThan(.01f), "label in the middle");
+                Debug.Log("RAMEN_PACKET hue " + h.ToString("0.000") + " sat " + sat.ToString("0.00") + " value " + v.ToString("0.00") + " seals " + seals.Length + " label value " + lv.ToString("0.00"));
             }
             finally { rig?.Dispose(); Object.DestroyImmediate(model); }
         }
